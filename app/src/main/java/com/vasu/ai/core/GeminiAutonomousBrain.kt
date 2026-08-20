@@ -3,7 +3,10 @@ package com.vasu.ai.core
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.Looper
 import com.vasu.ai.accessibility.VasuAccessibilityService
+import java.util.concurrent.Executors
 
 class GeminiAutonomousBrain(context: Context) {
 
@@ -21,6 +24,16 @@ class GeminiAutonomousBrain(context: Context) {
     private val executor = VasuActionExecutor(context)
     private val executionEngine = VasuExecutionEngine(executor)
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+    private val worker = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
+
+    /** Use this from voice/wake-word callbacks to keep network work off the UI thread. */
+    fun handleAsync(command: String, callback: (Result) -> Unit) {
+        worker.execute {
+            val result = handle(command)
+            main.post { callback(result) }
+        }
+    }
 
     /**
      * Online requests are planned by Gemini against the current screen. After every
