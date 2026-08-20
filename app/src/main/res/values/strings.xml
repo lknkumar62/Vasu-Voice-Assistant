@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VASU AI</string>
+    <string name="accessibility_description">VASU uses Accessibility only to perform user-requested UI actions such as reading visible UI elements, clicking controls, scrolling, and entering text where Android and the target app permit it.</string>
+</resources>
