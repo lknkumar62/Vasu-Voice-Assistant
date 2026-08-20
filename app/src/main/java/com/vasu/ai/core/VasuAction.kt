@@ -8,6 +8,8 @@ sealed interface VasuAction {
     data class Scroll(val direction: Direction) : VasuAction
     data class Volume(val direction: VolumeDirection) : VasuAction
     data class Flashlight(val enabled: Boolean) : VasuAction
+    data class CallContact(val name: String) : VasuAction
+    data class SendSms(val name: String, val message: String) : VasuAction
     data object Mute : VasuAction
     data object OpenWifiSettings : VasuAction
     data object OpenBluetoothSettings : VasuAction
