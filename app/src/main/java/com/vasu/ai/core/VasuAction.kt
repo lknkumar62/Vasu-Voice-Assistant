@@ -1,14 +1,24 @@
 package com.vasu.ai.core
 
-/** A small, stable contract for all executable VASU actions. */
+/** Stable executable action contract for VASU. */
 sealed interface VasuAction {
     data class OpenApp(val packageName: String) : VasuAction
     data class ClickText(val text: String) : VasuAction
     data class TypeText(val text: String) : VasuAction
     data class Scroll(val direction: Direction) : VasuAction
+    data class Volume(val direction: VolumeDirection) : VasuAction
+    data object Mute : VasuAction
+    data object OpenWifiSettings : VasuAction
+    data object OpenBluetoothSettings : VasuAction
+    data object OpenBrightnessSettings : VasuAction
+    data object OpenDndSettings : VasuAction
+    data object OpenAirplaneModeSettings : VasuAction
+    data object OpenBatterySaverSettings : VasuAction
+    data object OpenLocationSettings : VasuAction
     data object Back : VasuAction
     data object Home : VasuAction
     data object Recents : VasuAction
 
     enum class Direction { UP, DOWN, LEFT, RIGHT }
+    enum class VolumeDirection { UP, DOWN }
 }
