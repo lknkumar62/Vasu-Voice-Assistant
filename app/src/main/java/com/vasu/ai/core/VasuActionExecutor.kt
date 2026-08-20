@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.vasu.ai.accessibility.VasuAccessibilityService
+import com.vasu.ai.device.VasuCommunicationController
 import com.vasu.ai.device.VasuDeviceController
 
 class VasuActionExecutor(private val context: Context) {
     private val device = VasuDeviceController(context)
+    private val communication = VasuCommunicationController(context)
 
     fun execute(action: VasuAction): Boolean = when (action) {
         is VasuAction.OpenApp -> openApp(action.packageName)
@@ -31,6 +33,8 @@ class VasuActionExecutor(private val context: Context) {
             VasuAction.VolumeDirection.DOWN -> device.volumeDown()
         }
         is VasuAction.Flashlight -> device.setFlashlight(action.enabled)
+        is VasuAction.CallContact -> communication.callContact(action.name)
+        is VasuAction.SendSms -> communication.sendSms(action.name, action.message)
         VasuAction.Mute -> device.mute()
         VasuAction.OpenWifiSettings -> device.openWifiSettings()
         VasuAction.OpenBluetoothSettings -> device.openBluetoothSettings()
