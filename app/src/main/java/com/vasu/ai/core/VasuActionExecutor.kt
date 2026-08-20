@@ -8,18 +8,14 @@ import com.vasu.ai.accessibility.VasuAccessibilityService
 import com.vasu.ai.device.VasuDeviceController
 
 class VasuActionExecutor(private val context: Context) {
-
     private val device = VasuDeviceController(context)
 
     fun execute(action: VasuAction): Boolean = when (action) {
         is VasuAction.OpenApp -> openApp(action.packageName)
-        is VasuAction.ClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let {
-            VasuAccessibilityService.instance?.click(it) == true
-        } == true
+        is VasuAction.ClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.click(it) == true } == true
         is VasuAction.TypeText -> {
             val service = VasuAccessibilityService.instance ?: return false
-            val root = service.root() ?: return false
-            val editable = findEditable(root) ?: return false
+            val editable = findEditable(service.root() ?: return false) ?: return false
             service.setText(editable, action.text)
         }
         is VasuAction.Scroll -> {
@@ -34,6 +30,7 @@ class VasuActionExecutor(private val context: Context) {
             VasuAction.VolumeDirection.UP -> device.volumeUp()
             VasuAction.VolumeDirection.DOWN -> device.volumeDown()
         }
+        is VasuAction.Flashlight -> device.setFlashlight(action.enabled)
         VasuAction.Mute -> device.mute()
         VasuAction.OpenWifiSettings -> device.openWifiSettings()
         VasuAction.OpenBluetoothSettings -> device.openBluetoothSettings()
@@ -42,12 +39,9 @@ class VasuActionExecutor(private val context: Context) {
         VasuAction.OpenAirplaneModeSettings -> device.openAirplaneModeSettings()
         VasuAction.OpenBatterySaverSettings -> device.openBatterySaverSettings()
         VasuAction.OpenLocationSettings -> device.openLocationSettings()
-        VasuAction.Back -> VasuAccessibilityService.instance
-            ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) == true
-        VasuAction.Home -> VasuAccessibilityService.instance
-            ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) == true
-        VasuAction.Recents -> VasuAccessibilityService.instance
-            ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) == true
+        VasuAction.Back -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) == true
+        VasuAction.Home -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) == true
+        VasuAction.Recents -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) == true
     }
 
     private fun openApp(packageName: String): Boolean {
@@ -61,8 +55,7 @@ class VasuActionExecutor(private val context: Context) {
         if (node.isEditable && node.isEnabled && node.isVisibleToUser) return node
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val result = findEditable(child)
-            if (result != null) return result
+            findEditable(child)?.let { return it }
         }
         return null
     }
