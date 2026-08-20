@@ -87,9 +87,10 @@ class GeminiApiClient(
                             put("enum", JSONArray(listOf(
                                 "open_app", "click_text", "type_text", "scroll_up", "scroll_down",
                                 "back", "home", "recents", "volume_up", "volume_down", "mute",
-                                "flashlight_on", "flashlight_off", "open_wifi_settings", "open_bluetooth_settings",
-                                "open_brightness_settings", "open_dnd_settings", "open_airplane_settings",
-                                "open_battery_saver_settings", "open_location_settings"
+                                "flashlight_on", "flashlight_off", "call_contact", "send_sms",
+                                "open_wifi_settings", "open_bluetooth_settings", "open_brightness_settings",
+                                "open_dnd_settings", "open_airplane_settings", "open_battery_saver_settings",
+                                "open_location_settings"
                             )))
                         })
                         put("target", JSONObject().put("type", "STRING"))
@@ -112,7 +113,9 @@ Use the smallest reliable sequence of actions.
 Available actions:
 open_app(target=app name), click_text(target=visible UI text), type_text(value=text),
 scroll_up, scroll_down, back, home, recents, volume_up, volume_down, mute,
-flashlight_on, flashlight_off, and the supported Settings actions.
+flashlight_on, flashlight_off, call_contact(target=contact name),
+send_sms(target=contact name, value=message), and supported Settings actions.
+For app messaging, prefer Accessibility sequences such as open_app -> click_text -> type_text -> click_text.
 Typing into passwords/secure fields, bypassing locks, or extracting private app data is forbidden.
 The application will validate every action before execution.
 """.trimIndent()
