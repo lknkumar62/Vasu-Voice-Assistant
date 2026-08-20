@@ -23,26 +23,45 @@ class GeminiAutonomousBrain(context: Context) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
 
     /**
-     * Gemini is preferred for every online request. Local planning remains the
-     * safety/offline fallback so the phone still performs basic commands without internet.
+     * Online requests are planned by Gemini against the current screen. After every
+     * successful UI action the planner receives fresh screen context and decides the
+     * next step. Basic local planning remains the offline fallback.
      */
     fun handle(command: String): Result {
         val trimmed = command.trim()
         if (trimmed.isBlank()) return Result(false, "Command samajh nahi aaya.")
 
-        if (isOnline()) {
-            val context = screenContext()
-            val plan = api.plan(trimmed, context)
-            if (plan != null) {
-                val validation = validator.validate(plan.steps)
-                if (validation.rejectedCount == 0 && validation.actions.isNotEmpty()) {
-                    val execution = executionEngine.execute(validation.actions)
-                    return if (execution.success) {
-                        Result(true, plan.reply.ifBlank { "Ho gaya Boss." }, execution, true)
-                    } else {
-                        Result(true, "Boss, action ka step complete nahi hua. Android/app restriction ho sakti hai.", execution, true)
-                    }
+        if (isOnline() && keyStore.read().isNullOrBlank().not()) {
+            var lastExecution: VasuExecutionEngine.ExecutionResult? = null
+            var reply = ""
+
+            repeat(MAX_GEMINI_STEPS) {
+                val plan = api.plan(trimmed, screenContext(lastExecution)) ?: return@repeat
+                reply = plan.reply.ifBlank { reply }
+
+                if (plan.steps.isEmpty()) {
+                    if (reply.isNotBlank()) return Result(true, reply, lastExecution, true)
+                    return@repeat
                 }
+
+                val validation = validator.validate(listOf(plan.steps.first()))
+                if (validation.rejectedCount > 0 || validation.actions.isEmpty()) {
+                    return Result(false, "Boss, Gemini ne koi safe Android action nahi diya.", lastExecution, true)
+                }
+
+                val execution = executionEngine.execute(validation.actions)
+                lastExecution = execution
+                if (!execution.success) {
+                    return Result(true, "Boss, ye step execute nahi hua. Permission ya Android/app restriction ho sakti hai.", execution, true)
+                }
+
+                if (reply.isNotBlank() && plan.steps.size == 1) {
+                    return Result(true, reply, execution, true)
+                }
+            }
+
+            if (lastExecution != null) {
+                return Result(true, reply.ifBlank { "Boss, task poora verify nahi ho paya." }, lastExecution, true)
             }
         }
 
@@ -57,9 +76,9 @@ class GeminiAutonomousBrain(context: Context) {
         val actions = VasuCommandPlanner().plan(command) { appResolver.resolve(it) }
         if (actions.isNullOrEmpty()) {
             return if (isOnline()) {
-                Result(false, "Boss, Gemini ne is request ke liye valid Android action nahi diya.")
+                Result(false, "Boss, Gemini API response nahi de saka ya valid action nahi mila.")
             } else {
-                Result(false, "Internet nahi hai Boss, lekin main sirf offline-capable phone commands kar sakta hoon.")
+                Result(false, "Internet nahi hai Boss, lekin main offline-capable phone commands kar sakta hoon.")
             }
         }
         val execution = executionEngine.execute(actions)
@@ -77,7 +96,7 @@ class GeminiAutonomousBrain(context: Context) {
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    private fun screenContext(): String {
+    private fun screenContext(lastExecution: VasuExecutionEngine.ExecutionResult?): String {
         val service = VasuAccessibilityService.instance ?: return "Accessibility service unavailable."
         val root = service.root() ?: return "No readable foreground window."
         val packageName = service.foregroundPackage() ?: "unknown"
@@ -93,12 +112,20 @@ class GeminiAutonomousBrain(context: Context) {
                 }
             }
             visit(root)
-        }.distinct().take(80)
+        }.distinct().take(100)
 
         return buildString {
             append("foreground_package=").append(packageName).append('\n')
             append("visible_text=\n")
             texts.forEach { append("- ").append(it).append('\n') }
+            lastExecution?.let {
+                append("previous_step_success=").append(it.success).append('\n')
+                append("previous_completed_count=").append(it.completedCount).append('\n')
+            }
         }
+    }
+
+    private companion object {
+        const val MAX_GEMINI_STEPS = 8
     }
 }
