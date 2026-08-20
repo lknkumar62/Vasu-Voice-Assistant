@@ -1,9 +1,6 @@
 package com.vasu.ai.core
 
-/**
- * Converts common Hindi/Hinglish/English utterances into the stable VASU action contract.
- * Unknown requests deliberately return null so a future cloud planner can handle them.
- */
+/** Converts common Hindi/Hinglish/English utterances into executable VASU actions. */
 class VasuCommandPlanner {
 
     fun plan(command: String, appPackageResolver: (String) -> String?): List<VasuAction>? {
@@ -24,6 +21,37 @@ class VasuCommandPlanner {
         }
         if (normalized.contains("scroll up") || normalized.contains("upar scroll")) {
             return listOf(VasuAction.Scroll(VasuAction.Direction.UP))
+        }
+
+        if (normalized.contains("volume up") || normalized.contains("volume badha") || normalized.contains("awaz badha")) {
+            return listOf(VasuAction.Volume(VasuAction.VolumeDirection.UP))
+        }
+        if (normalized.contains("volume down") || normalized.contains("volume kam") || normalized.contains("awaz kam")) {
+            return listOf(VasuAction.Volume(VasuAction.VolumeDirection.DOWN))
+        }
+        if (normalized.contains("mute") || normalized.contains("silent kar")) {
+            return listOf(VasuAction.Mute)
+        }
+        if (normalized.contains("wifi") && (normalized.contains("open") || normalized.contains("settings") || normalized.contains("khol"))) {
+            return listOf(VasuAction.OpenWifiSettings)
+        }
+        if (normalized.contains("bluetooth") && (normalized.contains("open") || normalized.contains("settings") || normalized.contains("khol"))) {
+            return listOf(VasuAction.OpenBluetoothSettings)
+        }
+        if (normalized.contains("brightness") || normalized.contains("screen light")) {
+            return listOf(VasuAction.OpenBrightnessSettings)
+        }
+        if (normalized.contains("do not disturb") || normalized.contains("dnd")) {
+            return listOf(VasuAction.OpenDndSettings)
+        }
+        if (normalized.contains("airplane mode") || normalized.contains("flight mode")) {
+            return listOf(VasuAction.OpenAirplaneModeSettings)
+        }
+        if (normalized.contains("battery saver") || normalized.contains("power saver")) {
+            return listOf(VasuAction.OpenBatterySaverSettings)
+        }
+        if (normalized.contains("location settings") || normalized.contains("gps settings")) {
+            return listOf(VasuAction.OpenLocationSettings)
         }
 
         val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+)").find(normalized)
