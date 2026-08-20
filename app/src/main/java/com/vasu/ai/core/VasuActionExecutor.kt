@@ -3,7 +3,7 @@ package com.vasu.ai.core
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.view.accessibility.AccessibilityNodeInfo
 import com.vasu.ai.accessibility.VasuAccessibilityService
 
 class VasuActionExecutor(private val context: Context) {
@@ -21,17 +21,19 @@ class VasuActionExecutor(private val context: Context) {
         }
         is VasuAction.Scroll -> {
             val service = VasuAccessibilityService.instance ?: return false
-            val command = when (action.direction) {
-                VasuAction.Direction.UP -> AccessibilityNodeInfoCompat.ACTION_SCROLL_BACKWARD
-                VasuAction.Direction.DOWN -> AccessibilityNodeInfoCompat.ACTION_SCROLL_FORWARD
-                VasuAction.Direction.LEFT -> AccessibilityNodeInfoCompat.ACTION_SCROLL_LEFT
-                VasuAction.Direction.RIGHT -> AccessibilityNodeInfoCompat.ACTION_SCROLL_RIGHT
+            when (action.direction) {
+                VasuAction.Direction.UP -> service.scroll(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                VasuAction.Direction.DOWN -> service.scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                VasuAction.Direction.LEFT,
+                VasuAction.Direction.RIGHT -> false
             }
-            service.scroll(command)
         }
-        VasuAction.Back -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) == true
-        VasuAction.Home -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) == true
-        VasuAction.Recents -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) == true
+        VasuAction.Back -> VasuAccessibilityService.instance
+            ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) == true
+        VasuAction.Home -> VasuAccessibilityService.instance
+            ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) == true
+        VasuAction.Recents -> VasuAccessibilityService.instance
+            ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) == true
     }
 
     private fun openApp(packageName: String): Boolean {
@@ -41,7 +43,7 @@ class VasuActionExecutor(private val context: Context) {
         return true
     }
 
-    private fun findEditable(node: android.view.accessibility.AccessibilityNodeInfo): android.view.accessibility.AccessibilityNodeInfo? {
+    private fun findEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         if (node.isEditable && node.isEnabled && node.isVisibleToUser) return node
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
@@ -50,12 +52,4 @@ class VasuActionExecutor(private val context: Context) {
         }
         return null
     }
-}
-
-private object AccessibilityNodeInfoCompat {
-    const val ACTION_SCROLL_FORWARD = android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
-    const val ACTION_SCROLL_BACKWARD = android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
-    // Android node scrolling is primarily vertical; horizontal actions require a gesture fallback.
-    const val ACTION_SCROLL_LEFT = 16908355
-    const val ACTION_SCROLL_RIGHT = 16908356
 }
