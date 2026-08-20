@@ -31,6 +31,8 @@ class GeminiActionValidator(
                     "mute" -> VasuAction.Mute
                     "flashlight_on" -> VasuAction.Flashlight(true)
                     "flashlight_off" -> VasuAction.Flashlight(false)
+                    "call_contact" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::CallContact)
+                    "send_sms" -> if (step.target.isNotBlank() && step.value.isNotBlank()) VasuAction.SendSms(step.target, step.value) else null
                     "open_wifi_settings" -> VasuAction.OpenWifiSettings
                     "open_bluetooth_settings" -> VasuAction.OpenBluetoothSettings
                     "open_brightness_settings" -> VasuAction.OpenBrightnessSettings
