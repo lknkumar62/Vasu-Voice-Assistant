@@ -5,8 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.vasu.ai.accessibility.VasuAccessibilityService
+import com.vasu.ai.device.VasuDeviceController
 
 class VasuActionExecutor(private val context: Context) {
+
+    private val device = VasuDeviceController(context)
 
     fun execute(action: VasuAction): Boolean = when (action) {
         is VasuAction.OpenApp -> openApp(action.packageName)
@@ -24,10 +27,21 @@ class VasuActionExecutor(private val context: Context) {
             when (action.direction) {
                 VasuAction.Direction.UP -> service.scroll(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
                 VasuAction.Direction.DOWN -> service.scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-                VasuAction.Direction.LEFT,
-                VasuAction.Direction.RIGHT -> false
+                VasuAction.Direction.LEFT, VasuAction.Direction.RIGHT -> false
             }
         }
+        is VasuAction.Volume -> when (action.direction) {
+            VasuAction.VolumeDirection.UP -> device.volumeUp()
+            VasuAction.VolumeDirection.DOWN -> device.volumeDown()
+        }
+        VasuAction.Mute -> device.mute()
+        VasuAction.OpenWifiSettings -> device.openWifiSettings()
+        VasuAction.OpenBluetoothSettings -> device.openBluetoothSettings()
+        VasuAction.OpenBrightnessSettings -> device.openBrightnessSettings()
+        VasuAction.OpenDndSettings -> device.openDndSettings()
+        VasuAction.OpenAirplaneModeSettings -> device.openAirplaneModeSettings()
+        VasuAction.OpenBatterySaverSettings -> device.openBatterySaverSettings()
+        VasuAction.OpenLocationSettings -> device.openLocationSettings()
         VasuAction.Back -> VasuAccessibilityService.instance
             ?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) == true
         VasuAction.Home -> VasuAccessibilityService.instance
