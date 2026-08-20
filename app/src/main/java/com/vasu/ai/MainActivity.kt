@@ -8,20 +8,25 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.vasu.ai.core.GeminiAutonomousBrain
 
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var autonomousBrain: GeminiAutonomousBrain
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refresh() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        autonomousBrain = GeminiAutonomousBrain(this)
         refresh()
     }
 
@@ -39,6 +44,38 @@ class MainActivity : AppCompatActivity() {
         root.addView(TextView(this).apply {
             text = "VASU only uses capabilities you explicitly grant. Some Android restrictions cannot be bypassed."
             textSize = 16f
+        })
+
+        root.addView(TextView(this).apply {
+            text = "Gemini Autonomous Brain"
+            textSize = 20f
+        })
+        root.addView(TextView(this).apply {
+            text = "Online commands use Gemini for planning. The API key is encrypted locally with Android Keystore."
+            textSize = 14f
+        })
+        val keyInput = EditText(this).apply {
+            hint = "Paste Gemini API key"
+            inputType = 0x00000081
+        }
+        root.addView(keyInput)
+        root.addView(Button(this).apply {
+            text = "Save Gemini API Key"
+            setOnClickListener {
+                val key = keyInput.text.toString().trim()
+                if (key.isNotBlank()) {
+                    autonomousBrain.saveGeminiApiKey(key)
+                    keyInput.setText("")
+                    refresh()
+                }
+            }
+        })
+        root.addView(Button(this).apply {
+            text = "Remove Gemini API Key"
+            setOnClickListener {
+                autonomousBrain.clearGeminiApiKey()
+                refresh()
+            }
         })
 
         addPermissionButton(
@@ -112,6 +149,9 @@ class MainActivity : AppCompatActivity() {
         )
         return permissions.joinToString("\n") { (permission, label) ->
             "$label: ${if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) "granted" else "not granted"}"
-        }
+        } + "\nGemini API: ${if (autonomousBrainHasKey()) "configured" else "not configured"}"
     }
+
+    private fun autonomousBrainHasKey(): Boolean =
+        !com.vasu.ai.core.GeminiKeyStore(this).read().isNullOrBlank()
 }
