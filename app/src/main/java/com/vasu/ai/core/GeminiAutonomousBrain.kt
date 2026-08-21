@@ -62,6 +62,11 @@ class GeminiAutonomousBrain(context: Context) {
                 if (!execution.success) {
                     return Result(false, "Boss, ye step execute nahi hua. Permission ya Android/app restriction ho sakti hai.", execution, true)
                 }
+
+                // Allow the target app enough time to publish a fresh accessibility hierarchy
+                // before Gemini receives the next screen snapshot.
+                Thread.sleep(UI_SETTLE_DELAY_MS)
+
                 if (reply.isNotBlank() && plan.steps.size == 1) return Result(true, reply, execution, true)
                 if (stepIndex == MAX_GEMINI_STEPS - 1) break
             }
@@ -98,7 +103,7 @@ class GeminiAutonomousBrain(context: Context) {
         if (service == null) append("accessibility_service=unavailable\n")
         else {
             append("foreground_package=").append(service.foregroundPackage() ?: "unknown").append('\n')
-            append("visible_screen=\n").append(service.describeScreen(100))
+            append("visible_screen=\n").append(service.describeScreen(120))
         }
         val notifications = VasuNotificationListener.recent(10)
         if (notifications.isNotEmpty()) {
@@ -111,5 +116,8 @@ class GeminiAutonomousBrain(context: Context) {
         }
     }
 
-    private companion object { const val MAX_GEMINI_STEPS = 8 }
+    private companion object {
+        const val MAX_GEMINI_STEPS = 8
+        const val UI_SETTLE_DELAY_MS = 350L
+    }
 }
