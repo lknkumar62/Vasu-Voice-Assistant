@@ -28,7 +28,6 @@ class GeminiAutonomousBrain(context: Context) {
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
-    /** Use this from voice/wake-word callbacks to keep network work off the UI thread. */
     fun handleAsync(command: String, callback: (Result) -> Unit) {
         worker.execute {
             val result = handle(command)
@@ -36,7 +35,6 @@ class GeminiAutonomousBrain(context: Context) {
         }
     }
 
-    /** Online requests use Gemini; local command planning remains the offline fallback. */
     fun handle(command: String): Result {
         val trimmed = command.trim()
         if (trimmed.isBlank()) return Result(false, "Command samajh nahi aaya.")
@@ -44,14 +42,16 @@ class GeminiAutonomousBrain(context: Context) {
         if (isOnline() && keyStore.read().isNullOrBlank().not()) {
             var lastExecution: VasuExecutionEngine.ExecutionResult? = null
             var reply = ""
+            var geminiProducedResult = false
 
-            repeat(MAX_GEMINI_STEPS) {
-                val plan = api.plan(trimmed, screenContext(lastExecution)) ?: return@repeat
+            for (stepIndex in 0 until MAX_GEMINI_STEPS) {
+                val plan = api.plan(trimmed, screenContext(lastExecution)) ?: break
+                geminiProducedResult = true
                 reply = plan.reply.ifBlank { reply }
 
                 if (plan.steps.isEmpty()) {
                     if (reply.isNotBlank()) return Result(true, reply, lastExecution, true)
-                    return@repeat
+                    continue
                 }
 
                 val validation = validator.validate(listOf(plan.steps.first()))
@@ -62,16 +62,18 @@ class GeminiAutonomousBrain(context: Context) {
                 val execution = executionEngine.execute(validation.actions)
                 lastExecution = execution
                 if (!execution.success) {
-                    return Result(true, "Boss, ye step execute nahi hua. Permission ya Android/app restriction ho sakti hai.", execution, true)
+                    return Result(false, "Boss, ye step execute nahi hua. Permission ya Android/app restriction ho sakti hai.", execution, true)
                 }
 
                 if (reply.isNotBlank() && plan.steps.size == 1) {
                     return Result(true, reply, execution, true)
                 }
+
+                if (stepIndex == MAX_GEMINI_STEPS - 1) break
             }
 
-            if (lastExecution != null) {
-                return Result(true, reply.ifBlank { "Boss, task poora verify nahi ho paya." }, lastExecution, true)
+            if (geminiProducedResult && lastExecution != null) {
+                return Result(true, reply.ifBlank { "Boss, task execute hua, lekin final verification complete nahi ho paya." }, lastExecution, true)
             }
         }
 
@@ -89,7 +91,7 @@ class GeminiAutonomousBrain(context: Context) {
         }
         val execution = executionEngine.execute(actions)
         return if (execution.success) Result(true, "Ho gaya Boss.", execution, false)
-        else Result(true, "Boss, command execute nahi ho paya. Required permission ya app restriction check kijiye.", execution, false)
+        else Result(false, "Boss, command execute nahi ho paya. Required permission ya app restriction check kijiye.", execution, false)
     }
 
     private fun isOnline(): Boolean {
@@ -99,29 +101,27 @@ class GeminiAutonomousBrain(context: Context) {
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    private fun screenContext(lastExecution: VasuExecutionEngine.ExecutionResult?): String {
+    private fun screenContext(lastExecution: VasuExecutionEngine.ExecutionResult?): String = buildString {
         val service = VasuAccessibilityService.instance
-        return buildString {
-            if (service == null) {
-                append("accessibility_service=unavailable\n")
-            } else {
-                append("foreground_package=").append(service.foregroundPackage() ?: "unknown").append('\n')
-                append("visible_screen=\n").append(service.describeScreen(100))
-            }
+        if (service == null) {
+            append("accessibility_service=unavailable\n")
+        } else {
+            append("foreground_package=").append(service.foregroundPackage() ?: "unknown").append('\n')
+            append("visible_screen=\n").append(service.describeScreen(100))
+        }
 
-            val notifications = VasuNotificationListener.recent(10)
-            if (notifications.isNotEmpty()) {
-                append("recent_notifications=\n")
-                notifications.forEach {
-                    append("- [").append(it.packageName).append("] ")
-                        .append(it.title).append(": ").append(it.text).append('\n')
-                }
+        val notifications = VasuNotificationListener.recent(10)
+        if (notifications.isNotEmpty()) {
+            append("recent_notifications=\n")
+            notifications.forEach {
+                append("- [").append(it.packageName).append("] ")
+                    .append(it.title).append(": ").append(it.text).append('\n')
             }
+        }
 
-            lastExecution?.let {
-                append("previous_step_success=").append(it.success).append('\n')
-                append("previous_completed_count=").append(it.completedCount).append('\n')
-            }
+        lastExecution?.let {
+            append("previous_step_success=").append(it.success).append('\n')
+            append("previous_completed_count=").append(it.completedCount).append('\n')
         }
     }
 
