@@ -23,7 +23,6 @@ import java.util.Locale
 
 /** Foreground voice loop. Android still controls microphone/background availability. */
 class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitListener {
-
     private val handler = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
@@ -40,12 +39,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         tts = TextToSpeech(this, this)
         getSharedPreferences("vasu_runtime", MODE_PRIVATE).edit().putBoolean("voice_running", true).apply()
         createChannel()
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            buildNotification("Wake word: Hello Vasu"),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        )
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification("Wake word: Hello Vasu"), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(this) }
             startListeningSoon(500)
@@ -68,7 +62,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         }
@@ -92,9 +86,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (text.isBlank()) return
         val lower = text.lowercase(Locale.ROOT)
         val wakeVariants = listOf("hello vasu", "hey vasu", "helo vasu", "हेलो वासु", "हैलो वासु")
-        val wake = wakeVariants.firstOrNull { lower.contains(it) }
-        if (wake == null) return
-
+        val wake = wakeVariants.firstOrNull { lower.contains(it) } ?: return
         val command = text.substringAfter(wake, "", ignoreCase = true).trim()
         if (command.isBlank()) {
             speak("Haan Boss, boliye.")
@@ -125,15 +117,14 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, buildNotification(text))
     }
 
-    private fun buildNotification(text: String): Notification =
-        NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("VASU AI")
-            .setContentText(text)
-            .setOngoing(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+    private fun buildNotification(text: String): Notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setContentTitle("VASU AI")
+        .setContentText(text)
+        .setOngoing(true)
+        .setCategory(NotificationCompat.CATEGORY_SERVICE)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .build()
 
     private fun createChannel() {
         val channel = NotificationChannel(CHANNEL_ID, "VASU Voice Assistant", NotificationManager.IMPORTANCE_LOW).apply {
@@ -157,15 +148,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onResults(results: Bundle?) {
         listening = false
         if (processing) return
-        val values = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
-        values.firstOrNull()?.let(::handleTranscript)
+        results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(::handleTranscript)
         if (!processing) startListeningSoon(250)
     }
-    override fun onPartialResults(partialResults: Bundle?) {
-        if (processing) return
-        val values = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
-        values.firstOrNull()?.let { if (it.contains("vasu", true)) handleTranscript(it) }
-    }
+    override fun onPartialResults(partialResults: Bundle?) = Unit
     override fun onEvent(eventType: Int, params: Bundle?) = Unit
 
     override fun onInit(status: Int) {
