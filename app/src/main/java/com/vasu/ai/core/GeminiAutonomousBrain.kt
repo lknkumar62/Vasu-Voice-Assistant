@@ -122,6 +122,13 @@ class GeminiAutonomousBrain(context: Context) {
         lastExecution?.let {
             append("previous_step_success=").append(it.success).append('\n')
             append("previous_completed_count=").append(it.completedCount).append('\n')
+            append("previous_recovered_count=").append(it.recoveredCount).append('\n')
+            append("previous_total_attempts=").append(it.totalAttempts).append('\n')
+            it.steps.lastOrNull()?.let { step ->
+                append("previous_action=").append(step.action).append('\n')
+                append("previous_action_attempts=").append(step.attempts).append('\n')
+                append("previous_action_recovered=").append(step.recovered).append('\n')
+            }
         }
     }
 
