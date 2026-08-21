@@ -1,9 +1,6 @@
 package com.vasu.ai.core
 
-/**
- * Converts only explicitly allowed Gemini steps into the existing VasuAction contract.
- * Unsupported or malformed steps are rejected instead of being executed.
- */
+/** Converts only explicitly allowed Gemini steps into the existing VASU action contract. */
 class GeminiActionValidator(
     private val appResolver: VasuAppResolver
 ) {
@@ -20,9 +17,15 @@ class GeminiActionValidator(
                 val action = when (normalized) {
                     "open_app" -> appResolver.resolve(step.target)?.let(VasuAction::OpenApp)
                     "click_text" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::ClickText)
+                    "long_click_text" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::LongClickText)
+                    "click_description" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::ClickDescription)
                     "type_text" -> step.value.takeIf { it.isNotBlank() }?.let(VasuAction::TypeText)
                     "scroll_up" -> VasuAction.Scroll(VasuAction.Direction.UP)
                     "scroll_down" -> VasuAction.Scroll(VasuAction.Direction.DOWN)
+                    "swipe_up" -> VasuAction.Swipe(VasuAction.Direction.UP)
+                    "swipe_down" -> VasuAction.Swipe(VasuAction.Direction.DOWN)
+                    "swipe_left" -> VasuAction.Swipe(VasuAction.Direction.LEFT)
+                    "swipe_right" -> VasuAction.Swipe(VasuAction.Direction.RIGHT)
                     "back" -> VasuAction.Back
                     "home" -> VasuAction.Home
                     "recents" -> VasuAction.Recents
