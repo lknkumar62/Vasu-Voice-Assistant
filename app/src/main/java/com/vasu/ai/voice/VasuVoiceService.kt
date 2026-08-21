@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -14,6 +15,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.vasu.ai.R
 import com.vasu.ai.core.GeminiAutonomousBrain
 import com.vasu.ai.memory.VasuMemoryStore
@@ -38,7 +40,12 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         tts = TextToSpeech(this, this)
         getSharedPreferences("vasu_runtime", MODE_PRIVATE).edit().putBoolean("voice_running", true).apply()
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Wake word: Hello Vasu"))
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            buildNotification("Wake word: Hello Vasu"),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        )
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(this) }
             startListeningSoon(500)
