@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityEvent
 
@@ -141,8 +142,12 @@ class VasuAccessibilityService : AccessibilityService() {
                     if (node.isFocused) append(" focused")
                     if (node.isPassword) append(" secure")
                 }.trim()
+                val bounds = Rect().also(node::getBoundsInScreen)
                 out.append("- ").append(value.take(200))
                 if (flags.isNotBlank()) out.append(" [").append(flags).append(']')
+                out.append(" [bounds=")
+                    .append(bounds.left).append(',').append(bounds.top).append(',')
+                    .append(bounds.right).append(',').append(bounds.bottom).append(']')
                 out.append('\n')
                 count++
             }
