@@ -27,11 +27,7 @@ class VasuActionExecutor(private val context: Context) {
                 if (focused == null) editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 service.setText(editable, action.text)
             }
-            VasuAction.PressEnter -> {
-                val service = VasuAccessibilityService.instance ?: return false
-                val focused = service.focusedEditable() ?: findEditable(service.root() ?: return false) ?: return false
-                focused.performAction(AccessibilityNodeInfo.ACTION_IME_ACTION)
-            }
+            VasuAction.PressEnter -> pressEnter()
             is VasuAction.Scroll -> {
                 val service = VasuAccessibilityService.instance ?: return false
                 when (action.direction) {
@@ -63,6 +59,14 @@ class VasuActionExecutor(private val context: Context) {
             VasuAction.LockScreen -> if (Build.VERSION.SDK_INT >= 28) global(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) else false
             VasuAction.TakeScreenshot -> if (Build.VERSION.SDK_INT >= 30) global(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) else false
         }
+    }
+
+    private fun pressEnter(): Boolean {
+        if (Build.VERSION.SDK_INT < 30) return false
+        val service = VasuAccessibilityService.instance ?: return false
+        val focused = service.focusedEditable() ?: findEditable(service.root() ?: return false) ?: return false
+        if (!focused.isEditable || focused.isPassword || !focused.isEnabled || !focused.isVisibleToUser) return false
+        return focused.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
     }
 
     private fun global(action: Int): Boolean =
