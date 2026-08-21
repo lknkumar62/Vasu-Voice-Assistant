@@ -78,7 +78,7 @@ class GeminiApiClient(
                         put("action", JSONObject().apply {
                             put("type", "STRING")
                             put("enum", JSONArray(listOf(
-                                "open_app", "click_text", "long_click_text", "click_description", "type_text",
+                                "open_app", "click_text", "long_click_text", "click_description", "type_text", "press_enter",
                                 "scroll_up", "scroll_down", "swipe_up", "swipe_down", "swipe_left", "swipe_right",
                                 "back", "home", "recents", "notifications", "lock_screen", "take_screenshot",
                                 "volume_up", "volume_down", "mute", "flashlight_on", "flashlight_off",
@@ -108,8 +108,8 @@ Set done=false whenever another action or verification is required. A reply may 
 Use zero steps only when no action is needed; if the task is complete, set done=true.
 Inspect foreground package, visible screen text, and available notification context before acting.
 For multi-step tasks, use fresh context after every successful action and decide the next action from that fresh context.
-Available actions: open apps; visible text/content-description click; long click; type; scroll; swipe;
-Back/Home/Recents/notifications/lock/screenshot; volume/mute/flashlight; calls/SMS; supported Settings actions.
+Available actions: open apps; visible text/content-description click; long click; type; press enter;
+scroll; swipe; Back/Home/Recents/notifications/lock/screenshot; volume/mute/flashlight; calls/SMS; supported Settings actions.
 For app automation, use Accessibility one action at a time.
 Never type passwords, bypass device/app locks, extract private data, or defeat Android security controls.
 The application validates every action before execution.
