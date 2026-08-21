@@ -63,7 +63,12 @@ class VasuCommandPlanner {
             val target = chainedOpenSearch.groupValues[1].trim().removeSuffix(" app").trim()
             val packageName = appPackageResolver(target) ?: return null
             val query = chainedOpenSearch.groupValues[2].trim()
-            return listOf(VasuAction.OpenApp(packageName), VasuAction.ClickDescription("search"), VasuAction.TypeText(query))
+            return listOf(
+                VasuAction.OpenApp(packageName),
+                VasuAction.ClickDescription("search"),
+                VasuAction.TypeText(query),
+                VasuAction.PressEnter
+            )
         }
 
         val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+)").find(normalized)
