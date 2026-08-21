@@ -15,12 +15,24 @@ class VasuAppResolver(context: Context) {
         "insta" to listOf("com.instagram.android"),
         "facebook" to listOf("com.facebook.katana"),
         "messenger" to listOf("com.facebook.orca"),
+        "telegram" to listOf("org.telegram.messenger", "org.thunderdog.challegram"),
+        "spotify" to listOf("com.spotify.music"),
+        "x" to listOf("com.twitter.android"),
+        "twitter" to listOf("com.twitter.android"),
         "chrome" to listOf("com.android.chrome"),
         "browser" to listOf("com.android.chrome", "com.google.android.apps.chrome"),
         "gmail" to listOf("com.google.android.gm"),
         "maps" to listOf("com.google.android.apps.maps"),
         "google maps" to listOf("com.google.android.apps.maps"),
         "camera" to listOf("com.android.camera2", "com.google.android.GoogleCamera"),
+        "gallery" to listOf("com.google.android.apps.photos", "com.android.gallery3d"),
+        "photos" to listOf("com.google.android.apps.photos"),
+        "phone" to listOf("com.google.android.dialer", "com.android.dialer"),
+        "contacts" to listOf("com.google.android.contacts", "com.android.contacts"),
+        "clock" to listOf("com.google.android.deskclock", "com.android.deskclock"),
+        "calculator" to listOf("com.google.android.calculator", "com.android.calculator2"),
+        "files" to listOf("com.google.android.documentsui", "com.google.android.apps.nbu.files"),
+        "file manager" to listOf("com.google.android.documentsui", "com.google.android.apps.nbu.files"),
         "play store" to listOf("com.android.vending"),
         "settings" to listOf("com.android.settings")
     )
@@ -34,7 +46,7 @@ class VasuAppResolver(context: Context) {
             return query
         }
 
-        aliases[query]?.firstNotNullOfOrNull(::installedPackage)?.let { return it }
+        aliases[query]?.asSequence()?.mapNotNull(::installedPackage)?.firstOrNull()?.let { return it }
 
         val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
