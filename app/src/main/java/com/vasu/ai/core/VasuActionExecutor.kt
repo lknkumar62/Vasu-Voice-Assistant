@@ -77,12 +77,13 @@ class VasuActionExecutor(private val context: Context) {
         }
     }
 
-    private fun openApp(packageName: String): Boolean {
+    /** Safely launches an installed app without crashing the assistant on resolver/security failures. */
+    private fun openApp(packageName: String): Boolean = runCatching {
         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(launchIntent)
-        return true
-    }
+        true
+    }.getOrDefault(false)
 
     private fun findEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         if (node.isEditable && node.isEnabled && node.isVisibleToUser && !node.isPassword) return node
