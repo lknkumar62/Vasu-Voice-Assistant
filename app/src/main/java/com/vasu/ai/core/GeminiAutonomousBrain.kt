@@ -10,7 +10,12 @@ import com.vasu.ai.notification.VasuNotificationListener
 import java.util.concurrent.Executors
 
 class GeminiAutonomousBrain(context: Context) {
-    data class Result(val handled: Boolean, val reply: String, val execution: VasuExecutionEngine.ExecutionResult? = null, val usedGemini: Boolean = false)
+    data class Result(
+        val handled: Boolean,
+        val reply: String,
+        val execution: VasuExecutionEngine.ExecutionResult? = null,
+        val usedGemini: Boolean = false
+    )
 
     private val appResolver = VasuAppResolver(context)
     private val keyStore = GeminiKeyStore(context)
@@ -23,7 +28,10 @@ class GeminiAutonomousBrain(context: Context) {
     private val main = Handler(Looper.getMainLooper())
 
     fun handleAsync(command: String, callback: (Result) -> Unit) {
-        worker.execute { main.post { callback(handle(command)) } }
+        worker.execute {
+            val result = handle(command)
+            main.post { callback(result) }
+        }
     }
 
     fun handle(command: String): Result {
