@@ -40,37 +40,24 @@ class GeminiAutonomousBrain(context: Context) {
 
         if (isOnline() && !keyStore.read().isNullOrBlank()) {
             var lastExecution: VasuExecutionEngine.ExecutionResult? = null
-            var reply = ""
+            var lastReply = ""
             var geminiProducedResult = false
 
             for (stepIndex in 0 until MAX_GEMINI_STEPS) {
-                val plan = api.plan(trimmed, screenContext(lastExecution))
-                if (plan == null) {
-                    if (lastExecution != null) {
-                        return Result(
-                            true,
-                            reply.ifBlank { "Boss, task execute ho gaya, lekin final verification nahi mil paya." },
-                            lastExecution,
-                            true
-                        )
-                    }
-                    break
+                val plan = api.plan(trimmed, screenContext(lastExecution)) ?: break
+                geminiProducedResult = true
+                lastReply = plan.reply.ifBlank { lastReply }
+
+                // Gemini must explicitly declare completion; a non-empty reply alone is not completion.
+                if (plan.done && plan.steps.isEmpty()) {
+                    return Result(true, lastReply.ifBlank { "Ho gaya Boss." }, lastExecution, true)
                 }
 
-                geminiProducedResult = true
-                reply = plan.reply.ifBlank { reply }
-
-                // An empty step list is Gemini's explicit signal that no more UI action is needed.
                 if (plan.steps.isEmpty()) {
-                    if (reply.isNotBlank()) return Result(true, reply, lastExecution, true)
-                    if (lastExecution != null) {
-                        return Result(true, "Boss, task complete ho gaya.", lastExecution, true)
-                    }
-                    break
+                    return Result(false, lastReply.ifBlank { "Boss, next safe action decide nahi ho paya." }, lastExecution, true)
                 }
 
                 // Execute exactly one validated action, then request a fresh screen snapshot.
-                // This prevents stale multi-action plans from blindly running against a changed UI.
                 val validation = validator.validate(listOf(plan.steps.first()), trimmed)
                 if (validation.rejectedCount > 0 || validation.actions.isEmpty()) {
                     return Result(false, "Boss, Gemini ne koi safe Android action nahi diya.", lastExecution, true)
@@ -82,26 +69,20 @@ class GeminiAutonomousBrain(context: Context) {
                     return Result(false, "Boss, ye step execute nahi hua. Permission ya Android/app restriction ho sakti hai.", execution, true)
                 }
 
-                // Allow the target app enough time to publish a fresh accessibility hierarchy
-                // before Gemini receives the next screen snapshot.
                 Thread.sleep(UI_SETTLE_DELAY_MS)
 
-                if (stepIndex == MAX_GEMINI_STEPS - 1) {
-                    return Result(
-                        true,
-                        reply.ifBlank { "Boss, task execute hua, lekin maximum autonomous steps limit ho gayi." },
-                        lastExecution,
-                        true
-                    )
+                if (plan.done) {
+                    return Result(true, lastReply.ifBlank { "Ho gaya Boss." }, execution, true)
                 }
+
+                if (stepIndex == MAX_GEMINI_STEPS - 1) break
             }
 
-            // Never run the local fallback after Gemini has already executed an action:
-            // doing so could repeat calls, SMS, taps, or other side effects.
-            if (geminiProducedResult && lastExecution != null) {
+            // Never run local fallback after Gemini has already executed a side-effecting action.
+            if (geminiProducedResult) {
                 return Result(
-                    true,
-                    reply.ifBlank { "Boss, task execute ho gaya, lekin final verification complete nahi ho paya." },
+                    false,
+                    lastReply.ifBlank { "Boss, task partially execute hua, lekin completion verify nahi hua." },
                     lastExecution,
                     true
                 )
