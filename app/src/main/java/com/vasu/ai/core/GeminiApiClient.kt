@@ -58,13 +58,18 @@ class GeminiApiClient(
                 add(GeminiStep(item.optString("action", ""), item.optString("target", ""), item.optString("value", "")))
             }
         }
-        return GeminiPlan(root.optString("reply", ""), parsed)
+        return GeminiPlan(
+            reply = root.optString("reply", ""),
+            steps = parsed,
+            done = root.optBoolean("done", false)
+        )
     }
 
     private fun responseSchema(): JSONObject = JSONObject().apply {
         put("type", "OBJECT")
         put("properties", JSONObject().apply {
             put("reply", JSONObject().put("type", "STRING"))
+            put("done", JSONObject().put("type", "BOOLEAN"))
             put("steps", JSONObject().apply {
                 put("type", "ARRAY")
                 put("items", JSONObject().apply {
@@ -90,7 +95,7 @@ class GeminiApiClient(
                 })
             })
         })
-        put("required", JSONArray(listOf("reply", "steps")))
+        put("required", JSONArray(listOf("reply", "done", "steps")))
         put("additionalProperties", false)
     }
 
@@ -98,9 +103,11 @@ class GeminiApiClient(
 You are VASU AI's autonomous Android operator planner.
 Never invent capabilities. Never bypass Android security or permissions.
 Return ONLY JSON matching the provided schema.
-Choose ONE next action only. Use zero steps only when you can answer from current context without acting.
+Choose ONE next action only. Set done=true only when the user's command is fully satisfied.
+Set done=false whenever another action or verification is required. A reply may describe progress, but it is not completion.
+Use zero steps only when no action is needed; if the task is complete, set done=true.
 Inspect foreground package, visible screen text, and available notification context before acting.
-For multi-step tasks, use fresh context after every successful action.
+For multi-step tasks, use fresh context after every successful action and decide the next action from that fresh context.
 Available actions: open apps; visible text/content-description click; long click; type; scroll; swipe;
 Back/Home/Recents/notifications/lock/screenshot; volume/mute/flashlight; calls/SMS; supported Settings actions.
 For app automation, use Accessibility one action at a time.
