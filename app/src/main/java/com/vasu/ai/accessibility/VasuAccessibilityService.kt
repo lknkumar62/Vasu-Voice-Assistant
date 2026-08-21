@@ -47,6 +47,20 @@ class VasuAccessibilityService : AccessibilityService() {
         return findDescriptionRecursive(currentRoot, text, exact)
     }
 
+    fun findByViewId(viewId: String): AccessibilityNodeInfo? {
+        val normalized = viewId.trim().removePrefix("@id/").removePrefix("@+id/")
+        if (normalized.isBlank()) return null
+        val currentRoot = rootInActiveWindow ?: return null
+        val candidates = buildList {
+            addAll(currentRoot.findAccessibilityNodeInfosByViewId(normalized))
+            if (!normalized.contains(":")) {
+                addAll(currentRoot.findAccessibilityNodeInfosByViewId(normalized.substringAfterLast('/')))
+                addAll(currentRoot.findAccessibilityNodeInfosByViewId("$packageName:id/$normalized"))
+            }
+        }
+        return candidates.firstOrNull { it.isVisibleToUser && it.isEnabled }
+    }
+
     private fun findDescriptionRecursive(node: AccessibilityNodeInfo, text: String, exact: Boolean): AccessibilityNodeInfo? {
         val value = node.contentDescription?.toString().orEmpty()
         if (value.isNotBlank() && if (exact) value.equals(text, true) else value.contains(text, true)) return node
