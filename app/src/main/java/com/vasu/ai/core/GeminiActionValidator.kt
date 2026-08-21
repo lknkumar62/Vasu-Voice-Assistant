@@ -4,10 +4,7 @@ package com.vasu.ai.core
 class GeminiActionValidator(
     private val appResolver: VasuAppResolver
 ) {
-    data class ValidationResult(
-        val actions: List<VasuAction>,
-        val rejectedCount: Int
-    )
+    data class ValidationResult(val actions: List<VasuAction>, val rejectedCount: Int)
 
     fun validate(steps: List<GeminiStep>): ValidationResult {
         var rejected = 0
@@ -29,6 +26,9 @@ class GeminiActionValidator(
                     "back" -> VasuAction.Back
                     "home" -> VasuAction.Home
                     "recents" -> VasuAction.Recents
+                    "notifications" -> VasuAction.Notifications
+                    "lock_screen" -> VasuAction.LockScreen
+                    "take_screenshot" -> VasuAction.TakeScreenshot
                     "volume_up" -> VasuAction.Volume(VasuAction.VolumeDirection.UP)
                     "volume_down" -> VasuAction.Volume(VasuAction.VolumeDirection.DOWN)
                     "mute" -> VasuAction.Mute
