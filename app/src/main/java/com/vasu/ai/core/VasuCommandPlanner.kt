@@ -90,6 +90,19 @@ class VasuCommandPlanner {
             return listOf(VasuAction.OpenApp(packageName), VasuAction.ClickDescription("search"), VasuAction.TypeText(query), VasuAction.PressEnter)
         }
 
+        val chainedOpenSwipe = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:swipe)\\s+(left|right|up|down|baaye|daaye|upar|neeche|niche)").find(normalized)
+        if (chainedOpenSwipe != null) {
+            val target = chainedOpenSwipe.groupValues[1].trim().removeSuffix(" app").trim()
+            val packageName = appPackageResolver(target) ?: return null
+            val direction = when (chainedOpenSwipe.groupValues[2]) {
+                "left", "baaye" -> VasuAction.Direction.LEFT
+                "right", "daaye" -> VasuAction.Direction.RIGHT
+                "up", "upar" -> VasuAction.Direction.UP
+                else -> VasuAction.Direction.DOWN
+            }
+            return listOf(VasuAction.OpenApp(packageName), VasuAction.Swipe(direction))
+        }
+
         val searchCurrentApp = Regex("(?:search|dhundo|khojo)\\s+(?:for\\s+)?(.+)").find(normalized)
         if (searchCurrentApp != null) {
             val query = searchCurrentApp.groupValues[1].trim()
