@@ -2,7 +2,8 @@ name: Android Build
 
 on:
   push:
-  pull_request:
+    branches:
+      - feature/device-control-final4
 
 jobs:
   build:
