@@ -31,15 +31,22 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private var listening = false
     private var processing = false
     private var ttsReady = false
+    private var destroyed = false
 
     override fun onCreate() {
         super.onCreate()
+        destroyed = false
         brain = GeminiAutonomousBrain(this)
         memory = VasuMemoryStore(this)
         tts = TextToSpeech(this, this)
         getSharedPreferences("vasu_runtime", MODE_PRIVATE).edit().putBoolean("voice_running", true).apply()
         createChannel()
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification("Wake word: Hello Vasu"), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            buildNotification("Wake word: Hello Vasu"),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        )
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(this) }
             startListeningSoon(500)
@@ -57,7 +64,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     private fun startListening() {
-        if (isDestroyed || recognizer == null || listening || processing) return
+        if (destroyed || recognizer == null || listening || processing) return
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
@@ -87,7 +94,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         val lower = text.lowercase(Locale.ROOT)
         val wakeVariants = listOf("hello vasu", "hey vasu", "helo vasu", "हेलो वासु", "हैलो वासु")
         val wake = wakeVariants.firstOrNull { lower.contains(it) } ?: return
-        val command = text.substringAfter(wake, "", ignoreCase = true).trim()
+        val command = text.substring(wake.length.coerceAtMost(text.length)).trim()
         if (command.isBlank()) {
             speak("Haan Boss, boliye.")
             return
@@ -163,6 +170,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     override fun onDestroy() {
+        destroyed = true
         handler.removeCallbacksAndMessages(null)
         stopListening()
         recognizer?.destroy()
