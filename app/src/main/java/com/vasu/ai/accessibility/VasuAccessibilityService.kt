@@ -1,6 +1,7 @@
 package com.vasu.ai.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.view.accessibility.AccessibilityEvent
@@ -90,7 +91,8 @@ class VasuAccessibilityService : AccessibilityService() {
     }
 
     fun swipe(startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long = 350L): Boolean {
-        if (!serviceInfo.capabilities.and(android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES).equals(android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES)) return false
+        val info: AccessibilityServiceInfo = serviceInfo ?: return false
+        if ((info.capabilities and AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES) == 0) return false
         val path = Path().apply {
             moveTo(startX, startY)
             lineTo(endX, endY)
