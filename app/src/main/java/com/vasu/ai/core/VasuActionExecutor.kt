@@ -27,6 +27,11 @@ class VasuActionExecutor(private val context: Context) {
                 if (focused == null) editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 service.setText(editable, action.text)
             }
+            VasuAction.PressEnter -> {
+                val service = VasuAccessibilityService.instance ?: return false
+                val focused = service.focusedEditable() ?: findEditable(service.root() ?: return false) ?: return false
+                focused.performAction(AccessibilityNodeInfo.ACTION_IME_ACTION)
+            }
             is VasuAction.Scroll -> {
                 val service = VasuAccessibilityService.instance ?: return false
                 when (action.direction) {
@@ -77,7 +82,6 @@ class VasuActionExecutor(private val context: Context) {
         }
     }
 
-    /** Safely launches an installed app without crashing the assistant on resolver/security failures. */
     private fun openApp(packageName: String): Boolean = runCatching {
         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
