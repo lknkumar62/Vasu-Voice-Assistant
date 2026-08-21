@@ -44,14 +44,33 @@ class GeminiAutonomousBrain(context: Context) {
             var geminiProducedResult = false
 
             for (stepIndex in 0 until MAX_GEMINI_STEPS) {
-                val plan = api.plan(trimmed, screenContext(lastExecution)) ?: break
-                geminiProducedResult = true
-                reply = plan.reply.ifBlank { reply }
-                if (plan.steps.isEmpty()) {
-                    if (reply.isNotBlank()) return Result(true, reply, lastExecution, true)
-                    continue
+                val plan = api.plan(trimmed, screenContext(lastExecution))
+                if (plan == null) {
+                    if (lastExecution != null) {
+                        return Result(
+                            true,
+                            reply.ifBlank { "Boss, task execute ho gaya, lekin final verification nahi mil paya." },
+                            lastExecution,
+                            true
+                        )
+                    }
+                    break
                 }
 
+                geminiProducedResult = true
+                reply = plan.reply.ifBlank { reply }
+
+                // An empty step list is Gemini's explicit signal that no more UI action is needed.
+                if (plan.steps.isEmpty()) {
+                    if (reply.isNotBlank()) return Result(true, reply, lastExecution, true)
+                    if (lastExecution != null) {
+                        return Result(true, "Boss, task complete ho gaya.", lastExecution, true)
+                    }
+                    break
+                }
+
+                // Execute exactly one validated action, then request a fresh screen snapshot.
+                // This prevents stale multi-action plans from blindly running against a changed UI.
                 val validation = validator.validate(listOf(plan.steps.first()), trimmed)
                 if (validation.rejectedCount > 0 || validation.actions.isEmpty()) {
                     return Result(false, "Boss, Gemini ne koi safe Android action nahi diya.", lastExecution, true)
@@ -67,12 +86,25 @@ class GeminiAutonomousBrain(context: Context) {
                 // before Gemini receives the next screen snapshot.
                 Thread.sleep(UI_SETTLE_DELAY_MS)
 
-                if (reply.isNotBlank() && plan.steps.size == 1) return Result(true, reply, execution, true)
-                if (stepIndex == MAX_GEMINI_STEPS - 1) break
+                if (stepIndex == MAX_GEMINI_STEPS - 1) {
+                    return Result(
+                        true,
+                        reply.ifBlank { "Boss, task execute hua, lekin maximum autonomous steps limit ho gayi." },
+                        lastExecution,
+                        true
+                    )
+                }
             }
 
+            // Never run the local fallback after Gemini has already executed an action:
+            // doing so could repeat calls, SMS, taps, or other side effects.
             if (geminiProducedResult && lastExecution != null) {
-                return Result(true, reply.ifBlank { "Boss, task execute hua, lekin final verification complete nahi ho paya." }, lastExecution, true)
+                return Result(
+                    true,
+                    reply.ifBlank { "Boss, task execute ho gaya, lekin final verification complete nahi ho paya." },
+                    lastExecution,
+                    true
+                )
             }
         }
         return localFallback(trimmed)
