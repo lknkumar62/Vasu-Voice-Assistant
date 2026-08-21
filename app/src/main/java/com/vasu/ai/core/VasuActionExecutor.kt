@@ -18,7 +18,13 @@ class VasuActionExecutor(private val context: Context) {
             is VasuAction.OpenApp -> openApp(action.packageName)
             is VasuAction.ClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.click(it) == true } == true
             is VasuAction.LongClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.longClick(it) == true } == true
-            is VasuAction.ClickDescription -> VasuAccessibilityService.instance?.findByContentDescription(action.description)?.let { VasuAccessibilityService.instance?.click(it) == true } == true
+            is VasuAction.ClickDescription -> {
+                val service = VasuAccessibilityService.instance ?: return false
+                val node = service.findByContentDescription(action.description)
+                    ?: service.findByText(action.description)
+                    ?: return false
+                service.click(node)
+            }
             is VasuAction.TypeText -> {
                 val service = VasuAccessibilityService.instance ?: return false
                 val focused = service.focusedEditable()
