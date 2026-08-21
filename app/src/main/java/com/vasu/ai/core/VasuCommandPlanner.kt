@@ -4,7 +4,7 @@ package com.vasu.ai.core
 class VasuCommandPlanner {
 
     fun plan(command: String, appPackageResolver: (String) -> String?): List<VasuAction>? {
-        val normalized = command.trim().lowercase()
+        val normalized = command.trim().lowercase().replace(Regex("\\s+"), " ")
         if (normalized.isBlank()) return null
 
         if (normalized == "back" || normalized.contains("go back") || normalized.contains("wapas ja")) return listOf(VasuAction.Back)
@@ -46,7 +46,8 @@ class VasuCommandPlanner {
 
         val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+)").find(normalized)
         if (openMatch != null) {
-            val packageName = appPackageResolver(openMatch.groupValues[1].trim()) ?: return null
+            val target = openMatch.groupValues[1].trim().removeSuffix(" app").trim()
+            val packageName = appPackageResolver(target) ?: return null
             return listOf(VasuAction.OpenApp(packageName))
         }
 
