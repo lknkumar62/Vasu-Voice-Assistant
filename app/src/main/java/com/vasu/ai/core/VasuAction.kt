@@ -21,6 +21,7 @@ sealed interface VasuAction {
     data object OpenAirplaneModeSettings : VasuAction
     data object OpenBatterySaverSettings : VasuAction
     data object OpenLocationSettings : VasuAction
+    data object PressEnter : VasuAction
     data object Back : VasuAction
     data object Home : VasuAction
     data object Recents : VasuAction
