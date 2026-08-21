@@ -17,6 +17,7 @@ class GeminiActionValidator(private val appResolver: VasuAppResolver) {
                     "click_text" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::ClickText)
                     "long_click_text" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::LongClickText)
                     "click_description" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::ClickDescription)
+                    "click_view_id" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::ClickViewId)
                     "type_text" -> step.value.takeIf { it.isNotBlank() }?.let(VasuAction::TypeText)
                     "wait" -> step.value.toLongOrNull()?.takeIf { it in 50L..1500L }?.let(VasuAction::Wait)
                     "press_enter" -> VasuAction.PressEnter
