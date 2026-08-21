@@ -10,17 +10,25 @@ class VasuCommandPlanner {
         if (normalized == "back" || normalized.contains("go back") || normalized.contains("wapas ja")) return listOf(VasuAction.Back)
         if (normalized == "home" || normalized.contains("home screen") || normalized.contains("home ja")) return listOf(VasuAction.Home)
         if (normalized.contains("recent apps") || normalized.contains("recents")) return listOf(VasuAction.Recents)
+
         if (normalized.contains("scroll down") || normalized.contains("neeche scroll") || normalized.contains("niche scroll")) return listOf(VasuAction.Scroll(VasuAction.Direction.DOWN))
         if (normalized.contains("scroll up") || normalized.contains("upar scroll")) return listOf(VasuAction.Scroll(VasuAction.Direction.UP))
+        if (normalized.contains("swipe left") || normalized.contains("baaye swipe")) return listOf(VasuAction.Swipe(VasuAction.Direction.LEFT))
+        if (normalized.contains("swipe right") || normalized.contains("daaye swipe")) return listOf(VasuAction.Swipe(VasuAction.Direction.RIGHT))
+        if (normalized.contains("swipe up") || normalized.contains("upar swipe")) return listOf(VasuAction.Swipe(VasuAction.Direction.UP))
+        if (normalized.contains("swipe down") || normalized.contains("neeche swipe")) return listOf(VasuAction.Swipe(VasuAction.Direction.DOWN))
 
-        val flashlightOn = normalized.contains("flashlight") && (normalized.contains("on") || normalized.contains("chala") || normalized.contains("jala"))
-        val flashlightOff = normalized.contains("flashlight") && (normalized.contains("off") || normalized.contains("band"))
+        val flashlightOn = (normalized.contains("flashlight") || normalized.contains("torch") || normalized.contains("tarch")) &&
+            (normalized.contains("on") || normalized.contains("chala") || normalized.contains("jala"))
+        val flashlightOff = (normalized.contains("flashlight") || normalized.contains("torch") || normalized.contains("tarch")) &&
+            (normalized.contains("off") || normalized.contains("band"))
         if (flashlightOn) return listOf(VasuAction.Flashlight(true))
         if (flashlightOff) return listOf(VasuAction.Flashlight(false))
 
         if (normalized.contains("volume up") || normalized.contains("volume badha") || normalized.contains("awaz badha")) return listOf(VasuAction.Volume(VasuAction.VolumeDirection.UP))
         if (normalized.contains("volume down") || normalized.contains("volume kam") || normalized.contains("awaz kam")) return listOf(VasuAction.Volume(VasuAction.VolumeDirection.DOWN))
         if (normalized.contains("mute") || normalized.contains("silent kar")) return listOf(VasuAction.Mute)
+
         if (normalized.contains("wifi") && (normalized.contains("open") || normalized.contains("settings") || normalized.contains("khol"))) return listOf(VasuAction.OpenWifiSettings)
         if (normalized.contains("bluetooth") && (normalized.contains("open") || normalized.contains("settings") || normalized.contains("khol"))) return listOf(VasuAction.OpenBluetoothSettings)
         if (normalized.contains("brightness") || normalized.contains("screen light")) return listOf(VasuAction.OpenBrightnessSettings)
@@ -29,11 +37,23 @@ class VasuCommandPlanner {
         if (normalized.contains("battery saver") || normalized.contains("power saver")) return listOf(VasuAction.OpenBatterySaverSettings)
         if (normalized.contains("location settings") || normalized.contains("gps settings")) return listOf(VasuAction.OpenLocationSettings)
 
+        val callMatch = Regex("(?:call|phone karo|call karo)\\s+(.+)").find(normalized)
+        if (callMatch != null) return listOf(VasuAction.CallContact(callMatch.groupValues[1].trim()))
+
+        val smsMatch = Regex("(?:send sms|sms bhejo|message bhejo|text bhejo)\\s+(?:to\\s+)?(.+?)\\s+(?:message|bolo|likho|that)\\s+(.+)").find(normalized)
+        if (smsMatch != null) return listOf(VasuAction.SendSms(smsMatch.groupValues[1].trim(), smsMatch.groupValues[2].trim()))
+
         val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+)").find(normalized)
         if (openMatch != null) {
             val packageName = appPackageResolver(openMatch.groupValues[1].trim()) ?: return null
             return listOf(VasuAction.OpenApp(packageName))
         }
+
+        val longClickMatch = Regex("(?:long click|long press|hold|dabakar rakho)\\s+(.+)").find(normalized)
+        if (longClickMatch != null) return listOf(VasuAction.LongClickText(longClickMatch.groupValues[1].trim()))
+
+        val clickDescriptionMatch = Regex("(?:click icon|tap icon|press icon)\\s+(.+)").find(normalized)
+        if (clickDescriptionMatch != null) return listOf(VasuAction.ClickDescription(clickDescriptionMatch.groupValues[1].trim()))
 
         val clickMatch = Regex("(?:click|tap|dabao|dabao on|press)\\s+(.+)").find(normalized)
         if (clickMatch != null) return listOf(VasuAction.ClickText(clickMatch.groupValues[1].trim()))
