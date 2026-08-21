@@ -4,8 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
-import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityEvent
 
 /** Single UI automation engine for VASU; Android permissions and target-app restrictions still apply. */
 class VasuAccessibilityService : AccessibilityService() {
@@ -76,8 +76,22 @@ class VasuAccessibilityService : AccessibilityService() {
         return false
     }
 
+    fun focusedEditable(): AccessibilityNodeInfo? {
+        val currentRoot = rootInActiveWindow ?: return null
+        return findFocusedEditable(currentRoot)
+    }
+
+    private fun findFocusedEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.isFocused && node.isEditable && node.isEnabled && node.isVisibleToUser) return node
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            findFocusedEditable(child)?.let { return it }
+        }
+        return null
+    }
+
     fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
-        if (!node.isEditable || !node.isEnabled || !node.isVisibleToUser) return false
+        if (!node.isEditable || !node.isEnabled || !node.isVisibleToUser || node.isPassword) return false
         val args = android.os.Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
@@ -119,7 +133,17 @@ class VasuAccessibilityService : AccessibilityService() {
                 else -> ""
             }
             if (value.isNotBlank()) {
-                out.append("- ").append(value.take(200)).append('\n')
+                val flags = buildString {
+                    if (node.isClickable) append(" clickable")
+                    if (node.isLongClickable) append(" longClickable")
+                    if (node.isEditable) append(" editable")
+                    if (node.isScrollable) append(" scrollable")
+                    if (node.isFocused) append(" focused")
+                    if (node.isPassword) append(" secure")
+                }.trim()
+                out.append("- ").append(value.take(200))
+                if (flags.isNotBlank()) out.append(" [").append(flags).append(']')
+                out.append('\n')
                 count++
             }
             for (i in 0 until node.childCount) {
