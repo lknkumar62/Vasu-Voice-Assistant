@@ -15,6 +15,8 @@ class VasuActionExecutor(private val context: Context) {
     fun execute(action: VasuAction): Boolean = when (action) {
         is VasuAction.OpenApp -> openApp(action.packageName)
         is VasuAction.ClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.click(it) == true } == true
+        is VasuAction.LongClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.longClick(it) == true } == true
+        is VasuAction.ClickDescription -> VasuAccessibilityService.instance?.findByContentDescription(action.description)?.let { VasuAccessibilityService.instance?.click(it) == true } == true
         is VasuAction.TypeText -> {
             val service = VasuAccessibilityService.instance ?: return false
             val editable = findEditable(service.root() ?: return false) ?: return false
@@ -25,9 +27,10 @@ class VasuActionExecutor(private val context: Context) {
             when (action.direction) {
                 VasuAction.Direction.UP -> service.scroll(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
                 VasuAction.Direction.DOWN -> service.scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-                VasuAction.Direction.LEFT, VasuAction.Direction.RIGHT -> false
+                VasuAction.Direction.LEFT, VasuAction.Direction.RIGHT -> swipe(service, action.direction)
             }
         }
+        is VasuAction.Swipe -> VasuAccessibilityService.instance?.let { swipe(it, action.direction) } ?: false
         is VasuAction.Volume -> when (action.direction) {
             VasuAction.VolumeDirection.UP -> device.volumeUp()
             VasuAction.VolumeDirection.DOWN -> device.volumeDown()
@@ -46,6 +49,20 @@ class VasuActionExecutor(private val context: Context) {
         VasuAction.Back -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) == true
         VasuAction.Home -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) == true
         VasuAction.Recents -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) == true
+    }
+
+    private fun swipe(service: VasuAccessibilityService, direction: VasuAction.Direction): Boolean {
+        val metrics = context.resources.displayMetrics
+        val cx = metrics.widthPixels * 0.5f
+        val cy = metrics.heightPixels * 0.5f
+        val dx = metrics.widthPixels * 0.32f
+        val dy = metrics.heightPixels * 0.32f
+        return when (direction) {
+            VasuAction.Direction.UP -> service.swipe(cx, cy + dy, cx, cy - dy)
+            VasuAction.Direction.DOWN -> service.swipe(cx, cy - dy, cx, cy + dy)
+            VasuAction.Direction.LEFT -> service.swipe(cx + dx, cy, cx - dx, cy)
+            VasuAction.Direction.RIGHT -> service.swipe(cx - dx, cy, cx + dx, cy)
+        }
     }
 
     private fun openApp(packageName: String): Boolean {
