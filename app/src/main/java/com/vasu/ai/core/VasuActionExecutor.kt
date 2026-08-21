@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import com.vasu.ai.accessibility.VasuAccessibilityService
 import com.vasu.ai.device.VasuCommunicationController
@@ -32,6 +33,11 @@ class VasuActionExecutor(private val context: Context) {
                 if (editable == null || editable.isPassword) return false
                 if (focused == null) editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 service.setText(editable, action.text)
+            }
+            is VasuAction.Wait -> {
+                val delay = action.milliseconds.coerceIn(50L, 1500L)
+                SystemClock.sleep(delay)
+                true
             }
             VasuAction.PressEnter -> pressEnter()
             is VasuAction.Scroll -> {
