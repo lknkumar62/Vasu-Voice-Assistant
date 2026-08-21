@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import com.vasu.ai.accessibility.VasuAccessibilityService
+import com.vasu.ai.notification.VasuNotificationListener
 import java.util.concurrent.Executors
 
 class GeminiAutonomousBrain(context: Context) {
@@ -35,11 +36,7 @@ class GeminiAutonomousBrain(context: Context) {
         }
     }
 
-    /**
-     * Online requests are planned by Gemini against the current screen. After every
-     * successful UI action the planner receives fresh screen context and decides the
-     * next step. Basic local planning remains the offline fallback.
-     */
+    /** Online requests use Gemini; local command planning remains the offline fallback. */
     fun handle(command: String): Result {
         val trimmed = command.trim()
         if (trimmed.isBlank()) return Result(false, "Command samajh nahi aaya.")
@@ -82,24 +79,17 @@ class GeminiAutonomousBrain(context: Context) {
     }
 
     fun saveGeminiApiKey(apiKey: String) = keyStore.save(apiKey.trim())
-
     fun clearGeminiApiKey() = keyStore.clear()
 
     private fun localFallback(command: String): Result {
         val actions = VasuCommandPlanner().plan(command) { appResolver.resolve(it) }
         if (actions.isNullOrEmpty()) {
-            return if (isOnline()) {
-                Result(false, "Boss, Gemini API response nahi de saka ya valid action nahi mila.")
-            } else {
-                Result(false, "Internet nahi hai Boss, lekin main offline-capable phone commands kar sakta hoon.")
-            }
+            return if (isOnline()) Result(false, "Boss, Gemini API response nahi de saka ya valid action nahi mila.")
+            else Result(false, "Internet nahi hai Boss, lekin main offline-capable phone commands kar sakta hoon.")
         }
         val execution = executionEngine.execute(actions)
-        return if (execution.success) {
-            Result(true, "Ho gaya Boss.", execution, false)
-        } else {
-            Result(true, "Boss, command execute nahi ho paya. Required permission ya app restriction check kijiye.", execution, false)
-        }
+        return if (execution.success) Result(true, "Ho gaya Boss.", execution, false)
+        else Result(true, "Boss, command execute nahi ho paya. Required permission ya app restriction check kijiye.", execution, false)
     }
 
     private fun isOnline(): Boolean {
@@ -110,27 +100,24 @@ class GeminiAutonomousBrain(context: Context) {
     }
 
     private fun screenContext(lastExecution: VasuExecutionEngine.ExecutionResult?): String {
-        val service = VasuAccessibilityService.instance ?: return "Accessibility service unavailable."
-        val root = service.root() ?: return "No readable foreground window."
-        val packageName = service.foregroundPackage() ?: "unknown"
-        val texts = buildList {
-            fun visit(node: android.view.accessibility.AccessibilityNodeInfo) {
-                val text = node.text?.toString()?.trim().orEmpty()
-                val description = node.contentDescription?.toString()?.trim().orEmpty()
-                if (text.isNotBlank()) add(text.take(160))
-                if (description.isNotBlank()) add(description.take(160))
-                for (i in 0 until node.childCount) {
-                    val child = node.getChild(i) ?: continue
-                    visit(child)
+        val service = VasuAccessibilityService.instance
+        return buildString {
+            if (service == null) {
+                append("accessibility_service=unavailable\n")
+            } else {
+                append("foreground_package=").append(service.foregroundPackage() ?: "unknown").append('\n')
+                append("visible_screen=\n").append(service.describeScreen(100))
+            }
+
+            val notifications = VasuNotificationListener.recent(10)
+            if (notifications.isNotEmpty()) {
+                append("recent_notifications=\n")
+                notifications.forEach {
+                    append("- [").append(it.packageName).append("] ")
+                        .append(it.title).append(": ").append(it.text).append('\n')
                 }
             }
-            visit(root)
-        }.distinct().take(100)
 
-        return buildString {
-            append("foreground_package=").append(packageName).append('\n')
-            append("visible_text=\n")
-            texts.forEach { append("- ").append(it).append('\n') }
             lastExecution?.let {
                 append("previous_step_success=").append(it.success).append('\n')
                 append("previous_completed_count=").append(it.completedCount).append('\n')
