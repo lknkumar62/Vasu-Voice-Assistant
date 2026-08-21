@@ -84,6 +84,18 @@ class VasuCommandPlanner {
             )
         }
 
+        val searchCurrentApp = Regex("(?:search|dhundo|khojo)\\s+(?:for\\s+)?(.+)").find(normalized)
+        if (searchCurrentApp != null) {
+            val query = searchCurrentApp.groupValues[1].trim()
+            if (query.isNotBlank()) {
+                return listOf(
+                    VasuAction.ClickDescription("search"),
+                    VasuAction.TypeText(query),
+                    VasuAction.PressEnter
+                )
+            }
+        }
+
         val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+)").find(normalized)
         if (openMatch != null) {
             val target = openMatch.groupValues[1].trim().removeSuffix(" app").trim()
