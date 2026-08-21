@@ -24,6 +24,9 @@ sealed interface VasuAction {
     data object Back : VasuAction
     data object Home : VasuAction
     data object Recents : VasuAction
+    data object Notifications : VasuAction
+    data object LockScreen : VasuAction
+    data object TakeScreenshot : VasuAction
 
     enum class Direction { UP, DOWN, LEFT, RIGHT }
     enum class VolumeDirection { UP, DOWN }
