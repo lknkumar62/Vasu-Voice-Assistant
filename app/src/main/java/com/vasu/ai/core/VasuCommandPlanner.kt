@@ -15,6 +15,14 @@ class VasuCommandPlanner {
         if (normalized.contains("take screenshot") || normalized.contains("screenshot lo") || normalized.contains("screenshot le")) return listOf(VasuAction.TakeScreenshot)
         if (normalized == "enter" || normalized == "press enter" || normalized == "submit" || normalized == "done" || normalized == "search now") return listOf(VasuAction.PressEnter)
 
+        val waitMatch = Regex("(?:wait|ruk|ruko|thehro)\\s+(\\d+(?:\\.\\d+)?)\\s*(ms|millisecond|milliseconds|second|seconds|sec)?").find(normalized)
+        if (waitMatch != null) {
+            val value = waitMatch.groupValues[1].toDoubleOrNull() ?: return null
+            val unit = waitMatch.groupValues[2]
+            val milliseconds = if (unit in setOf("second", "seconds", "sec")) (value * 1000).toLong() else value.toLong()
+            return listOf(VasuAction.Wait(milliseconds.coerceIn(50L, 1500L)))
+        }
+
         if (normalized.contains("scroll down") || normalized.contains("neeche scroll") || normalized.contains("niche scroll")) return listOf(VasuAction.Scroll(VasuAction.Direction.DOWN))
         if (normalized.contains("scroll up") || normalized.contains("upar scroll")) return listOf(VasuAction.Scroll(VasuAction.Direction.UP))
         if (normalized.contains("swipe left") || normalized.contains("baaye swipe")) return listOf(VasuAction.Swipe(VasuAction.Direction.LEFT))
