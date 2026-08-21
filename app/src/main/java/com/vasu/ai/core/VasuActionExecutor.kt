@@ -21,13 +21,12 @@ class VasuActionExecutor(private val context: Context) {
             is VasuAction.LongClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.longClick(it) == true } == true
             is VasuAction.ClickDescription -> {
                 val service = VasuAccessibilityService.instance ?: return false
-                val target = action.description.trim()
-                val node = if (target.startsWith("id:", ignoreCase = true)) {
-                    service.findByViewId(target.substringAfter(':'))
-                } else {
-                    service.findByContentDescription(target) ?: service.findByText(target)
-                } ?: return false
+                val node = service.findByContentDescription(action.description) ?: service.findByText(action.description) ?: return false
                 service.click(node)
+            }
+            is VasuAction.ClickViewId -> {
+                val service = VasuAccessibilityService.instance ?: return false
+                service.findByViewId(action.viewId)?.let(service::click) == true
             }
             is VasuAction.TypeText -> {
                 val service = VasuAccessibilityService.instance ?: return false
