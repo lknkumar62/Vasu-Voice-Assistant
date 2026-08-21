@@ -44,6 +44,20 @@ class VasuCommandPlanner {
         val smsMatch = Regex("(?:send sms|sms bhejo|message bhejo|text bhejo)\\s+(?:to\\s+)?(.+?)\\s+(?:message|bolo|likho|that)\\s+(.+)").find(normalized)
         if (smsMatch != null) return listOf(VasuAction.SendSms(smsMatch.groupValues[1].trim(), smsMatch.groupValues[2].trim()))
 
+        val chainedOpenClick = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:click|tap|dabao|press)\\s+(.+)").find(normalized)
+        if (chainedOpenClick != null) {
+            val target = chainedOpenClick.groupValues[1].trim().removeSuffix(" app").trim()
+            val packageName = appPackageResolver(target) ?: return null
+            return listOf(VasuAction.OpenApp(packageName), VasuAction.ClickText(chainedOpenClick.groupValues[2].trim()))
+        }
+
+        val chainedOpenType = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:type|likho|write)\\s+(.+)").find(normalized)
+        if (chainedOpenType != null) {
+            val target = chainedOpenType.groupValues[1].trim().removeSuffix(" app").trim()
+            val packageName = appPackageResolver(target) ?: return null
+            return listOf(VasuAction.OpenApp(packageName), VasuAction.TypeText(chainedOpenType.groupValues[2].trim()))
+        }
+
         val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+)").find(normalized)
         if (openMatch != null) {
             val target = openMatch.groupValues[1].trim().removeSuffix(" app").trim()
