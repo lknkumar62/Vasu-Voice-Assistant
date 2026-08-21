@@ -22,11 +22,11 @@ class GeminiApiClient(
                 }
             ))
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.15)
                 put("candidateCount", 1)
                 put("maxOutputTokens", 1200)
                 put("responseMimeType", "application/json")
                 put("responseSchema", responseSchema())
+                put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
             })
         }
 
@@ -56,18 +56,16 @@ class GeminiApiClient(
             ?.optString("text", "")
             ?.takeIf { it.isNotBlank() } ?: return null
 
-        val root = JSONObject(text)
+        val root = runCatching { JSONObject(text) }.getOrNull() ?: return null
         val steps = root.optJSONArray("steps") ?: JSONArray()
         val parsed = buildList {
             for (i in 0 until steps.length()) {
                 val item = steps.optJSONObject(i) ?: continue
-                add(
-                    GeminiStep(
-                        action = item.optString("action", ""),
-                        target = item.optString("target", ""),
-                        value = item.optString("value", "")
-                    )
-                )
+                add(GeminiStep(
+                    action = item.optString("action", ""),
+                    target = item.optString("target", ""),
+                    value = item.optString("value", "")
+                ))
             }
         }
         return GeminiPlan(root.optString("reply", ""), parsed)
@@ -85,7 +83,8 @@ class GeminiApiClient(
                         put("action", JSONObject().apply {
                             put("type", "STRING")
                             put("enum", JSONArray(listOf(
-                                "open_app", "click_text", "type_text", "scroll_up", "scroll_down",
+                                "open_app", "click_text", "long_click_text", "click_description", "type_text",
+                                "scroll_up", "scroll_down", "swipe_up", "swipe_down", "swipe_left", "swipe_right",
                                 "back", "home", "recents", "volume_up", "volume_down", "mute",
                                 "flashlight_on", "flashlight_off", "call_contact", "send_sms",
                                 "open_wifi_settings", "open_bluetooth_settings", "open_brightness_settings",
@@ -109,16 +108,13 @@ class GeminiApiClient(
 You are VASU AI's autonomous Android operator planner.
 Never invent capabilities. Never bypass Android security or permissions.
 Return ONLY JSON matching the provided schema.
-At each turn choose ONE next action only. Use zero steps only when you can answer from the current screen context without acting.
-Always inspect the current foreground package and visible UI text provided in CURRENT CONTEXT before choosing the action.
-For multi-step tasks, rely on a fresh context after each successful step instead of assuming the previous screen stayed the same.
-Available actions:
-open_app(target=app name), click_text(target=visible UI text), type_text(value=text),
-scroll_up, scroll_down, back, home, recents, volume_up, volume_down, mute,
-flashlight_on, flashlight_off, call_contact(target=contact name),
-send_sms(target=contact name, value=message), and supported Settings actions.
-For app messaging, prefer Accessibility sequences one action at a time.
-Typing into passwords/secure fields, bypassing locks, or extracting private app data is forbidden.
-The application will validate every action before execution.
+Choose ONE next action only. Use zero steps only when you can answer from current screen context without acting.
+Always inspect foreground package and visible UI text in CURRENT CONTEXT before choosing an action.
+For multi-step tasks, rely on fresh context after every successful action.
+Available actions include opening apps, visible text/description clicks, long clicks, typing, scrolling, swiping,
+Back/Home/Recents, volume, mute, flashlight, calling contacts, SMS and supported Settings actions.
+For messaging and app automation, use Accessibility one action at a time.
+Never type passwords, bypass device/app locks, extract private data, or defeat Android security controls.
+The application validates every action before execution.
 """.trimIndent()
 }
