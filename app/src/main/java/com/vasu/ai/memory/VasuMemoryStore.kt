@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Small encrypted-by-app-storage boundary for recent VASU interactions. */
+/** Local command history stored in the app's private SharedPreferences. */
 class VasuMemoryStore(context: Context) {
     private val prefs = context.getSharedPreferences("vasu_memory", Context.MODE_PRIVATE)
 
