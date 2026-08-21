@@ -4,8 +4,11 @@ package com.vasu.ai.core
 sealed interface VasuAction {
     data class OpenApp(val packageName: String) : VasuAction
     data class ClickText(val text: String) : VasuAction
+    data class LongClickText(val text: String) : VasuAction
+    data class ClickDescription(val description: String) : VasuAction
     data class TypeText(val text: String) : VasuAction
     data class Scroll(val direction: Direction) : VasuAction
+    data class Swipe(val direction: Direction) : VasuAction
     data class Volume(val direction: VolumeDirection) : VasuAction
     data class Flashlight(val enabled: Boolean) : VasuAction
     data class CallContact(val name: String) : VasuAction
