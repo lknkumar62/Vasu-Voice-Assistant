@@ -28,6 +28,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private lateinit var brain: GeminiAutonomousBrain
     private lateinit var memory: VasuMemoryStore
     private var listening = false
+    private var processing = false
     private var ttsReady = false
 
     override fun onCreate() {
@@ -35,6 +36,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         brain = GeminiAutonomousBrain(this)
         memory = VasuMemoryStore(this)
         tts = TextToSpeech(this, this)
+        getSharedPreferences("vasu_runtime", MODE_PRIVATE).edit().putBoolean("voice_running", true).apply()
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Wake word: Hello Vasu"))
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
@@ -54,7 +56,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     private fun startListening() {
-        if (isDestroyed || recognizer == null || listening) return
+        if (isDestroyed || recognizer == null || listening || processing) return
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
@@ -78,6 +80,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     private fun handleTranscript(raw: String) {
+        if (processing) return
         val text = raw.trim()
         if (text.isBlank()) return
         val lower = text.lowercase(Locale.ROOT)
@@ -91,12 +94,15 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             return
         }
 
+        processing = true
         stopListening()
         updateNotification("Processing: $command")
         brain.handleAsync(command) { result ->
             memory.add(command, result.reply, result.handled, result.usedGemini)
-            speak(result.reply.ifBlank { if (result.handled) "Ho gaya Boss." else "Command execute nahi hua." })
             updateNotification(if (result.handled) "Ready — Hello Vasu" else "Command failed — Hello Vasu")
+            val response = result.reply.ifBlank { if (result.handled) "Ho gaya Boss." else "Command execute nahi hua." }
+            speak(response)
+            processing = false
             startListeningSoon(800)
         }
     }
@@ -105,7 +111,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (!ttsReady) return
         stopListening()
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), "vasu-${System.currentTimeMillis()}")
-        handler.postDelayed({ startListeningSoon(500) }, (text.length * 55L).coerceIn(700, 5000))
+        handler.postDelayed({ if (!processing) startListeningSoon(500) }, (text.length * 55L).coerceIn(700, 5000))
     }
 
     private fun updateNotification(text: String) {
@@ -135,19 +141,21 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onBufferReceived(buffer: ByteArray?) = Unit
     override fun onEndOfSpeech() {
         listening = false
-        startListeningSoon(300)
+        if (!processing) startListeningSoon(300)
     }
     override fun onError(error: Int) {
         listening = false
-        startListeningSoon(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500)
+        if (!processing) startListeningSoon(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500)
     }
     override fun onResults(results: Bundle?) {
         listening = false
+        if (processing) return
         val values = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
         values.firstOrNull()?.let(::handleTranscript)
-        if (values.firstOrNull()?.contains("hello", true) != true) startListeningSoon(250)
+        if (!processing) startListeningSoon(250)
     }
     override fun onPartialResults(partialResults: Bundle?) {
+        if (processing) return
         val values = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
         values.firstOrNull()?.let { if (it.contains("vasu", true)) handleTranscript(it) }
     }
@@ -169,6 +177,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         tts?.stop()
         tts?.shutdown()
         tts = null
+        getSharedPreferences("vasu_runtime", MODE_PRIVATE).edit().putBoolean("voice_running", false).apply()
         super.onDestroy()
     }
 
