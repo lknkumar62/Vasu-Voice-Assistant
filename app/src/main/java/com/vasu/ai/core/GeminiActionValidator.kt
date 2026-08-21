@@ -1,13 +1,14 @@
 package com.vasu.ai.core
 
 /** Converts only explicitly allowed Gemini steps into the existing VASU action contract. */
-class GeminiActionValidator(
-    private val appResolver: VasuAppResolver
-) {
+class GeminiActionValidator(private val appResolver: VasuAppResolver) {
     data class ValidationResult(val actions: List<VasuAction>, val rejectedCount: Int)
 
-    fun validate(steps: List<GeminiStep>): ValidationResult {
+    fun validate(steps: List<GeminiStep>, userCommand: String = ""): ValidationResult {
         var rejected = 0
+        val command = userCommand.trim().lowercase()
+        val explicitCallIntent = command.contains("call") || command.contains("phone") || command.contains("dial")
+        val explicitMessageIntent = command.contains("sms") || command.contains("message") || command.contains("text")
         val actions = buildList {
             for (step in steps) {
                 val normalized = step.action.trim().lowercase()
@@ -34,8 +35,8 @@ class GeminiActionValidator(
                     "mute" -> VasuAction.Mute
                     "flashlight_on" -> VasuAction.Flashlight(true)
                     "flashlight_off" -> VasuAction.Flashlight(false)
-                    "call_contact" -> step.target.takeIf { it.isNotBlank() }?.let(VasuAction::CallContact)
-                    "send_sms" -> if (step.target.isNotBlank() && step.value.isNotBlank()) VasuAction.SendSms(step.target, step.value) else null
+                    "call_contact" -> if (explicitCallIntent && step.target.isNotBlank()) VasuAction.CallContact(step.target) else null
+                    "send_sms" -> if (explicitMessageIntent && step.target.isNotBlank() && step.value.isNotBlank()) VasuAction.SendSms(step.target, step.value) else null
                     "open_wifi_settings" -> VasuAction.OpenWifiSettings
                     "open_bluetooth_settings" -> VasuAction.OpenBluetoothSettings
                     "open_brightness_settings" -> VasuAction.OpenBrightnessSettings
