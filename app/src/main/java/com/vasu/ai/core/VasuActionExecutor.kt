@@ -20,7 +20,10 @@ class VasuActionExecutor(private val context: Context) {
         is VasuAction.ClickDescription -> VasuAccessibilityService.instance?.findByContentDescription(action.description)?.let { VasuAccessibilityService.instance?.click(it) == true } == true
         is VasuAction.TypeText -> {
             val service = VasuAccessibilityService.instance ?: return false
-            val editable = findEditable(service.root() ?: return false) ?: return false
+            val focused = service.focusedEditable()
+            val editable = focused ?: findEditable(service.root() ?: return false)
+            if (editable == null || editable.isPassword) return false
+            if (focused == null) editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             service.setText(editable, action.text)
         }
         is VasuAction.Scroll -> {
@@ -80,7 +83,7 @@ class VasuActionExecutor(private val context: Context) {
     }
 
     private fun findEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (node.isEditable && node.isEnabled && node.isVisibleToUser) return node
+        if (node.isEditable && node.isEnabled && node.isVisibleToUser && !node.isPassword) return node
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             findEditable(child)?.let { return it }
