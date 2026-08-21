@@ -5,7 +5,8 @@ class VasuExecutionEngine(private val executor: VasuActionExecutor) {
     data class StepResult(
         val action: VasuAction,
         val success: Boolean,
-        val recovered: Boolean = false
+        val recovered: Boolean = false,
+        val attempts: Int = 1
     )
 
     data class ExecutionResult(
@@ -14,6 +15,8 @@ class VasuExecutionEngine(private val executor: VasuActionExecutor) {
         val success: Boolean get() = steps.isNotEmpty() && steps.all { it.success }
         val completedCount: Int get() = steps.count { it.success }
         val recoveredCount: Int get() = steps.count { it.recovered }
+        val failedAction: VasuAction? get() = steps.lastOrNull { !it.success }?.action
+        val totalAttempts: Int get() = steps.sumOf { it.attempts }
     }
 
     fun execute(actions: List<VasuAction>): ExecutionResult {
@@ -30,7 +33,7 @@ class VasuExecutionEngine(private val executor: VasuActionExecutor) {
             if (isSafeToRetry(action)) {
                 Thread.sleep(150L)
                 val recovered = runCatching { executor.execute(action) }.getOrDefault(false)
-                results += StepResult(action, recovered, recovered)
+                results += StepResult(action, recovered, recovered, attempts = 2)
                 if (!recovered) break
                 continue
             }
