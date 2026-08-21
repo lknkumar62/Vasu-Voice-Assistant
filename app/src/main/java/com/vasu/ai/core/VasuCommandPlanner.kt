@@ -4,7 +4,7 @@ package com.vasu.ai.core
 class VasuCommandPlanner {
 
     fun plan(command: String, appPackageResolver: (String) -> String?): List<VasuAction>? {
-        val normalized = command.trim().lowercase().replace(Regex("\s+"), " ")
+        val normalized = command.trim().lowercase().replace(Regex("\\s+"), " ")
         if (normalized.isBlank()) return null
 
         if (normalized == "back" || normalized.contains("go back") || normalized.contains("wapas ja")) return listOf(VasuAction.Back)
@@ -39,27 +39,42 @@ class VasuCommandPlanner {
         if (normalized.contains("battery saver") || normalized.contains("power saver")) return listOf(VasuAction.OpenBatterySaverSettings)
         if (normalized.contains("location settings") || normalized.contains("gps settings")) return listOf(VasuAction.OpenLocationSettings)
 
-        val callMatch = Regex("(?:call|phone karo|call karo)\s+(.+)").find(normalized)
+        val callMatch = Regex("(?:call|phone karo|call karo)\\s+(.+)").find(normalized)
         if (callMatch != null) return listOf(VasuAction.CallContact(callMatch.groupValues[1].trim()))
 
-        val smsMatch = Regex("(?:send sms|sms bhejo|message bhejo|text bhejo)\s+(?:to\s+)?(.+?)\s+(?:message|bolo|likho|that)\s+(.+)").find(normalized)
+        val smsMatch = Regex("(?:send sms|sms bhejo|message bhejo|text bhejo)\\s+(?:to\\s+)?(.+?)\\s+(?:message|bolo|likho|that)\\s+(.+)").find(normalized)
         if (smsMatch != null) return listOf(VasuAction.SendSms(smsMatch.groupValues[1].trim(), smsMatch.groupValues[2].trim()))
 
-        val chainedOpenClick = Regex("(?:open|launch|khol|kholo|chalao)\s+(.+?)\s+(?:and|then|phir|aur)\s+(?:click|tap|dabao|press)\s+(.+)").find(normalized)
+        val chainedOpenClick = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:click|tap|dabao|press)\\s+(.+)").find(normalized)
         if (chainedOpenClick != null) {
             val target = chainedOpenClick.groupValues[1].trim().removeSuffix(" app").trim()
             val packageName = appPackageResolver(target) ?: return null
             return listOf(VasuAction.OpenApp(packageName), VasuAction.ClickText(chainedOpenClick.groupValues[2].trim()))
         }
 
-        val chainedOpenType = Regex("(?:open|launch|khol|kholo|chalao)\s+(.+?)\s+(?:and|then|phir|aur)\s+(?:type|likho|write)\s+(.+)").find(normalized)
+        val chainedOpenLongClick = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:long click|long press|hold|dabakar rakho)\\s+(.+)").find(normalized)
+        if (chainedOpenLongClick != null) {
+            val target = chainedOpenLongClick.groupValues[1].trim().removeSuffix(" app").trim()
+            val packageName = appPackageResolver(target) ?: return null
+            return listOf(VasuAction.OpenApp(packageName), VasuAction.LongClickText(chainedOpenLongClick.groupValues[2].trim()))
+        }
+
+        val chainedOpenScroll = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:scroll|scroll karo)\\s+(up|down|upar|neeche|niche)").find(normalized)
+        if (chainedOpenScroll != null) {
+            val target = chainedOpenScroll.groupValues[1].trim().removeSuffix(" app").trim()
+            val packageName = appPackageResolver(target) ?: return null
+            val direction = if (chainedOpenScroll.groupValues[2] in setOf("up", "upar")) VasuAction.Direction.UP else VasuAction.Direction.DOWN
+            return listOf(VasuAction.OpenApp(packageName), VasuAction.Scroll(direction))
+        }
+
+        val chainedOpenType = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:type|likho|write)\\s+(.+)").find(normalized)
         if (chainedOpenType != null) {
             val target = chainedOpenType.groupValues[1].trim().removeSuffix(" app").trim()
             val packageName = appPackageResolver(target) ?: return null
             return listOf(VasuAction.OpenApp(packageName), VasuAction.TypeText(chainedOpenType.groupValues[2].trim()))
         }
 
-        val searchInApp = Regex("(?:search|dhundo|khojo)\s+(.+?)\s+(?:in|on|me)\s+(.+)").find(normalized)
+        val searchInApp = Regex("(?:search|dhundo|khojo)\\s+(.+?)\\s+(?:in|on|me)\\s+(.+)").find(normalized)
         if (searchInApp != null) {
             val query = searchInApp.groupValues[1].trim()
             val target = searchInApp.groupValues[2].trim().removeSuffix(" app").trim()
@@ -67,7 +82,7 @@ class VasuCommandPlanner {
             return listOf(VasuAction.OpenApp(packageName), VasuAction.ClickDescription("search"), VasuAction.TypeText(query), VasuAction.PressEnter)
         }
 
-        val chainedOpenSearch = Regex("(?:open|launch|khol|kholo|chalao)\s+(.+?)\s+(?:and|then|phir|aur)\s+(?:search|dhundo|khojo)\s+(?:for\s+)?(.+)").find(normalized)
+        val chainedOpenSearch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+?)\\s+(?:and|then|phir|aur)\\s+(?:search|dhundo|khojo)\\s+(?:for\\s+)?(.+)").find(normalized)
         if (chainedOpenSearch != null) {
             val target = chainedOpenSearch.groupValues[1].trim().removeSuffix(" app").trim()
             val packageName = appPackageResolver(target) ?: return null
@@ -75,29 +90,29 @@ class VasuCommandPlanner {
             return listOf(VasuAction.OpenApp(packageName), VasuAction.ClickDescription("search"), VasuAction.TypeText(query), VasuAction.PressEnter)
         }
 
-        val searchCurrentApp = Regex("(?:search|dhundo|khojo)\s+(?:for\s+)?(.+)").find(normalized)
+        val searchCurrentApp = Regex("(?:search|dhundo|khojo)\\s+(?:for\\s+)?(.+)").find(normalized)
         if (searchCurrentApp != null) {
             val query = searchCurrentApp.groupValues[1].trim()
             if (query.isNotBlank()) return listOf(VasuAction.ClickDescription("search"), VasuAction.TypeText(query), VasuAction.PressEnter)
         }
 
-        val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\s+(.+)").find(normalized)
+        val openMatch = Regex("(?:open|launch|khol|kholo|chalao)\\s+(.+)").find(normalized)
         if (openMatch != null) {
             val target = openMatch.groupValues[1].trim().removeSuffix(" app").trim()
             val packageName = appPackageResolver(target) ?: return null
             return listOf(VasuAction.OpenApp(packageName))
         }
 
-        val longClickMatch = Regex("(?:long click|long press|hold|dabakar rakho)\s+(.+)").find(normalized)
+        val longClickMatch = Regex("(?:long click|long press|hold|dabakar rakho)\\s+(.+)").find(normalized)
         if (longClickMatch != null) return listOf(VasuAction.LongClickText(longClickMatch.groupValues[1].trim()))
 
-        val clickDescriptionMatch = Regex("(?:click icon|tap icon|press icon)\s+(.+)").find(normalized)
+        val clickDescriptionMatch = Regex("(?:click icon|tap icon|press icon)\\s+(.+)").find(normalized)
         if (clickDescriptionMatch != null) return listOf(VasuAction.ClickDescription(clickDescriptionMatch.groupValues[1].trim()))
 
-        val clickMatch = Regex("(?:click|tap|dabao|dabao on|press)\s+(.+)").find(normalized)
+        val clickMatch = Regex("(?:click|tap|dabao|dabao on|press)\\s+(.+)").find(normalized)
         if (clickMatch != null) return listOf(VasuAction.ClickText(clickMatch.groupValues[1].trim()))
 
-        val typeMatch = Regex("(?:type|likho|write)\s+(.+)").find(normalized)
+        val typeMatch = Regex("(?:type|likho|write)\\s+(.+)").find(normalized)
         if (typeMatch != null) return listOf(VasuAction.TypeText(typeMatch.groupValues[1].trim()))
 
         return null
