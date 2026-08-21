@@ -36,6 +36,14 @@ class VasuActionExecutor(private val context: Context) {
                 if (focused == null) editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 service.setText(editable, action.text)
             }
+            VasuAction.ClearText -> {
+                val service = VasuAccessibilityService.instance ?: return false
+                val focused = service.focusedEditable()
+                val editable = focused ?: findEditable(service.root() ?: return false)
+                if (editable == null || editable.isPassword) return false
+                if (focused == null && !editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)) return false
+                service.setText(editable, "")
+            }
             is VasuAction.Wait -> {
                 val delay = action.milliseconds.coerceIn(50L, 1500L)
                 SystemClock.sleep(delay)
