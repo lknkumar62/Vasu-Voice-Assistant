@@ -3,6 +3,7 @@ package com.vasu.ai.core
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
 import com.vasu.ai.accessibility.VasuAccessibilityService
 import com.vasu.ai.device.VasuCommunicationController
@@ -46,10 +47,16 @@ class VasuActionExecutor(private val context: Context) {
         VasuAction.OpenAirplaneModeSettings -> device.openAirplaneModeSettings()
         VasuAction.OpenBatterySaverSettings -> device.openBatterySaverSettings()
         VasuAction.OpenLocationSettings -> device.openLocationSettings()
-        VasuAction.Back -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) == true
-        VasuAction.Home -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) == true
-        VasuAction.Recents -> VasuAccessibilityService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) == true
+        VasuAction.Back -> global(AccessibilityService.GLOBAL_ACTION_BACK)
+        VasuAction.Home -> global(AccessibilityService.GLOBAL_ACTION_HOME)
+        VasuAction.Recents -> global(AccessibilityService.GLOBAL_ACTION_RECENTS)
+        VasuAction.Notifications -> if (Build.VERSION.SDK_INT >= 29) global(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS) else false
+        VasuAction.LockScreen -> if (Build.VERSION.SDK_INT >= 28) global(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) else false
+        VasuAction.TakeScreenshot -> if (Build.VERSION.SDK_INT >= 30) global(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) else false
     }
+
+    private fun global(action: Int): Boolean =
+        VasuAccessibilityService.instance?.performGlobalAction(action) == true
 
     private fun swipe(service: VasuAccessibilityService, direction: VasuAction.Direction): Boolean {
         val metrics = context.resources.displayMetrics
