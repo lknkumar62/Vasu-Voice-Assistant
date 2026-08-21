@@ -48,16 +48,15 @@ class GeminiAutonomousBrain(context: Context) {
                 geminiProducedResult = true
                 lastReply = plan.reply.ifBlank { lastReply }
 
-                // Gemini must explicitly declare completion; a non-empty reply alone is not completion.
-                if (plan.done && plan.steps.isEmpty()) {
-                    return Result(true, lastReply.ifBlank { "Ho gaya Boss." }, lastExecution, true)
-                }
-
+                // Completion is accepted only after Gemini observes a fresh post-action context.
+                // A plan that contains an action is never allowed to finish the task immediately.
                 if (plan.steps.isEmpty()) {
-                    return Result(false, lastReply.ifBlank { "Boss, next safe action decide nahi ho paya." }, lastExecution, true)
+                    if (plan.done) {
+                        return Result(true, lastReply.ifBlank { "Ho gaya Boss." }, lastExecution, true)
+                    }
+                    return Result(false, lastReply.ifBlank { "Boss, completion verify nahi hua." }, lastExecution, true)
                 }
 
-                // Execute exactly one validated action, then request a fresh screen snapshot.
                 val validation = validator.validate(listOf(plan.steps.first()), trimmed)
                 if (validation.rejectedCount > 0 || validation.actions.isEmpty()) {
                     return Result(false, "Boss, Gemini ne koi safe Android action nahi diya.", lastExecution, true)
@@ -69,11 +68,8 @@ class GeminiAutonomousBrain(context: Context) {
                     return Result(false, "Boss, ye step execute nahi hua. Permission ya Android/app restriction ho sakti hai.", execution, true)
                 }
 
+                // Force a fresh accessibility hierarchy before Gemini is allowed to declare completion.
                 Thread.sleep(UI_SETTLE_DELAY_MS)
-
-                if (plan.done) {
-                    return Result(true, lastReply.ifBlank { "Ho gaya Boss." }, execution, true)
-                }
 
                 if (stepIndex == MAX_GEMINI_STEPS - 1) break
             }
