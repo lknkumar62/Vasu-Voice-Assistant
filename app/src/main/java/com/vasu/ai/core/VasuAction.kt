@@ -6,6 +6,7 @@ sealed interface VasuAction {
     data class ClickText(val text: String) : VasuAction
     data class LongClickText(val text: String) : VasuAction
     data class ClickDescription(val description: String) : VasuAction
+    data class ClickViewId(val viewId: String) : VasuAction
     data class TypeText(val text: String) : VasuAction
     data class Wait(val milliseconds: Long) : VasuAction
     data class Scroll(val direction: Direction) : VasuAction
