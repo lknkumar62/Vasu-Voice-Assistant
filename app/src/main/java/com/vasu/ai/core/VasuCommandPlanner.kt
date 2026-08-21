@@ -10,6 +10,9 @@ class VasuCommandPlanner {
         if (normalized == "back" || normalized.contains("go back") || normalized.contains("wapas ja")) return listOf(VasuAction.Back)
         if (normalized == "home" || normalized.contains("home screen") || normalized.contains("home ja")) return listOf(VasuAction.Home)
         if (normalized.contains("recent apps") || normalized.contains("recents")) return listOf(VasuAction.Recents)
+        if (normalized.contains("notification shade") || normalized.contains("notifications kholo") || normalized.contains("notification kholo")) return listOf(VasuAction.Notifications)
+        if (normalized.contains("lock screen") || normalized.contains("phone lock") || normalized.contains("screen lock")) return listOf(VasuAction.LockScreen)
+        if (normalized.contains("take screenshot") || normalized.contains("screenshot lo") || normalized.contains("screenshot le")) return listOf(VasuAction.TakeScreenshot)
 
         if (normalized.contains("scroll down") || normalized.contains("neeche scroll") || normalized.contains("niche scroll")) return listOf(VasuAction.Scroll(VasuAction.Direction.DOWN))
         if (normalized.contains("scroll up") || normalized.contains("upar scroll")) return listOf(VasuAction.Scroll(VasuAction.Direction.UP))
@@ -18,10 +21,8 @@ class VasuCommandPlanner {
         if (normalized.contains("swipe up") || normalized.contains("upar swipe")) return listOf(VasuAction.Swipe(VasuAction.Direction.UP))
         if (normalized.contains("swipe down") || normalized.contains("neeche swipe")) return listOf(VasuAction.Swipe(VasuAction.Direction.DOWN))
 
-        val flashlightOn = (normalized.contains("flashlight") || normalized.contains("torch") || normalized.contains("tarch")) &&
-            (normalized.contains("on") || normalized.contains("chala") || normalized.contains("jala"))
-        val flashlightOff = (normalized.contains("flashlight") || normalized.contains("torch") || normalized.contains("tarch")) &&
-            (normalized.contains("off") || normalized.contains("band"))
+        val flashlightOn = (normalized.contains("flashlight") || normalized.contains("torch") || normalized.contains("tarch")) && (normalized.contains("on") || normalized.contains("chala") || normalized.contains("jala"))
+        val flashlightOff = (normalized.contains("flashlight") || normalized.contains("torch") || normalized.contains("tarch")) && (normalized.contains("off") || normalized.contains("band"))
         if (flashlightOn) return listOf(VasuAction.Flashlight(true))
         if (flashlightOff) return listOf(VasuAction.Flashlight(false))
 
