@@ -26,7 +26,7 @@ class VasuAppResolver(context: Context) {
     )
 
     fun resolve(labelOrPackage: String): String? {
-        val query = labelOrPackage.trim()
+        val query = normalize(labelOrPackage)
         if (query.isBlank()) return null
 
         runCatching {
@@ -34,25 +34,35 @@ class VasuAppResolver(context: Context) {
             return query
         }
 
-        val normalized = query.lowercase()
-        aliases[normalized]?.firstNotNullOfOrNull { candidate ->
-            runCatching {
-                packageManager.getApplicationInfo(candidate, 0)
-                candidate
-            }.getOrNull()
-        }?.let { return it }
+        aliases[query]?.firstNotNullOfOrNull(::installedPackage)?.let { return it }
 
         val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
-        return packageManager.queryIntentActivities(launcherIntent, 0)
-            .asSequence()
-            .map { it.activityInfo.applicationInfo }
-            .distinctBy { it.packageName }
-            .firstOrNull { info ->
-                val label = packageManager.getApplicationLabel(info).toString()
-                label.equals(query, ignoreCase = true) || label.contains(query, ignoreCase = true)
-            }
-            ?.packageName
+        return runCatching {
+            packageManager.queryIntentActivities(launcherIntent, 0)
+                .asSequence()
+                .map { it.activityInfo.applicationInfo }
+                .distinctBy { it.packageName }
+                .firstOrNull { info ->
+                    val label = normalize(packageManager.getApplicationLabel(info).toString())
+                    label == query || label.contains(query) || query.contains(label)
+                }
+                ?.packageName
+        }.getOrNull()
     }
+
+    private fun installedPackage(packageName: String): String? =
+        runCatching {
+            packageManager.getApplicationInfo(packageName, 0)
+            packageName
+        }.getOrNull()
+
+    private fun normalize(value: String): String = value
+        .trim()
+        .lowercase()
+        .replace(Regex("\\s+"), " ")
+        .removePrefix("app ")
+        .removeSuffix(" app")
+        .trim()
 }
