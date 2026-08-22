@@ -1,5 +1,8 @@
 package com.vasu.ai.core
 
+import android.os.SystemClock
+import java.util.UUID
+
 class VasuExecutionEngine(
     private val executor: VasuActionExecutor,
     private val screenDetector: VasuScreenTransitionDetector = VasuScreenTransitionDetector(),
@@ -7,6 +10,8 @@ class VasuExecutionEngine(
     private val workflowReliability: VasuWorkflowReliability = VasuWorkflowReliability(),
     private val navigationRecovery: VasuNavigationRecovery = VasuNavigationRecovery()
 ) {
+    private val workflowState = VasuWorkflowState()
+    private var workflowContext: VasuWorkflowContext? = null
 
     data class StepResult(
         val action: VasuAction,
@@ -28,27 +33,46 @@ class VasuExecutionEngine(
     }
 
     fun execute(actions: List<VasuAction>): ExecutionResult {
+        if (actions.isEmpty()) return ExecutionResult(emptyList())
+
+        ensureWorkflowStarted()
         val results = mutableListOf<StepResult>()
 
         for (action in actions) {
-            val before = screenDetector.capture()
-            val signature = buildActionSignature(action, before?.packageName)
+            val stepIndex = workflowState.currentStepIndex + 1
+            workflowState.beginStep(
+                index = stepIndex,
+                actionType = action::class.simpleName ?: "Unknown",
+                now = SystemClock.uptimeMillis()
+            )
+            workflowState.recordAttempt()
+            workflowContext?.let {
+                it.stepIndex = stepIndex
+                it.lastActionType = action::class.simpleName
+            }
 
+            val before = screenDetector.capture()
+            workflowContext?.let {
+                it.previousScreenFingerprint = it.currentScreenFingerprint
+                it.currentScreenFingerprint = before?.fingerprint
+                it.currentPackage = before?.packageName
+            }
+
+            val signature = buildActionSignature(action, before?.packageName)
             if (workflowReliability.isDuplicate(signature)) {
-                results += StepResult(
-                    action = action,
-                    success = false,
-                    attempts = 0,
-                    verificationReason = "duplicate_action_blocked"
-                )
+                val reason = "duplicate_action_blocked"
+                workflowState.markFailed(reason)
+                workflowContext?.let {
+                    it.lastActionVerified = false
+                    it.lastFailureReason = reason
+                }
+                results += StepResult(action = action, success = false, attempts = 0, verificationReason = reason)
                 break
             }
 
             workflowReliability.recordExecution(signature)
-
             val firstAttempt = runCatching { executor.execute(action) }.getOrDefault(false)
             if (firstAttempt) workflowReliability.boundedSleep(120L)
-
             val after = screenDetector.capture()
 
             if (!firstAttempt) {
@@ -60,16 +84,18 @@ class VasuExecutionEngine(
                         val retrySignature = buildActionSignature(action, retryBefore?.packageName)
 
                         if (workflowReliability.isDuplicate(retrySignature)) {
-                            results += StepResult(
-                                action = action,
-                                success = false,
-                                attempts = 1,
-                                verificationReason = "duplicate_retry_blocked"
-                            )
+                            val reason = "duplicate_retry_blocked"
+                            workflowState.markFailed(reason)
+                            workflowContext?.let {
+                                it.lastActionVerified = false
+                                it.lastFailureReason = reason
+                            }
+                            results += StepResult(action = action, success = false, attempts = 1, verificationReason = reason)
                             break
                         }
 
                         workflowReliability.recordExecution(retrySignature)
+                        workflowState.recordAttempt()
                         val recovered = runCatching { executor.execute(action) }.getOrDefault(false)
                         if (recovered) workflowReliability.boundedSleep(120L)
                         val retryAfter = screenDetector.capture()
@@ -77,6 +103,7 @@ class VasuExecutionEngine(
                         if (recovered) {
                             val verification = verifier.verify(action, retryBefore, retryAfter)
                             val success = verification.status != VasuActionVerifier.Status.NOT_VERIFIED
+                            recordVerification(action, success, verification)
                             results += StepResult(
                                 action = action,
                                 success = success,
@@ -86,7 +113,6 @@ class VasuExecutionEngine(
                                 verificationReason = verification.reason
                             )
                             logVerification(action, 2, verification)
-
                             if (!success) {
                                 recoverNavigation(action, retryAfter?.packageName)
                                 break
@@ -96,17 +122,18 @@ class VasuExecutionEngine(
                     }
                 }
 
-                results += StepResult(
-                    action = action,
-                    success = false,
-                    verificationReason = "executor_failed"
-                )
+                workflowState.markFailed("executor_failed")
+                workflowContext?.let {
+                    it.lastActionVerified = false
+                    it.lastFailureReason = "executor_failed"
+                }
+                results += StepResult(action = action, success = false, verificationReason = "executor_failed")
                 break
             }
 
             val verification = verifier.verify(action, before, after)
             val success = verification.status != VasuActionVerifier.Status.NOT_VERIFIED
-
+            recordVerification(action, success, verification)
             results += StepResult(
                 action = action,
                 success = success,
@@ -121,10 +148,54 @@ class VasuExecutionEngine(
             }
         }
 
+        workflowContext?.currentPackage = screenDetector.capture()?.packageName
         return ExecutionResult(results)
     }
 
+    fun workflowSnapshot(): List<VasuWorkflowState.StepRecord> = workflowState.snapshot()
+
+    fun completeWorkflow() {
+        workflowState.complete()
+        workflowContext = null
+    }
+
+    fun failWorkflow(reason: String) {
+        workflowState.fail(reason)
+        workflowContext?.lastFailureReason = reason
+    }
+
+    private fun ensureWorkflowStarted() {
+        if (!workflowState.workflowStarted || workflowState.workflowCompleted || workflowState.workflowFailed) {
+            workflowState.start()
+            workflowContext = VasuWorkflowContext(
+                workflowId = UUID.randomUUID().toString(),
+                originalCommand = "runtime_workflow"
+            )
+        }
+    }
+
+    private fun recordVerification(
+        action: VasuAction,
+        success: Boolean,
+        verification: VasuActionVerifier.VerificationResult
+    ) {
+        if (success) {
+            workflowState.markVerified(SystemClock.uptimeMillis())
+        } else {
+            workflowState.markFailed(verification.reason)
+        }
+        workflowContext?.let {
+            it.lastActionType = action::class.simpleName
+            it.lastActionVerified = success
+            it.lastFailureReason = if (success) null else verification.reason
+        }
+    }
+
     private fun recoverNavigation(action: VasuAction, expectedPackage: String?) {
+        if (!VasuWorkflowStepGuard.isRecoverable(action, "verification_failed")) {
+            println("VASU_WORKFLOW recovery_blocked=true")
+            return
+        }
         if (isSensitiveAction(action)) {
             println("VASU_WORKFLOW sensitive_action_recovery_blocked=true")
             return
