@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Local command history stored in the app's private SharedPreferences. */
+/** Local command history and simple persistent key/value memory. */
 class VasuMemoryStore(context: Context) {
     private val prefs = context.getSharedPreferences("vasu_memory", Context.MODE_PRIVATE)
 
@@ -33,6 +33,54 @@ class VasuMemoryStore(context: Context) {
                 add(Entry(o.optLong("time"), o.optString("command"), o.optString("reply"), o.optBoolean("handled"), o.optBoolean("gemini")))
             }
         }
+    }
+
+    fun remember(key: String, value: String) {
+        val normalizedKey = key.trim()
+        val normalizedValue = value.trim()
+
+        if (normalizedKey.isBlank() || normalizedValue.isBlank()) {
+            return
+        }
+
+        val now = System.currentTimeMillis()
+
+        prefs.edit()
+            .putString(
+                "memory:$normalizedKey",
+                normalizedValue
+            )
+            .putLong(
+                "memory:$normalizedKey:updated",
+                now
+            )
+            .apply()
+    }
+
+    fun recall(key: String): String? {
+        val normalizedKey = key.trim()
+
+        if (normalizedKey.isBlank()) {
+            return null
+        }
+
+        return prefs.getString(
+            "memory:$normalizedKey",
+            null
+        )
+    }
+
+    fun forget(key: String) {
+        val normalizedKey = key.trim()
+
+        if (normalizedKey.isBlank()) {
+            return
+        }
+
+        prefs.edit()
+            .remove("memory:$normalizedKey")
+            .remove("memory:$normalizedKey:updated")
+            .apply()
     }
 
     fun clear() = prefs.edit().remove(KEY_HISTORY).apply()
