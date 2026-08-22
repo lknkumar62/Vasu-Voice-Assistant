@@ -30,7 +30,11 @@ class GeminiAutonomousBrain(private val appContext: Context) {
 
     private val conversationStore = VasuConversationContextStore()
     private val conversationStateMachine = VasuConversationStateMachine(conversationStore)
-    private val followUpResolver = VasuFollowUpResolver(conversationStore)
+    private val clarificationManager = VasuClarificationManager()
+    private val followUpResolver = VasuFollowUpResolver(
+        contextStore = conversationStore,
+        clarificationManager = clarificationManager
+    )
     private val referenceResolver = VasuReferenceResolver(conversationStore)
     private val contextMapper = VasuGeminiConversationContextMapper()
     private val contextPromptBuilder = VasuGeminiContextPromptBuilder()
@@ -48,19 +52,35 @@ class GeminiAutonomousBrain(private val appContext: Context) {
 
         val referenceResult = referenceResolver.resolve(trimmed)
         val resolution = followUpResolver.resolve(trimmed)
+
+        resolution.clarificationAnswer?.let { answer ->
+            if (answer.normalizedAnswer == "cancel") {
+                clarificationManager.clear()
+                return Result(true, "Theek hai.")
+            }
+            if (!answer.matched) {
+                return Result(false, "Samajh nahi aaya. Pehla ya dusra?")
+            }
+        }
+
         val effectiveCommand = resolution.resolvedCommand
         val boundedContext = contextMapper.map(resolution.context)
+        val effectiveReference = if (resolution.clarificationHandled) {
+            resolution.reference
+        } else {
+            referenceResult.reference
+        }
         val contextPrompt = contextPromptBuilder.build(
             command = effectiveCommand,
             context = boundedContext,
             isFollowUp = resolution.isFollowUp,
-            reference = referenceResult.reference
+            reference = effectiveReference
         )
 
         println(
             "VASU_GEMINI_REFERENCE " +
-                "type=${referenceResult.reference.type} " +
-                "freshUi=${referenceResult.reference.requiresFreshUiEvidence}"
+                "type=${effectiveReference.type} " +
+                "freshUi=${effectiveReference.requiresFreshUiEvidence}"
         )
 
         conversationStateMachine.startProcessing()
@@ -87,7 +107,7 @@ class GeminiAutonomousBrain(private val appContext: Context) {
                 } else {
                     buildString {
                         append(screen)
-                        if (resolution.isFollowUp || referenceResult.reference.type != VasuReferenceType.NONE) {
+                        if (resolution.isFollowUp || effectiveReference.type != VasuReferenceType.NONE) {
                             append("\n\nCONVERSATION CONTEXT:\n")
                             append(contextPrompt)
                         }
@@ -117,8 +137,8 @@ class GeminiAutonomousBrain(private val appContext: Context) {
                 }
 
                 val action = validation.actions.first()
-                if (referenceResult.reference.requiresFreshUiEvidence) {
-                    println("VASU_REFERENCE_EXECUTION_GUARD reference=${referenceResult.reference.type} action=${action::class.simpleName}")
+                if (effectiveReference.requiresFreshUiEvidence) {
+                    println("VASU_REFERENCE_EXECUTION_GUARD reference=${effectiveReference.type} action=${action::class.simpleName}")
                 }
 
                 if (stepIndex > 0 && isSensitiveSideEffect(action)) {
