@@ -17,9 +17,22 @@ class VasuConfirmationManager(
         description: String,
         now: Long = System.currentTimeMillis()
     ): VasuConfirmationRequest? {
-
         if (!policy.requiresConfirmation(actionType)) {
             return null
+        }
+
+        expireIfNeeded(now)
+
+        val active = request
+        if (active != null &&
+            (state == VasuConfirmationState.PENDING ||
+                state == VasuConfirmationState.CONFIRMED)
+        ) {
+            return if (active.actionType == actionType) {
+                active
+            } else {
+                null
+            }
         }
 
         val safeDescription = description
@@ -49,6 +62,8 @@ class VasuConfirmationManager(
         id: String,
         now: Long = System.currentTimeMillis()
     ): Boolean {
+        expireIfNeeded(now)
+
         val current = request ?: return false
 
         if (state != VasuConfirmationState.PENDING) {
@@ -59,14 +74,7 @@ class VasuConfirmationManager(
             return false
         }
 
-        if (now >= current.expiresAt) {
-            state = VasuConfirmationState.EXPIRED
-            request = null
-            return false
-        }
-
         state = VasuConfirmationState.CONFIRMED
-        // Keep the request until the execution boundary consumes it.
         return true
     }
 
@@ -93,6 +101,8 @@ class VasuConfirmationManager(
         actionType: VasuSecurityActionType,
         now: Long = System.currentTimeMillis()
     ): Boolean {
+        expireIfNeeded(now)
+
         val current = request ?: return false
 
         if (state != VasuConfirmationState.CONFIRMED) {
@@ -104,12 +114,6 @@ class VasuConfirmationManager(
         }
 
         if (current.actionType != actionType) {
-            return false
-        }
-
-        if (now >= current.expiresAt) {
-            state = VasuConfirmationState.EXPIRED
-            request = null
             return false
         }
 
@@ -138,10 +142,16 @@ class VasuConfirmationManager(
     }
 
     @Synchronized
-    fun getState(): VasuConfirmationState = state
+    fun getState(): VasuConfirmationState {
+        expireIfNeeded()
+        return state
+    }
 
     @Synchronized
-    fun getPendingRequest(): VasuConfirmationRequest? = request
+    fun getPendingRequest(): VasuConfirmationRequest? {
+        expireIfNeeded()
+        return request
+    }
 
     companion object {
         const val MAX_DESCRIPTION_LENGTH = 500
