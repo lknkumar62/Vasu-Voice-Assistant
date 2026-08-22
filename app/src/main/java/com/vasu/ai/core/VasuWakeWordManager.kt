@@ -29,29 +29,36 @@ class VasuWakeWordManager(
     }
 
     @Synchronized
-    fun onWakeWordDetected() {
-        if (state != VasuWakeWordState.LISTENING_FOR_WAKE_WORD) return
+    fun onWakeWordDetected(): Boolean {
+        if (state != VasuWakeWordState.LISTENING_FOR_WAKE_WORD) {
+            println("VASU_WAKEWORD_IGNORED_DURING_COMMAND")
+            return false
+        }
         state = VasuWakeWordState.WAKE_DETECTED
         println("VASU_WAKEWORD_DETECTED")
+        return true
     }
 
     @Synchronized
-    fun beginCommandListening() {
-        if (state != VasuWakeWordState.WAKE_DETECTED) return
+    fun beginCommandListening(): Boolean {
+        if (state != VasuWakeWordState.WAKE_DETECTED) return false
         state = VasuWakeWordState.COMMAND_LISTENING
         println("VASU_COMMAND_LISTENING")
+        return true
     }
 
     @Synchronized
-    fun onCommandReceived() {
-        if (state != VasuWakeWordState.COMMAND_LISTENING) return
+    fun onCommandReceived(): Boolean {
+        if (state != VasuWakeWordState.COMMAND_LISTENING) return false
         state = VasuWakeWordState.COMMAND_RECEIVED
+        return true
     }
 
     @Synchronized
-    fun beginProcessing() {
-        if (state != VasuWakeWordState.COMMAND_RECEIVED) return
+    fun beginProcessing(): Boolean {
+        if (state != VasuWakeWordState.COMMAND_RECEIVED) return false
         state = VasuWakeWordState.PROCESSING
+        return true
     }
 
     @Synchronized
