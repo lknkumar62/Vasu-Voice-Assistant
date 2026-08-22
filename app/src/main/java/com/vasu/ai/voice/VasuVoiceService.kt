@@ -18,6 +18,17 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.vasu.ai.R
 import com.vasu.ai.core.GeminiAutonomousBrain
+import com.vasu.ai.core.VasuAudioCaptureConfig
+import com.vasu.ai.core.VasuAudioCaptureManager
+import com.vasu.ai.core.VasuCommandListeningTimeoutController
+import com.vasu.ai.core.VasuPorcupineWakeWordDetector
+import com.vasu.ai.core.VasuWakeWordAudioBridge
+import com.vasu.ai.core.VasuWakeWordConfig
+import com.vasu.ai.core.VasuWakeWordCoordinator
+import com.vasu.ai.core.VasuWakeWordKeyStore
+import com.vasu.ai.core.VasuWakeWordManager
+import com.vasu.ai.core.VasuWakeWordReadiness
+import com.vasu.ai.core.VasuWakeWordReadinessChecker
 import com.vasu.ai.memory.VasuMemoryStore
 import java.util.Locale
 
@@ -33,12 +44,23 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private var ttsReady = false
     private var destroyed = false
 
+    private val wakeConfig = VasuWakeWordConfig()
+    private var wakeMode = false
+    private var wakeBridge: VasuWakeWordAudioBridge? = null
+    private var wakeCoordinator: VasuWakeWordCoordinator? = null
+    private lateinit var commandTimeoutController: VasuCommandListeningTimeoutController
+
     override fun onCreate() {
         super.onCreate()
         destroyed = false
         brain = GeminiAutonomousBrain(this)
         memory = VasuMemoryStore(this)
         tts = TextToSpeech(this, this)
+        commandTimeoutController = VasuCommandListeningTimeoutController(
+            wakeConfig.commandTimeoutMs
+        ) {
+            finishWakeCommand("timeout")
+        }
         getSharedPreferences("vasu_runtime", MODE_PRIVATE).edit().putBoolean("voice_running", true).apply()
         createChannel()
         ServiceCompat.startForeground(
@@ -47,21 +69,105 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             buildNotification("Wake word: Hello Vasu"),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         )
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(this) }
-            startListeningSoon(500)
+
+        if (wakeConfig.enabled) {
+            startWakeWordMode()
+        } else if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            ensureRecognizer()
+            startListeningSoon(500, requireWakeWord = true)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startListeningSoon(200)
+        when (intent?.action) {
+            ACTION_MANUAL_COMMAND -> startManualCommandListening()
+            ACTION_WAKE_WORD_MODE -> startWakeWordMode()
+            else -> if (!wakeConfig.enabled) startListeningSoon(200, requireWakeWord = true)
+        }
         return START_STICKY
     }
 
-    private fun startListeningSoon(delay: Long) {
-        handler.removeCallbacksAndMessages(null)
-        handler.postDelayed({ startListening() }, delay)
+    private fun ensureRecognizer(): Boolean {
+        if (destroyed) return false
+        if (recognizer != null) return true
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) return false
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this).also {
+            it.setRecognitionListener(this)
+        }
+        return true
     }
+
+    private fun startManualCommandListening() {
+        wakeMode = false
+        commandTimeoutController.stop()
+        wakeBridge?.stop()
+        wakeBridge = null
+        ensureRecognizer()
+        startListeningSoon(200, requireWakeWord = false)
+    }
+
+    private fun startWakeWordMode() {
+        if (destroyed || !wakeConfig.enabled) return
+        wakeMode = true
+        commandTimeoutController.stop()
+        stopListening()
+
+        val readiness = VasuWakeWordReadinessChecker(this, wakeConfig).check()
+        if (readiness != VasuWakeWordReadiness.READY) {
+            updateNotification("Wake word unavailable")
+            return
+        }
+
+        wakeBridge?.release()
+        val keyStore = VasuWakeWordKeyStore(this)
+        val manager = VasuWakeWordManager(wakeConfig)
+        val coordinator = VasuWakeWordCoordinator(
+            manager,
+            com.vasu.ai.core.VasuAudioLifecycleManager(wakeConfig)
+        )
+        wakeCoordinator = coordinator
+
+        val detector = VasuPorcupineWakeWordDetector(
+            context = this,
+            config = wakeConfig,
+            accessKeyProvider = { keyStore.getAccessKey() },
+            onDetected = { }
+        )
+
+        val bridge = VasuWakeWordAudioBridge(
+            audioCapture = VasuAudioCaptureManager(this, VasuAudioCaptureConfig()),
+            detector = detector,
+            coordinator = coordinator,
+            onCommandListeningRequested = {
+                handler.post { startCommandListeningFromWake() }
+            }
+        )
+        wakeBridge = bridge
+
+        if (!bridge.start()) {
+            updateNotification("Wake word unavailable")
+            return
+        }
+        manager.start()
+        updateNotification("Listening for Hello Vasu")
+    }
+
+    private fun startCommandListeningFromWake() {
+        if (!wakeMode || destroyed) return
+        ensureRecognizer()
+        commandTimeoutController.start()
+        startListeningSoon(150, requireWakeWord = false)
+        updateNotification("Listening for command")
+    }
+
+    private fun startListeningSoon(delay: Long, requireWakeWord: Boolean) {
+        handler.removeCallbacks(LISTENING_CALLBACK)
+        LISTENING_REQUIRE_WAKE_WORD = requireWakeWord
+        handler.postDelayed(LISTENING_CALLBACK, delay.coerceAtLeast(0L))
+    }
+
+    private val LISTENING_CALLBACK = Runnable { startListening() }
+    private var LISTENING_REQUIRE_WAKE_WORD = true
 
     private fun startListening() {
         if (destroyed || recognizer == null || listening || processing) return
@@ -78,7 +184,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             recognizer?.startListening(request)
         } catch (_: Exception) {
             listening = false
-            startListeningSoon(1000)
+            if (wakeMode) finishWakeCommand("recognizer_start_error")
+            else startListeningSoon(1000, LISTENING_REQUIRE_WAKE_WORD)
         }
     }
 
@@ -91,33 +198,56 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (processing) return
         val text = raw.trim()
         if (text.isBlank()) return
-        val lower = text.lowercase(Locale.ROOT)
-        val wakeVariants = listOf("hello vasu", "hey vasu", "helo vasu", "हेलो वासु", "हैलो वासु")
-        val wake = wakeVariants.firstOrNull { lower.contains(it) } ?: return
-        val command = text.substring(wake.length.coerceAtMost(text.length)).trim()
+
+        val command = if (!LISTENING_REQUIRE_WAKE_WORD) {
+            text
+        } else {
+            val lower = text.lowercase(Locale.ROOT)
+            val wakeVariants = listOf("hello vasu", "hey vasu", "helo vasu", "हेलो वासु", "हैलो वासु")
+            val wake = wakeVariants.firstOrNull { lower.contains(it) } ?: return
+            text.substring(wake.length.coerceAtMost(text.length)).trim()
+        }
+
         if (command.isBlank()) {
             speak("Haan Boss, boliye.")
+            if (wakeMode) finishWakeCommand("empty_command")
             return
         }
 
         processing = true
+        commandTimeoutController.stop()
         stopListening()
-        updateNotification("Processing: $command")
+        updateNotification("Processing command")
         brain.handleAsync(command) { result ->
             memory.add(command, result.reply, result.handled, result.usedGemini)
             updateNotification(if (result.handled) "Ready — Hello Vasu" else "Command failed — Hello Vasu")
             val response = result.reply.ifBlank { if (result.handled) "Ho gaya Boss." else "Command execute nahi hua." }
             speak(response)
             processing = false
-            startListeningSoon(800)
+            if (wakeMode) {
+                handler.postDelayed({ startWakeWordMode() }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
+            } else {
+                startListeningSoon(800, requireWakeWord = true)
+            }
         }
+    }
+
+    private fun finishWakeCommand(reason: String) {
+        if (!wakeMode || destroyed) return
+        commandTimeoutController.stop()
+        stopListening()
+        processing = false
+        println("VASU_COMMAND_LISTENING_STOPPED reason=$reason")
+        handler.postDelayed({ startWakeWordMode() }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
     }
 
     private fun speak(text: String) {
         if (!ttsReady) return
         stopListening()
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), "vasu-${System.currentTimeMillis()}")
-        handler.postDelayed({ if (!processing) startListeningSoon(500) }, (text.length * 55L).coerceIn(700, 5000))
+        handler.postDelayed({
+            if (!processing && !wakeMode) startListeningSoon(500, requireWakeWord = true)
+        }, (text.length * 55L).coerceIn(700, 5000))
     }
 
     private fun updateNotification(text: String) {
@@ -146,18 +276,44 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onBufferReceived(buffer: ByteArray?) = Unit
     override fun onEndOfSpeech() {
         listening = false
-        if (!processing) startListeningSoon(300)
+        if (wakeMode) {
+            if (!processing && commandTimeoutController.isRunning()) startListeningSoon(150, requireWakeWord = false)
+        } else if (!processing) {
+            startListeningSoon(300, LISTENING_REQUIRE_WAKE_WORD)
+        }
     }
+
     override fun onError(error: Int) {
         listening = false
-        if (!processing) startListeningSoon(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500)
+        if (processing) return
+        if (wakeMode) {
+            when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH,
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> finishWakeCommand("speech_timeout")
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                    println("VASU_AUDIO_RECOVERY")
+                    finishWakeCommand("recognizer_busy")
+                }
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> finishWakeCommand("permission_error")
+                SpeechRecognizer.ERROR_AUDIO,
+                SpeechRecognizer.ERROR_CLIENT,
+                SpeechRecognizer.ERROR_NETWORK -> finishWakeCommand("speech_error")
+                else -> finishWakeCommand("speech_error")
+            }
+        } else {
+            startListeningSoon(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500, LISTENING_REQUIRE_WAKE_WORD)
+        }
     }
+
     override fun onResults(results: Bundle?) {
         listening = false
         if (processing) return
-        results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(::handleTranscript)
-        if (!processing) startListeningSoon(250)
+        results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            ?.firstOrNull()
+            ?.let(::handleTranscript)
+        if (!processing && !wakeMode) startListeningSoon(250, LISTENING_REQUIRE_WAKE_WORD)
     }
+
     override fun onPartialResults(partialResults: Bundle?) = Unit
     override fun onEvent(eventType: Int, params: Bundle?) = Unit
 
@@ -172,6 +328,9 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onDestroy() {
         destroyed = true
         handler.removeCallbacksAndMessages(null)
+        commandTimeoutController.stop()
+        wakeBridge?.release()
+        wakeBridge = null
         stopListening()
         recognizer?.destroy()
         recognizer = null
@@ -187,5 +346,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private companion object {
         const val CHANNEL_ID = "vasu_voice"
         const val NOTIFICATION_ID = 1001
+        const val ACTION_MANUAL_COMMAND = "com.vasu.ai.voice.MANUAL_COMMAND"
+        const val ACTION_WAKE_WORD_MODE = "com.vasu.ai.voice.WAKE_WORD_MODE"
     }
 }
