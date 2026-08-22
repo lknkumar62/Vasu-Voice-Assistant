@@ -20,13 +20,48 @@ class VasuActionExecutor(
     private val elementResolver = VasuElementResolver()
     private val searchFieldDetector = VasuSearchFieldDetector()
     private val clarificationTrigger = VasuClarificationTrigger(clarificationManager)
+    private val confirmationGate = VasuConfirmationGate()
 
     @Volatile
     var blockedByClarification: Boolean = false
         private set
 
-    fun execute(action: VasuAction, originalCommand: String? = null): Boolean {
+    fun execute(
+        action: VasuAction,
+        originalCommand: String? = null,
+        confirmationRequestId: String? = null
+    ): Boolean {
         blockedByClarification = false
+
+        if (isConfirmationSensitive(action)) {
+            val authorized = if (confirmationRequestId.isNullOrBlank()) {
+                false
+            } else {
+                confirmationGate.authorizeConfirmed(
+                    action = action,
+                    requestId = confirmationRequestId
+                )
+            }
+
+            if (!authorized) {
+                val decision = confirmationGate.evaluate(
+                    action = action,
+                    description = originalCommand
+                        ?.trim()
+                        ?.take(500)
+                        .orEmpty()
+                )
+
+                println(
+                    "VASU_CONFIRMATION_REQUIRED " +
+                        "action=${action::class.simpleName} " +
+                        "requestId=${confirmationRequestId ?: (decision as? VasuConfirmationDecision.RequiresConfirmation)?.request?.id}"
+                )
+
+                return false
+            }
+        }
+
         return when (action) {
             is VasuAction.OpenApp -> openApp(action.packageName)
             is VasuAction.ClickText -> executeClickTextWithResolution(action.text, originalCommand)
@@ -73,6 +108,28 @@ class VasuActionExecutor(
             VasuAction.TakeScreenshot -> if (Build.VERSION.SDK_INT >= 30) global(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) else false
         }
     }
+
+    private fun isConfirmationSensitive(action: VasuAction): Boolean =
+        when (action) {
+            is VasuAction.CallContact,
+            is VasuAction.SendSms -> true
+            else -> false
+        }
+
+    fun pendingConfirmationRequest(): VasuConfirmationRequest? =
+        confirmationGate.pendingRequest()
+
+    fun confirmationState(): VasuConfirmationState =
+        confirmationGate.state()
+
+    fun confirmPendingAction(
+        requestId: String,
+        now: Long = System.currentTimeMillis()
+    ): Boolean =
+        confirmationGate.confirm(requestId, now)
+
+    fun cancelPendingAction(requestId: String): Boolean =
+        confirmationGate.cancel(requestId)
 
     private fun blockForAmbiguity(originalCommand: String?): Boolean {
         clarificationTrigger.requestForAmbiguousElement(originalCommand.orEmpty())
