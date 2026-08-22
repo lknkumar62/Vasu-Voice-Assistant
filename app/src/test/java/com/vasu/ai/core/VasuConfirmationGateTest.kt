@@ -83,4 +83,94 @@ class VasuConfirmationGateTest {
             gate.state()
         )
     }
+
+    @Test
+    fun confirmedRequest_matchesSameSensitiveAction() {
+        val gate = VasuConfirmationGate()
+
+        val action = VasuAction.SendSms(
+            name = "Alice",
+            message = "Hello"
+        )
+
+        val result = gate.evaluate(
+            action = action,
+            description = "Send SMS"
+        ) as VasuConfirmationDecision.RequiresConfirmation
+
+        assertTrue(gate.confirm(result.request.id))
+        assertTrue(
+            gate.authorizeConfirmed(
+                action = action,
+                requestId = result.request.id
+            )
+        )
+    }
+
+    @Test
+    fun confirmedRequest_cannotAuthorizeDifferentSensitiveAction() {
+        val gate = VasuConfirmationGate()
+
+        val smsAction = VasuAction.SendSms(
+            name = "Alice",
+            message = "Hello"
+        )
+        val callAction = VasuAction.CallContact("Alice")
+
+        val result = gate.evaluate(
+            action = smsAction,
+            description = "Send SMS"
+        ) as VasuConfirmationDecision.RequiresConfirmation
+
+        assertTrue(gate.confirm(result.request.id))
+        assertFalse(
+            gate.authorizeConfirmed(
+                action = callAction,
+                requestId = result.request.id
+            )
+        )
+
+        assertTrue(
+            gate.authorizeConfirmed(
+                action = smsAction,
+                requestId = result.request.id
+            )
+        )
+    }
+
+    @Test
+    fun expiredRequest_cannotAuthorizeAction() {
+        val gate = VasuConfirmationGate()
+
+        val action = VasuAction.SendSms(
+            name = "Alice",
+            message = "Hello"
+        )
+
+        val result = gate.evaluate(
+            action = action,
+            description = "Send SMS",
+            now = 1_000L
+        ) as VasuConfirmationDecision.RequiresConfirmation
+
+        assertTrue(
+            gate.confirm(
+                result.request.id,
+                now = 1_000L
+            )
+        )
+
+        assertFalse(
+            gate.authorizeConfirmed(
+                action = action,
+                requestId = result.request.id,
+                now = result.request.expiresAt
+            )
+        )
+
+        assertEquals(
+            VasuConfirmationState.EXPIRED,
+            gate.state()
+        )
+    }
 }
