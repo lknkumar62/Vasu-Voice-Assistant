@@ -126,7 +126,7 @@ class VasuElementResolver {
         val className = node.className?.toString()
         val score = calculateScore(node, visible, clickable, enabled, bounds, depth)
         return Candidate(
-            node = node,
+            node = AccessibilityNodeInfo.obtain(node),
             text = node.text?.toString(),
             contentDescription = node.contentDescription?.toString(),
             viewId = node.viewIdResourceName,
@@ -166,7 +166,10 @@ class VasuElementResolver {
         var parent = node.parent
         var depth = 0
         while (parent != null && depth < 4) {
-            if (parent.isClickable && parent.isEnabled && parent.isVisibleToUser) return true
+            if (parent.isClickable && parent.isEnabled && parent.isVisibleToUser) {
+                parent.recycle()
+                return true
+            }
             val next = parent.parent
             parent.recycle()
             parent = next
@@ -183,6 +186,7 @@ class VasuElementResolver {
         if (candidates.isEmpty()) return failure("no_matching_${targetType.name.lowercase()}_candidate")
         val sorted = candidates.filter { it.enabled && it.visible }.sortedByDescending { it.score }
         if (sorted.isEmpty()) {
+            candidates.forEach { it.node.recycle() }
             return ResolutionResult(false, null, candidates, "matching_candidates_not_interactable")
         }
         val best = sorted.first()
