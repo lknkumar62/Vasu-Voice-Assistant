@@ -1,10 +1,10 @@
 package com.vasu.ai.core
 
 import android.content.Context
-import android.content.Intent
 
 class VasuAppResolver(context: Context) {
     private val packageManager = context.packageManager
+    private val appDiscovery = VasuInstalledAppDiscovery(context)
 
     private val aliases = mapOf(
         "whatsapp" to listOf("com.whatsapp"),
@@ -46,22 +46,27 @@ class VasuAppResolver(context: Context) {
             return query
         }
 
-        aliases[query]?.asSequence()?.mapNotNull(::installedPackage)?.firstOrNull()?.let { return it }
+        aliases[query]
+            ?.asSequence()
+            ?.mapNotNull(::installedPackage)
+            ?.firstOrNull()
+            ?.let { return it }
 
-        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
+        val candidates = appDiscovery.findCandidates(query)
+        val best = candidates.firstOrNull()
+        if (best != null) {
+            println(
+                "VASU_APP_RESOLUTION " +
+                    "query=$labelOrPackage " +
+                    "selected=${best.label} " +
+                    "package=${best.packageName} " +
+                    "candidates=${candidates.size}"
+            )
+            return best.packageName
         }
-        return runCatching {
-            packageManager.queryIntentActivities(launcherIntent, 0)
-                .asSequence()
-                .map { it.activityInfo.applicationInfo }
-                .distinctBy { it.packageName }
-                .firstOrNull { info ->
-                    val label = normalize(packageManager.getApplicationLabel(info).toString())
-                    label == query || label.contains(query) || query.contains(label)
-                }
-                ?.packageName
-        }.getOrNull()
+
+        println("VASU_APP_RESOLUTION query=$labelOrPackage result=NOT_FOUND")
+        return null
     }
 
     private fun installedPackage(packageName: String): String? =
