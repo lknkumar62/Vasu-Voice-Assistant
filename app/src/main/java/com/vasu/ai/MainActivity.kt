@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
             refreshStatus()
         })
 
-        section(root, "VOICE ENGINE", "Foreground microphone service. Say “Hello Vasu” followed by a command.")
+        section(root, "VOICE ENGINE", "Foreground microphone service. Wake mode can hand off into the existing SpeechRecognizer command pipeline.")
         root.addView(button("START VASU VOICE") {
             if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
@@ -91,7 +91,12 @@ class MainActivity : AppCompatActivity() {
                 permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
                 return@button
             }
-            ContextCompat.startForegroundService(this, Intent(this, VasuVoiceService::class.java))
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, VasuVoiceService::class.java).apply {
+                    action = "com.vasu.ai.voice.MANUAL_COMMAND"
+                }
+            )
             refreshStatus()
         })
         root.addView(button("STOP VASU VOICE") {
@@ -222,8 +227,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun notificationAccessEnabled(): Boolean {
         val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
-        return enabled.split(':').any { it.equals(ComponentName(this, VasuNotificationListener::class.java).flattenToString(), true) }
+        return enabled.split(':').any { it.startsWith(packageName) }
     }
 
-    private fun voiceServiceRunning(): Boolean = getSharedPreferences("vasu_runtime", MODE_PRIVATE).getBoolean("voice_running", false)
+    private fun voiceServiceRunning(): Boolean =
+        getSharedPreferences("vasu_runtime", MODE_PRIVATE).getBoolean("voice_running", false)
 }
