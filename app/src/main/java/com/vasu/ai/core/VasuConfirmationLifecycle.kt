@@ -91,13 +91,21 @@ class VasuConfirmationLifecycle(
                 actionType = actionType,
                 requestId = requestId,
                 timestamp = now,
-                reason = reason.take(MAX_REASON_LENGTH)
+                reason = reason
+                    .trim()
+                    .take(MAX_REASON_LENGTH)
             )
         )
     }
 
     fun snapshot(): List<VasuConfirmationAuditEvent> =
         auditLog.snapshot()
+
+    fun snapshotData(): VasuConfirmationAuditSnapshot =
+        auditLog.snapshotData()
+
+    fun size(): Int =
+        auditLog.size()
 
     companion object {
         const val MAX_REASON_LENGTH = 200
