@@ -1,6 +1,10 @@
 package com.vasu.ai.core
 
-class VasuExecutionEngine(private val executor: VasuActionExecutor) {
+class VasuExecutionEngine(
+    private val executor: VasuActionExecutor,
+    private val screenDetector: VasuScreenTransitionDetector =
+        VasuScreenTransitionDetector()
+) {
 
     data class StepResult(
         val action: VasuAction,
@@ -22,9 +26,57 @@ class VasuExecutionEngine(private val executor: VasuActionExecutor) {
     fun execute(actions: List<VasuAction>): ExecutionResult {
         val results = mutableListOf<StepResult>()
         for (action in actions) {
+            /*
+             * Capture the UI before the action.
+             *
+             * This is observation only. We do not treat a screen change
+             * as proof that the action succeeded yet.
+             */
+            val before = screenDetector.capture()
+
             val firstAttempt = runCatching { executor.execute(action) }.getOrDefault(false)
+
+            /*
+             * Give Android Accessibility a short opportunity to publish
+             * the resulting UI tree.
+             */
             if (firstAttempt) {
-                results += StepResult(action, true)
+                Thread.sleep(120L)
+            }
+
+            val after = screenDetector.capture()
+
+            val screenChanged = screenDetector.hasChanged(
+                before = before,
+                after = after
+            )
+
+            if (firstAttempt) {
+                println(
+                    "VASU_SCREEN_TRANSITION " +
+                        "action=${action::class.simpleName} " +
+                        "changed=$screenChanged " +
+                        "before=${before?.fingerprint?.take(8)} " +
+                        "after=${after?.fingerprint?.take(8)}"
+                )
+
+                /*
+                 * The executor accepted the action.
+                 *
+                 * screenChanged is deliberately not used as the success
+                 * decision yet. Some valid actions legitimately leave the
+                 * accessibility tree unchanged.
+                 *
+                 * Step 2 will combine this signal with action-specific
+                 * verification.
+                 */
+                results += StepResult(
+                    action = action,
+                    success = true,
+                    recovered = false,
+                    attempts = 1
+                )
+
                 continue
             }
 
