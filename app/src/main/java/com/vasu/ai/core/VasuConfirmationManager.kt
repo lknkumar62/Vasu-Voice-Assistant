@@ -66,7 +66,7 @@ class VasuConfirmationManager(
         }
 
         state = VasuConfirmationState.CONFIRMED
-        request = null
+        // Keep the request until the execution boundary consumes it.
         return true
     }
 
@@ -85,6 +85,56 @@ class VasuConfirmationManager(
         state = VasuConfirmationState.CANCELLED
         request = null
         return true
+    }
+
+    @Synchronized
+    fun consumeConfirmed(
+        id: String,
+        actionType: VasuSecurityActionType,
+        now: Long = System.currentTimeMillis()
+    ): Boolean {
+        val current = request ?: return false
+
+        if (state != VasuConfirmationState.CONFIRMED) {
+            return false
+        }
+
+        if (current.id != id) {
+            return false
+        }
+
+        if (current.actionType != actionType) {
+            return false
+        }
+
+        if (now >= current.expiresAt) {
+            state = VasuConfirmationState.EXPIRED
+            request = null
+            return false
+        }
+
+        request = null
+        state = VasuConfirmationState.NONE
+        return true
+    }
+
+    @Synchronized
+    fun expireIfNeeded(
+        now: Long = System.currentTimeMillis()
+    ): Boolean {
+        val current = request ?: return false
+
+        if (
+            (state == VasuConfirmationState.PENDING ||
+                state == VasuConfirmationState.CONFIRMED) &&
+            now >= current.expiresAt
+        ) {
+            state = VasuConfirmationState.EXPIRED
+            request = null
+            return true
+        }
+
+        return false
     }
 
     @Synchronized
