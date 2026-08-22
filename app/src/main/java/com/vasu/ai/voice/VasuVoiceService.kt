@@ -61,6 +61,11 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private fun isCurrentGeneration(generation: Long): Boolean =
         !destroyed && generation == serviceGeneration
 
+    private fun resetRecoveryState() {
+        wakeRecoveryAttempts = 0
+        commandTimeoutController.stop()
+    }
+
     override fun onCreate() {
         super.onCreate()
         destroyed = false
@@ -69,9 +74,9 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         wakeMode = false
         listening = false
         processing = false
-        wakeRecoveryAttempts = 0
         wakeBridge = null
         wakeCoordinator = null
+        resetRecoveryState()
 
         val desiredMode = runtimePrefs.getString(
             KEY_DESIRED_MODE,
@@ -178,8 +183,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private fun startManualCommandListening() {
         runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_MANUAL).apply()
         wakeMode = false
-        wakeRecoveryAttempts = 0
-        commandTimeoutController.stop()
+        resetRecoveryState()
         wakeCoordinator?.stop()
         wakeCoordinator = null
         wakeBridge?.release()
@@ -260,6 +264,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             return
         }
 
+        resetRecoveryState()
         updateNotification("Listening for Hello Vasu")
     }
 
@@ -555,10 +560,9 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         wakeMode = false
         listening = false
         processing = false
-        wakeRecoveryAttempts = 0
+        resetRecoveryState()
 
         handler.removeCallbacksAndMessages(null)
-        commandTimeoutController.stop()
 
         wakeCoordinator?.stop()
         wakeCoordinator = null
@@ -572,6 +576,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         tts?.stop()
         tts?.shutdown()
         tts = null
+        ttsReady = false
 
         runtimePrefs.edit()
             .putBoolean(KEY_VOICE_RUNNING, false)
