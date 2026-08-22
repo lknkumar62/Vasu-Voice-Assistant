@@ -43,12 +43,18 @@ class VasuMemoryStore(context: Context) {
             return
         }
 
+        val safeValue = normalizedValue.take(MAX_VALUE_LENGTH)
+
+        if (safeValue.isBlank()) {
+            return
+        }
+
         val now = System.currentTimeMillis()
 
         prefs.edit()
             .putString(
                 "memory:$normalizedKey",
-                normalizedValue
+                safeValue
             )
             .putLong(
                 "memory:$normalizedKey:updated",
@@ -90,5 +96,6 @@ class VasuMemoryStore(context: Context) {
     private companion object {
         const val KEY_HISTORY = "history"
         const val MAX_ITEMS = 100
+        const val MAX_VALUE_LENGTH = 1000
     }
 }
