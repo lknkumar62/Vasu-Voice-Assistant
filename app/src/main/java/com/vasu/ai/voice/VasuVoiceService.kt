@@ -103,7 +103,9 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         wakeMode = false
         wakeRecoveryAttempts = 0
         commandTimeoutController.stop()
-        wakeBridge?.stop()
+        wakeCoordinator?.stop()
+        wakeCoordinator = null
+        wakeBridge?.release()
         wakeBridge = null
         ensureRecognizer()
         startListeningSoon(200, requireWakeWord = false)
@@ -121,12 +123,25 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             return
         }
 
-        wakeBridge?.release()
+        wakeBridge?.let { existingBridge ->
+            runCatching { existingBridge.release() }
+        }
+        wakeBridge = null
+        wakeCoordinator = null
+
         val keyStore = VasuWakeWordKeyStore(this)
         val manager = VasuWakeWordManager(wakeConfig)
+        val audioCapture = VasuAudioCaptureManager(
+            this,
+            VasuAudioCaptureConfig()
+        )
+        val audioLifecycleManager = VasuAudioLifecycleManager(
+            wakeConfig
+        )
         val coordinator = VasuWakeWordCoordinator(
-            manager,
-            VasuAudioLifecycleManager(wakeConfig)
+            wakeWordManager = manager,
+            audioLifecycleManager = audioLifecycleManager,
+            audioCapture = audioCapture
         )
         wakeCoordinator = coordinator
 
@@ -138,21 +153,34 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         )
 
         val bridge = VasuWakeWordAudioBridge(
-            audioCapture = VasuAudioCaptureManager(this, VasuAudioCaptureConfig()),
+            audioCapture = audioCapture,
             detector = detector,
             coordinator = coordinator,
             onCommandListeningRequested = {
-                handler.post { startCommandListeningFromWake() }
+                handler.post {
+                    startCommandListeningFromWake()
+                }
             }
         )
         wakeBridge = bridge
 
-        manager.start()
-        if (!bridge.start()) {
-            manager.stop()
+        if (!coordinator.start()) {
+            coordinator.stop()
+            wakeBridge = null
+            wakeCoordinator = null
             updateNotification("Wake word unavailable")
             return
         }
+
+        if (!bridge.start()) {
+            coordinator.onAudioFailure()
+            coordinator.stop()
+            wakeBridge = null
+            wakeCoordinator = null
+            updateNotification("Wake word unavailable")
+            return
+        }
+
         wakeRecoveryAttempts = 0
         updateNotification("Listening for Hello Vasu")
     }
@@ -252,7 +280,9 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (wakeRecoveryAttempts >= wakeConfig.maxRecoveryAttempts) {
             println("VASU_AUDIO_RECOVERY_FAILED")
             println("VASU_WAKEWORD_SAFE_STOP")
-            wakeBridge?.stop()
+            wakeCoordinator?.stop()
+            wakeCoordinator = null
+            wakeBridge?.release()
             wakeBridge = null
             wakeMode = false
             return
@@ -295,6 +325,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onBeginningOfSpeech() = Unit
     override fun onRmsChanged(rmsdB: Float) = Unit
     override fun onBufferReceived(buffer: ByteArray?) = Unit
+
     override fun onEndOfSpeech() {
         listening = false
         if (wakeMode) {
@@ -307,6 +338,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onError(error: Int) {
         listening = false
         if (processing) return
+
         if (wakeMode) {
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
@@ -319,17 +351,24 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
                 else -> finishWakeCommand("speech_error")
             }
         } else {
-            startListeningSoon(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500, LISTENING_REQUIRE_WAKE_WORD)
+            startListeningSoon(
+                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500,
+                LISTENING_REQUIRE_WAKE_WORD
+            )
         }
     }
 
     override fun onResults(results: Bundle?) {
         listening = false
         if (processing) return
+
         results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             ?.firstOrNull()
             ?.let(::handleTranscript)
-        if (!processing && !wakeMode) startListeningSoon(250, LISTENING_REQUIRE_WAKE_WORD)
+
+        if (!processing && !wakeMode) {
+            startListeningSoon(250, LISTENING_REQUIRE_WAKE_WORD)
+        }
     }
 
     override fun onPartialResults(partialResults: Bundle?) = Unit
@@ -347,6 +386,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         destroyed = true
         handler.removeCallbacksAndMessages(null)
         commandTimeoutController.stop()
+        wakeCoordinator?.stop()
+        wakeCoordinator = null
         wakeBridge?.release()
         wakeBridge = null
         stopListening()
