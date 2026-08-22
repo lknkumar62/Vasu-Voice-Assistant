@@ -55,6 +55,14 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onCreate() {
         super.onCreate()
         destroyed = false
+
+        wakeMode = false
+        listening = false
+        processing = false
+        wakeRecoveryAttempts = 0
+        wakeBridge = null
+        wakeCoordinator = null
+
         brain = GeminiAutonomousBrain(this)
         memory = VasuMemoryStore(this)
         tts = TextToSpeech(this, this)
@@ -63,7 +71,11 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         ) {
             finishWakeCommand("timeout")
         }
-        getSharedPreferences("vasu_runtime", MODE_PRIVATE).edit().putBoolean("voice_running", true).apply()
+        getSharedPreferences("vasu_runtime", MODE_PRIVATE)
+            .edit()
+            .putBoolean("voice_running", true)
+            .putLong("voice_started_at", System.currentTimeMillis())
+            .apply()
         createChannel()
         ServiceCompat.startForeground(
             this,
@@ -80,13 +92,71 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_MANUAL_COMMAND -> startManualCommandListening()
-            ACTION_WAKE_WORD_MODE -> startWakeWordMode()
-            else -> if (!wakeConfig.enabled) startListeningSoon(200, requireWakeWord = true)
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
+        if (destroyed) {
+            return START_NOT_STICKY
         }
+
+        when (intent?.action) {
+            ACTION_MANUAL_COMMAND -> {
+                startManualCommandListening()
+            }
+
+            ACTION_WAKE_WORD_MODE -> {
+                ensureWakeWordModeRunning()
+            }
+
+            null -> {
+                /*
+                 * START_STICKY recreation can arrive with a null intent.
+                 * onCreate() already starts the default wake-word mode,
+                 * so do not create another wake stack here.
+                 */
+                if (!wakeConfig.enabled) {
+                    ensureRecognizer()
+
+                    if (!listening && !processing) {
+                        startListeningSoon(
+                            200,
+                            requireWakeWord = true
+                        )
+                    }
+                } else {
+                    ensureWakeWordModeRunning()
+                }
+            }
+
+            else -> {
+                if (wakeConfig.enabled) {
+                    ensureWakeWordModeRunning()
+                }
+            }
+        }
+
         return START_STICKY
+    }
+
+    private fun ensureWakeWordModeRunning() {
+        if (destroyed || !wakeConfig.enabled) {
+            return
+        }
+
+        val coordinator = wakeCoordinator
+
+        if (
+            wakeMode &&
+            coordinator != null &&
+            coordinator.isHealthy()
+        ) {
+            updateNotification("Listening for Hello Vasu")
+            return
+        }
+
+        startWakeWordMode()
     }
 
     private fun ensureRecognizer(): Boolean {
@@ -112,7 +182,17 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     private fun startWakeWordMode() {
-        if (destroyed || !wakeConfig.enabled) return
+        if (destroyed || !wakeConfig.enabled) {
+            return
+        }
+
+        if (
+            wakeMode &&
+            wakeCoordinator?.isHealthy() == true
+        ) {
+            updateNotification("Listening for Hello Vasu")
+            return
+        }
 
         wakeMode = true
         commandTimeoutController.stop()
@@ -451,6 +531,11 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     override fun onDestroy() {
         destroyed = true
+
+        wakeMode = false
+        listening = false
+        processing = false
+        wakeRecoveryAttempts = 0
 
         handler.removeCallbacksAndMessages(null)
 
