@@ -118,7 +118,7 @@ class VasuExecutionEngine(
                 break
             }
 
-            if (!firstAttempt && isConfirmationSensitive(action)) {
+            if (!firstAttempt && isSensitiveAction(action)) {
                 val pending = executor.pendingConfirmationRequest()
                 if (pending != null) {
                     val reason = "confirmation_required"
@@ -205,7 +205,7 @@ class VasuExecutionEngine(
                             break
                         }
 
-                        if (!recovered && isConfirmationSensitive(action)) {
+                        if (!recovered && isSensitiveAction(action)) {
                             val pending = executor.pendingConfirmationRequest()
                             if (pending != null) {
                                 val reason = "confirmation_required"
