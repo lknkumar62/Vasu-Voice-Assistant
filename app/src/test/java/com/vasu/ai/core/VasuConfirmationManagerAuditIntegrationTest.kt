@@ -81,8 +81,13 @@ class VasuConfirmationManagerAuditIntegrationTest {
 
         val events = lifecycle.snapshot()
 
+        assertTrue(
+            events.any {
+                it.eventType == VasuConfirmationAuditEvent.EventType.CONSUMED
+            }
+        )
         assertEquals(
-            VasuConfirmationAuditEvent.EventType.CONSUMED,
+            VasuConfirmationAuditEvent.EventType.REJECTED,
             events.last().eventType
         )
     }
