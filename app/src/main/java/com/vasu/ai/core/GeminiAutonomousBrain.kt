@@ -28,10 +28,10 @@ class GeminiAutonomousBrain(context: Context) {
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
-    // One session-scoped store is shared by follow-up resolution and Gemini context.
     private val conversationStore = VasuConversationContextStore()
     private val conversationStateMachine = VasuConversationStateMachine(conversationStore)
     private val followUpResolver = VasuFollowUpResolver(conversationStore)
+    private val referenceResolver = VasuReferenceResolver(conversationStore)
     private val contextMapper = VasuGeminiConversationContextMapper()
     private val contextPromptBuilder = VasuGeminiContextPromptBuilder()
 
@@ -46,22 +46,27 @@ class GeminiAutonomousBrain(context: Context) {
         val trimmed = command.trim()
         if (trimmed.isBlank()) return Result(false, "Command samajh nahi aaya.")
 
+        val referenceResult = referenceResolver.resolve(trimmed)
         val resolution = followUpResolver.resolve(trimmed)
         val effectiveCommand = resolution.resolvedCommand
         val boundedContext = contextMapper.map(resolution.context)
         val contextPrompt = contextPromptBuilder.build(
             command = effectiveCommand,
             context = boundedContext,
-            isFollowUp = resolution.isFollowUp
+            isFollowUp = resolution.isFollowUp,
+            reference = referenceResult.reference
+        )
+
+        println(
+            "VASU_GEMINI_REFERENCE " +
+                "type=${referenceResult.reference.type} " +
+                "freshUi=${referenceResult.reference.requiresFreshUiEvidence}"
         )
 
         conversationStateMachine.startProcessing()
         conversationStore.updateUserCommand(trimmed)
         conversationStore.addTurn(
-            VasuConversationTurn(
-                userText = trimmed,
-                timestampMs = System.currentTimeMillis()
-            )
+            VasuConversationTurn(trimmed, timestampMs = System.currentTimeMillis())
         )
 
         if (isOnline() && !keyStore.read().isNullOrBlank()) {
@@ -73,10 +78,7 @@ class GeminiAutonomousBrain(context: Context) {
             for (stepIndex in 0 until MAX_GEMINI_STEPS) {
                 val screen = screenContext(lastExecution)
                 val context = if (lastExecution != null && lastExecution.steps.any { !it.success }) {
-                    val recovery = dynamicReplanner.capture(
-                        originalCommand = effectiveCommand,
-                        execution = lastExecution
-                    )
+                    val recovery = dynamicReplanner.capture(effectiveCommand, lastExecution)
                     buildString {
                         append(screen)
                         append("\n\n")
@@ -85,7 +87,7 @@ class GeminiAutonomousBrain(context: Context) {
                 } else {
                     buildString {
                         append(screen)
-                        if (resolution.isFollowUp) {
+                        if (resolution.isFollowUp || referenceResult.reference.type != VasuReferenceType.NONE) {
                             append("\n\nCONVERSATION CONTEXT:\n")
                             append(contextPrompt)
                         }
@@ -100,9 +102,7 @@ class GeminiAutonomousBrain(context: Context) {
                     if (plan.done) {
                         val reply = lastReply.ifBlank { "Ho gaya Boss." }
                         conversationStore.updateAssistantResponse(reply)
-                        conversationStore.addTurn(
-                            VasuConversationTurn(trimmed, reply, System.currentTimeMillis(), true)
-                        )
+                        conversationStore.addTurn(VasuConversationTurn(trimmed, reply, System.currentTimeMillis(), true))
                         conversationStateMachine.complete()
                         return Result(true, reply, lastExecution, true)
                     }
@@ -117,15 +117,13 @@ class GeminiAutonomousBrain(context: Context) {
                 }
 
                 val action = validation.actions.first()
+                if (referenceResult.reference.requiresFreshUiEvidence) {
+                    println("VASU_REFERENCE_EXECUTION_GUARD reference=${referenceResult.reference.type} action=${action::class.simpleName}")
+                }
 
                 if (stepIndex > 0 && isSensitiveSideEffect(action)) {
                     conversationStateMachine.fail()
-                    return finalizeFailure(
-                        trimmed,
-                        "Boss, sensitive action ko automatic recovery ke liye repeat nahi kiya gaya.",
-                        lastExecution,
-                        true
-                    )
+                    return finalizeFailure(trimmed, "Boss, sensitive action ko automatic recovery ke liye repeat nahi kiya gaya.", lastExecution, true)
                 }
 
                 val execution = executionEngine.execute(listOf(action))
@@ -139,22 +137,13 @@ class GeminiAutonomousBrain(context: Context) {
                 }
 
                 conversationStore.updateLastAction(action::class.simpleName, false)
-                println(
-                    "VASU_DYNAMIC_REPLAN " +
-                        "step=$stepIndex " +
-                        "failedAction=${execution.failedAction}"
-                )
+                println("VASU_DYNAMIC_REPLAN step=$stepIndex failedAction=${execution.failedAction}")
                 Thread.sleep(RECOVERY_SETTLE_DELAY_MS)
             }
 
             if (geminiProducedResult) {
                 conversationStateMachine.waitForFollowUp()
-                return finalizeFailure(
-                    trimmed,
-                    lastReply.ifBlank { "Boss, task partially execute hua, lekin completion verify nahi hua." },
-                    lastExecution,
-                    true
-                )
+                return finalizeFailure(trimmed, lastReply.ifBlank { "Boss, task partially execute hua, lekin completion verify nahi hua." }, lastExecution, true)
             }
         }
 
@@ -167,9 +156,7 @@ class GeminiAutonomousBrain(context: Context) {
             }
             conversationStateMachine.complete()
             conversationStore.updateAssistantResponse(result.reply)
-            conversationStore.addTurn(
-                VasuConversationTurn(trimmed, result.reply, System.currentTimeMillis(), true)
-            )
+            conversationStore.addTurn(VasuConversationTurn(trimmed, result.reply, System.currentTimeMillis(), true))
         } else {
             conversationStateMachine.fail()
         }
@@ -179,16 +166,9 @@ class GeminiAutonomousBrain(context: Context) {
     fun saveGeminiApiKey(apiKey: String) = keyStore.save(apiKey.trim())
     fun clearGeminiApiKey() = keyStore.clear()
 
-    private fun finalizeFailure(
-        originalCommand: String,
-        reply: String,
-        execution: VasuExecutionEngine.ExecutionResult?,
-        usedGemini: Boolean
-    ): Result {
+    private fun finalizeFailure(originalCommand: String, reply: String, execution: VasuExecutionEngine.ExecutionResult?, usedGemini: Boolean): Result {
         conversationStore.updateAssistantResponse(reply)
-        conversationStore.addTurn(
-            VasuConversationTurn(originalCommand, reply, System.currentTimeMillis(), false)
-        )
+        conversationStore.addTurn(VasuConversationTurn(originalCommand, reply, System.currentTimeMillis(), false))
         return Result(false, reply, execution, usedGemini)
     }
 
@@ -215,8 +195,7 @@ class GeminiAutonomousBrain(context: Context) {
     }
 
     private fun isSensitiveSideEffect(action: VasuAction): Boolean = when (action) {
-        is VasuAction.CallContact,
-        is VasuAction.SendSms -> true
+        is VasuAction.CallContact, is VasuAction.SendSms -> true
         else -> false
     }
 
