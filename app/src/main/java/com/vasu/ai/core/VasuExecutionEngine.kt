@@ -3,7 +3,9 @@ package com.vasu.ai.core
 class VasuExecutionEngine(
     private val executor: VasuActionExecutor,
     private val screenDetector: VasuScreenTransitionDetector = VasuScreenTransitionDetector(),
-    private val verifier: VasuActionVerifier = VasuActionVerifier(screenDetector)
+    private val verifier: VasuActionVerifier = VasuActionVerifier(screenDetector),
+    private val workflowReliability: VasuWorkflowReliability = VasuWorkflowReliability(),
+    private val navigationRecovery: VasuNavigationRecovery = VasuNavigationRecovery()
 ) {
 
     data class StepResult(
@@ -30,100 +32,125 @@ class VasuExecutionEngine(
 
         for (action in actions) {
             val before = screenDetector.capture()
+            val signature = buildActionSignature(action, before?.packageName)
 
-            val firstAttempt = runCatching {
-                executor.execute(action)
-            }.getOrDefault(false)
-
-            if (firstAttempt) {
-                Thread.sleep(120L)
+            if (workflowReliability.isDuplicate(signature)) {
+                results += StepResult(
+                    action = action,
+                    success = false,
+                    attempts = 0,
+                    verificationReason = "duplicate_action_blocked"
+                )
+                break
             }
+
+            workflowReliability.recordExecution(signature)
+
+            val firstAttempt = runCatching { executor.execute(action) }.getOrDefault(false)
+            if (firstAttempt) workflowReliability.boundedSleep(120L)
 
             val after = screenDetector.capture()
 
             if (!firstAttempt) {
                 if (isSafeToRetry(action)) {
-                    Thread.sleep(150L)
+                    val retryState = VasuWorkflowReliability.RetryState()
+                    if (workflowReliability.shouldRetry(retryState, action::class.simpleName ?: "Unknown")) {
+                        workflowReliability.boundedSleep(150L)
+                        val retryBefore = screenDetector.capture()
+                        val retrySignature = buildActionSignature(action, retryBefore?.packageName)
 
-                    val retryBefore = screenDetector.capture()
-                    val recovered = runCatching {
-                        executor.execute(action)
-                    }.getOrDefault(false)
+                        if (workflowReliability.isDuplicate(retrySignature)) {
+                            results += StepResult(
+                                action = action,
+                                success = false,
+                                attempts = 1,
+                                verificationReason = "duplicate_retry_blocked"
+                            )
+                            break
+                        }
 
-                    if (recovered) {
-                        Thread.sleep(120L)
+                        workflowReliability.recordExecution(retrySignature)
+                        val recovered = runCatching { executor.execute(action) }.getOrDefault(false)
+                        if (recovered) workflowReliability.boundedSleep(120L)
+                        val retryAfter = screenDetector.capture()
+
+                        if (recovered) {
+                            val verification = verifier.verify(action, retryBefore, retryAfter)
+                            val success = verification.status != VasuActionVerifier.Status.NOT_VERIFIED
+                            results += StepResult(
+                                action = action,
+                                success = success,
+                                recovered = true,
+                                attempts = 2,
+                                verification = verification.status,
+                                verificationReason = verification.reason
+                            )
+                            logVerification(action, 2, verification)
+
+                            if (!success) {
+                                recoverNavigation(action, retryAfter?.packageName)
+                                break
+                            }
+                            continue
+                        }
                     }
-
-                    val retryAfter = screenDetector.capture()
-
-                    if (recovered) {
-                        val verification = verifier.verify(
-                            action = action,
-                            before = retryBefore,
-                            after = retryAfter
-                        )
-                        val success = verification.status != VasuActionVerifier.Status.NOT_VERIFIED
-
-                        results += StepResult(
-                            action = action,
-                            success = success,
-                            recovered = true,
-                            attempts = 2,
-                            verification = verification.status,
-                            verificationReason = verification.reason
-                        )
-
-                        logVerification(action, 2, verification)
-
-                        if (!success) break
-                        continue
-                    }
-
-                    results += StepResult(
-                        action = action,
-                        success = false,
-                        recovered = false,
-                        attempts = 2,
-                        verification = VasuActionVerifier.Status.UNKNOWN,
-                        verificationReason = "executor_failed_after_safe_retry"
-                    )
-                    break
                 }
 
                 results += StepResult(
                     action = action,
                     success = false,
-                    recovered = false,
-                    attempts = 1,
-                    verification = VasuActionVerifier.Status.UNKNOWN,
                     verificationReason = "executor_failed"
                 )
                 break
             }
 
-            val verification = verifier.verify(
-                action = action,
-                before = before,
-                after = after
-            )
-
+            val verification = verifier.verify(action, before, after)
             val success = verification.status != VasuActionVerifier.Status.NOT_VERIFIED
 
             results += StepResult(
                 action = action,
                 success = success,
-                recovered = false,
-                attempts = 1,
                 verification = verification.status,
                 verificationReason = verification.reason
             )
-
             logVerification(action, 1, verification)
 
-            if (!success) break
+            if (!success) {
+                recoverNavigation(action, after?.packageName)
+                break
+            }
         }
 
         return ExecutionResult(results)
+    }
+
+    private fun recoverNavigation(action: VasuAction, expectedPackage: String?) {
+        if (isSensitiveAction(action)) {
+            println("VASU_WORKFLOW sensitive_action_recovery_blocked=true")
+            return
+        }
+        val recovery = navigationRecovery.recover(expectedPackage)
+        println("VASU_WORKFLOW navigation_recovery=${recovery.recovered}")
+    }
+
+    private fun buildActionSignature(
+        action: VasuAction,
+        packageName: String?
+    ): VasuWorkflowReliability.ActionSignature = when (action) {
+        is VasuAction.OpenApp -> VasuWorkflowReliability.ActionSignature("OpenApp", action.packageName, null, packageName)
+        is VasuAction.TypeText -> VasuWorkflowReliability.ActionSignature("TypeText", null, action.text, packageName)
+        VasuAction.ClearText -> VasuWorkflowReliability.ActionSignature("ClearText", null, null, packageName)
+        is VasuAction.ClickText -> VasuWorkflowReliability.ActionSignature("ClickText", action.text, null, packageName)
+        is VasuAction.LongClickText -> VasuWorkflowReliability.ActionSignature("LongClickText", action.text, null, packageName)
+        is VasuAction.ClickDescription -> VasuWorkflowReliability.ActionSignature("ClickDescription", action.description, null, packageName)
+        is VasuAction.ClickViewId -> VasuWorkflowReliability.ActionSignature("ClickViewId", action.viewId, null, packageName)
+        else -> VasuWorkflowReliability.ActionSignature(action::class.simpleName ?: "Unknown", null, null, packageName)
+    }
+
+    private fun isSensitiveAction(action: VasuAction): Boolean = when (action) {
+        is VasuAction.CallContact,
+        is VasuAction.SendSms -> true
+        else -> false
     }
 
     private fun logVerification(
