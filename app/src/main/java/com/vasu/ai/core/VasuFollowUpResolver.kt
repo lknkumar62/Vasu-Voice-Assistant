@@ -3,7 +3,9 @@ package com.vasu.ai.core
 class VasuFollowUpResolver(
     private val contextStore: VasuConversationContextStore,
     private val referenceResolver: VasuReferenceResolver = VasuReferenceResolver(contextStore),
-    private val clarificationManager: VasuClarificationManager = VasuClarificationManager()
+    private val clarificationManager: VasuClarificationManager = VasuClarificationManager(),
+    private val clarificationResumeResolver: VasuClarificationResumeResolver = VasuClarificationResumeResolver(),
+    private val freshReferenceResolver: VasuFreshReferenceResolver = VasuFreshReferenceResolver()
 ) {
     data class Resolution(
         val isFollowUp: Boolean,
@@ -21,16 +23,34 @@ class VasuFollowUpResolver(
         if (pending != null) {
             val answer = clarificationManager.resolveAnswer(input)
             if (answer != null) {
+                val resume = clarificationResumeResolver.resolve(answer)
+                val freshRequired =
+                    resume.requiresFreshUi || freshReferenceResolver.requiresFreshResolution(answer.referenceType)
+
+                println(
+                    "VASU_CLARIFICATION_RESUME " +
+                        "reference=${answer.referenceType} " +
+                        "resolved=${resume.resolved} " +
+                        "freshUi=$freshRequired " +
+                        "reason=${resume.reason}"
+                )
+
                 val reference = VasuConversationReference(
-                    type = if (answer.matched) answer.referenceType else VasuReferenceType.UNKNOWN,
+                    type = if (resume.resolved) answer.referenceType else VasuReferenceType.UNKNOWN,
                     originalText = input,
                     confidence = answer.confidence,
-                    requiresFreshUiEvidence = answer.requiresFreshUiEvidence
+                    requiresFreshUiEvidence = freshRequired
                 )
-                println("VASU_CLARIFICATION_ANSWER type=${answer.referenceType} confidence=${answer.confidence}")
+
+                println(
+                    "VASU_CLARIFICATION_ANSWER " +
+                        "type=${answer.referenceType} " +
+                        "confidence=${answer.confidence}"
+                )
+
                 return Resolution(
                     isFollowUp = true,
-                    resolvedCommand = if (answer.matched) pending.originalCommand else input,
+                    resolvedCommand = if (resume.resolved) pending.originalCommand else input,
                     context = context,
                     reference = reference,
                     clarificationAnswer = answer,
