@@ -13,37 +13,17 @@ import com.vasu.ai.device.VasuDeviceController
 class VasuActionExecutor(private val context: Context) {
     private val device = VasuDeviceController(context)
     private val communication = VasuCommunicationController(context)
+    private val elementRecovery = VasuElementRecovery()
 
     fun execute(action: VasuAction): Boolean {
         return when (action) {
             is VasuAction.OpenApp -> openApp(action.packageName)
-            is VasuAction.ClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.click(it) == true } == true
-            is VasuAction.LongClickText -> VasuAccessibilityService.instance?.findByText(action.text)?.let { VasuAccessibilityService.instance?.longClick(it) == true } == true
-            is VasuAction.ClickDescription -> {
-                val service = VasuAccessibilityService.instance ?: return false
-                val node = service.findByContentDescription(action.description) ?: service.findByText(action.description) ?: return false
-                service.click(node)
-            }
-            is VasuAction.ClickViewId -> {
-                val service = VasuAccessibilityService.instance ?: return false
-                service.findByViewId(action.viewId)?.let(service::click) == true
-            }
-            is VasuAction.TypeText -> {
-                val service = VasuAccessibilityService.instance ?: return false
-                val focused = service.focusedEditable()
-                val editable = focused ?: findEditable(service.root() ?: return false)
-                if (editable == null || editable.isPassword) return false
-                if (focused == null) editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                service.setText(editable, action.text)
-            }
-            VasuAction.ClearText -> {
-                val service = VasuAccessibilityService.instance ?: return false
-                val focused = service.focusedEditable()
-                val editable = focused ?: findEditable(service.root() ?: return false)
-                if (editable == null || editable.isPassword) return false
-                if (focused == null && !editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)) return false
-                service.setText(editable, "")
-            }
+            is VasuAction.ClickText -> executeClickTextWithRecovery(action.text)
+            is VasuAction.LongClickText -> executeLongClickTextWithRecovery(action.text)
+            is VasuAction.ClickDescription -> executeClickDescriptionWithRecovery(action.description)
+            is VasuAction.ClickViewId -> executeClickViewIdWithRecovery(action.viewId)
+            is VasuAction.TypeText -> executeTypeTextWithRecovery(action.text)
+            VasuAction.ClearText -> executeClearTextWithRecovery()
             is VasuAction.Wait -> {
                 val delay = action.milliseconds.coerceIn(50L, 1500L)
                 SystemClock.sleep(delay)
@@ -81,6 +61,110 @@ class VasuActionExecutor(private val context: Context) {
             VasuAction.LockScreen -> if (Build.VERSION.SDK_INT >= 28) global(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) else false
             VasuAction.TakeScreenshot -> if (Build.VERSION.SDK_INT >= 30) global(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) else false
         }
+    }
+
+    private fun executeClickTextWithRecovery(text: String): Boolean {
+        val service = VasuAccessibilityService.instance ?: return false
+        var node = service.findByText(text)
+        if (node == null) {
+            val recovery = elementRecovery.waitForText(text)
+            println(
+                "VASU_ELEMENT_RECOVERY " +
+                    "type=TEXT query=$text found=${recovery.found} " +
+                    "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
+            )
+            if (!recovery.found) return false
+            node = service.findByText(text)
+        }
+        return node?.let(service::click) == true
+    }
+
+    private fun executeLongClickTextWithRecovery(text: String): Boolean {
+        val service = VasuAccessibilityService.instance ?: return false
+        var node = service.findByText(text)
+        if (node == null) {
+            val recovery = elementRecovery.waitForText(text)
+            println(
+                "VASU_ELEMENT_RECOVERY " +
+                    "type=LONG_CLICK_TEXT query=$text found=${recovery.found} " +
+                    "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
+            )
+            if (!recovery.found) return false
+            node = service.findByText(text)
+        }
+        return node?.let(service::longClick) == true
+    }
+
+    private fun executeClickDescriptionWithRecovery(description: String): Boolean {
+        val service = VasuAccessibilityService.instance ?: return false
+        var node = service.findByContentDescription(description) ?: service.findByText(description)
+        if (node == null) {
+            val recovery = elementRecovery.waitForContentDescription(description)
+            println(
+                "VASU_ELEMENT_RECOVERY " +
+                    "type=CONTENT_DESCRIPTION query=$description found=${recovery.found} " +
+                    "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
+            )
+            if (!recovery.found) return false
+            node = service.findByContentDescription(description) ?: service.findByText(description)
+        }
+        return node?.let(service::click) == true
+    }
+
+    private fun executeClickViewIdWithRecovery(viewId: String): Boolean {
+        val service = VasuAccessibilityService.instance ?: return false
+        var node = service.findByViewId(viewId)
+        if (node == null) {
+            val recovery = elementRecovery.waitForViewId(viewId)
+            println(
+                "VASU_ELEMENT_RECOVERY " +
+                    "type=VIEW_ID query=$viewId found=${recovery.found} " +
+                    "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
+            )
+            if (!recovery.found) return false
+            node = service.findByViewId(viewId)
+        }
+        return node?.let(service::click) == true
+    }
+
+    private fun executeTypeTextWithRecovery(text: String): Boolean {
+        val service = VasuAccessibilityService.instance ?: return false
+        var editable = service.focusedEditable() ?: findEditable(service.root() ?: return false)
+
+        if (editable == null) {
+            val recovery = elementRecovery.waitForEditable()
+            println(
+                "VASU_ELEMENT_RECOVERY " +
+                    "type=EDITABLE query=type_text found=${recovery.found} " +
+                    "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
+            )
+            if (!recovery.found) return false
+            editable = service.focusedEditable() ?: findEditable(service.root() ?: return false)
+        }
+
+        if (editable == null || editable.isPassword || !editable.isEnabled || !editable.isVisibleToUser) return false
+        if (!editable.isFocused && !editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)) return false
+        return service.setText(editable, text)
+    }
+
+    private fun executeClearTextWithRecovery(): Boolean {
+        val service = VasuAccessibilityService.instance ?: return false
+        var editable = service.focusedEditable() ?: findEditable(service.root() ?: return false)
+
+        if (editable == null) {
+            val recovery = elementRecovery.waitForEditable()
+            println(
+                "VASU_ELEMENT_RECOVERY " +
+                    "type=EDITABLE query=clear_text found=${recovery.found} " +
+                    "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
+            )
+            if (!recovery.found) return false
+            editable = service.focusedEditable() ?: findEditable(service.root() ?: return false)
+        }
+
+        if (editable == null || editable.isPassword || !editable.isEnabled || !editable.isVisibleToUser) return false
+        if (!editable.isFocused && !editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)) return false
+        return service.setText(editable, "")
     }
 
     private fun pressEnter(): Boolean {
