@@ -4,9 +4,10 @@ class VasuGeminiContextPromptBuilder {
     fun build(
         command: String,
         context: VasuGeminiConversationContext,
-        isFollowUp: Boolean
+        isFollowUp: Boolean,
+        reference: VasuConversationReference? = null
     ): String {
-        if (!isFollowUp) return command
+        if (!isFollowUp && reference?.type == VasuReferenceType.NONE) return command
 
         val lines = mutableListOf<String>()
         lines += "Current user command: $command"
@@ -23,8 +24,18 @@ class VasuGeminiContextPromptBuilder {
         context.lastSuccessfulAction?.takeIf { it.isNotBlank() }?.let {
             lines += "Previous successful action: $it"
         }
+        reference?.let {
+            lines += "Conversation reference: ${it.type}"
+            lines += "Reference confidence: ${it.confidence}"
+            lines += "Fresh UI evidence required: ${it.requiresFreshUiEvidence}"
+        }
         lines += "Resolve references only when supported by the supplied context."
+        lines += "Never invent the meaning of an ambiguous reference."
         lines += "Do not invent an app, target, element, or previous result."
+        if (reference?.requiresFreshUiEvidence == true) {
+            lines += "Inspect the current screen and require reliable fresh accessibility evidence before selecting a referenced item."
+            lines += "If no reliable candidate exists or candidates are equally plausible, do not execute the action."
+        }
         return lines.joinToString("\n")
     }
 }
