@@ -10,11 +10,14 @@ import ai.picovoice.porcupine.PorcupineException
 class VasuPorcupineWakeWordDetector(
     context: Context,
     private val config: VasuWakeWordConfig = VasuWakeWordConfig(),
-    private val accessKeyProvider: () -> String?,
+    private val accessKeyProvider: () -> String? = {
+        VasuWakeWordKeyStore(context.applicationContext).getAccessKey()
+    },
     private val onDetected: () -> Unit
 ) : VasuWakeWordDetector {
 
     private val appContext = context.applicationContext
+    private val readinessChecker = VasuWakeWordReadinessChecker(appContext, config)
 
     @Volatile
     private var running = false
@@ -29,10 +32,17 @@ class VasuPorcupineWakeWordDetector(
 
     @Synchronized
     override fun start(): Boolean {
-        if (released || !config.enabled) {
-            if (!config.enabled) println("VASU_WAKEWORD_DISABLED")
-            return false
+        if (released) return false
+
+        when (val readiness = readinessChecker.check()) {
+            VasuWakeWordReadiness.DISABLED -> return false
+            VasuWakeWordReadiness.ACCESS_KEY_MISSING,
+            VasuWakeWordReadiness.MODEL_MISSING,
+            VasuWakeWordReadiness.MODEL_INVALID,
+            VasuWakeWordReadiness.CONFIGURATION_ERROR -> return false
+            VasuWakeWordReadiness.READY -> Unit
         }
+
         if (running) return true
 
         if (ContextCompat.checkSelfPermission(
@@ -46,12 +56,7 @@ class VasuPorcupineWakeWordDetector(
 
         val accessKey = accessKeyProvider()?.trim().orEmpty()
         if (accessKey.isBlank()) {
-            println("VASU_WAKEWORD_ENGINE_ERROR reason=access_key_missing")
-            return false
-        }
-
-        if (!assetExists(config.keywordAssetPath)) {
-            println("VASU_WAKEWORD_MODEL_MISSING")
+            println("VASU_WAKEWORD_ACCESS_KEY_MISSING")
             return false
         }
 
@@ -76,10 +81,10 @@ class VasuPorcupineWakeWordDetector(
             running = false
             println("VASU_WAKEWORD_ENGINE_ERROR reason=porcupine_init_failed")
             false
-        } catch (error: Throwable) {
+        } catch (_: Throwable) {
             engine = null
             running = false
-            println("VASU_WAKEWORD_ENGINE_ERROR reason=${error::class.simpleName}")
+            println("VASU_WAKEWORD_ENGINE_ERROR reason=engine_init_failed")
             false
         }
     }
@@ -146,9 +151,4 @@ class VasuPorcupineWakeWordDetector(
     }
 
     override fun isRunning(): Boolean = running && !released
-
-    private fun assetExists(path: String): Boolean =
-        runCatching {
-            appContext.assets.open(path).use { true }
-        }.getOrDefault(false)
 }
