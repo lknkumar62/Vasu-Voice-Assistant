@@ -32,6 +32,9 @@ class VasuGeminiContextPromptBuilder {
         lines += "Resolve references only when supported by the supplied context."
         lines += "Never invent the meaning of an ambiguous reference."
         lines += "Do not invent an app, target, element, or previous result."
+        lines += "If this command resolves a pending clarification, use the supplied reference type."
+        lines += "Clarification-derived references require fresh current-screen UI evidence."
+        lines += "Never convert an ambiguous reference directly into a click without verified UI evidence."
         if (reference?.requiresFreshUiEvidence == true) {
             lines += "Inspect the current screen and require reliable fresh accessibility evidence before selecting a referenced item."
             lines += "If no reliable candidate exists or candidates are equally plausible, do not execute the action."
