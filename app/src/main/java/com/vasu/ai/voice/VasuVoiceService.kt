@@ -1,10 +1,14 @@
 package com.vasu.ai.voice
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Bundle
 import android.os.Handler
@@ -48,6 +52,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private var ttsReady = false
     private var destroyed = false
     private var serviceGeneration = 0L
+    private var deviceLocked = false
 
     private val wakeConfig = VasuWakeWordConfig()
     private var wakeMode = false
@@ -59,6 +64,31 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private var listeningRequireWakeWord = true
 
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (destroyed) return
+
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF,
+                Intent.ACTION_SCREEN_ON,
+                Intent.ACTION_USER_UNLOCKED -> {
+                    updateDeviceLockState()
+
+                    if (!wakeMode) return
+
+                    if (
+                        intent.action == Intent.ACTION_SCREEN_ON ||
+                        intent.action == Intent.ACTION_USER_UNLOCKED
+                    ) {
+                        ensureWakeWordModeRunning()
+                    } else if (hasHealthyWakeStack()) {
+                        updateWakeWordNotification()
+                    }
+                }
+            }
+        }
+    }
+
     private fun isCurrentGeneration(generation: Long): Boolean =
         !destroyed && generation == serviceGeneration
 
@@ -67,6 +97,21 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (::commandTimeoutController.isInitialized) {
             commandTimeoutController.stop()
         }
+    }
+
+    private fun updateDeviceLockState() {
+        val keyguardManager = getSystemService(KeyguardManager::class.java)
+        deviceLocked = keyguardManager?.isKeyguardLocked == true
+    }
+
+    private fun updateWakeWordNotification() {
+        updateNotification(
+            if (deviceLocked) {
+                "Listening for Hello Vasu — screen locked"
+            } else {
+                "Listening for Hello Vasu"
+            }
+        )
     }
 
     private fun hasHealthyWakeStack(): Boolean {
@@ -104,6 +149,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         super.onCreate()
         destroyed = false
         serviceGeneration++
+        updateDeviceLockState()
 
         wakeMode = false
         listening = false
@@ -134,10 +180,26 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             .apply()
 
         createChannel()
+
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_UNLOCKED)
+        }
+        runCatching {
+            registerReceiver(screenStateReceiver, screenFilter)
+        }
+
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
-            buildNotification("Wake word: Hello Vasu"),
+            buildNotification(
+                if (wakeConfig.enabled && deviceLocked) {
+                    "Wake word: Hello Vasu — screen locked"
+                } else {
+                    "Wake word: Hello Vasu"
+                }
+            ),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         )
 
@@ -164,6 +226,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (destroyed) return START_NOT_STICKY
+
+        updateDeviceLockState()
 
         when (intent?.action) {
             ACTION_MANUAL_COMMAND -> {
@@ -196,8 +260,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private fun ensureWakeWordModeRunning() {
         if (destroyed || !wakeConfig.enabled) return
 
+        updateDeviceLockState()
+
         if (hasHealthyWakeStack()) {
-            updateNotification("Listening for Hello Vasu")
+            updateWakeWordNotification()
             return
         }
 
@@ -231,8 +297,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private fun startWakeWordMode() {
         if (destroyed || !wakeConfig.enabled) return
 
+        updateDeviceLockState()
+
         if (hasHealthyWakeStack()) {
-            updateNotification("Listening for Hello Vasu")
+            updateWakeWordNotification()
             return
         }
 
@@ -302,7 +370,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
         recoveryScheduled = false
         resetRecoveryState()
-        updateNotification("Listening for Hello Vasu")
+        updateWakeWordNotification()
     }
 
     private fun startCommandListeningFromWake() {
@@ -466,7 +534,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
         if (coordinator.completeAudioRecovery()) {
             recoveryScheduled = false
-            updateNotification("Listening for Hello Vasu")
+            updateWakeWordNotification()
             return
         }
 
@@ -602,6 +670,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         processing = false
 
         handler.removeCallbacksAndMessages(null)
+
+        runCatching {
+            unregisterReceiver(screenStateReceiver)
+        }
 
         if (::commandTimeoutController.isInitialized) {
             commandTimeoutController.stop()
