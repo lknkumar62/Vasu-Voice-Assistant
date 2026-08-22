@@ -8,10 +8,15 @@ class VasuExecutionEngine(
     private val screenDetector: VasuScreenTransitionDetector = VasuScreenTransitionDetector(),
     private val verifier: VasuActionVerifier = VasuActionVerifier(screenDetector),
     private val workflowReliability: VasuWorkflowReliability = VasuWorkflowReliability(),
-    private val navigationRecovery: VasuNavigationRecovery = VasuNavigationRecovery()
+    private val navigationRecovery: VasuNavigationRecovery = VasuNavigationRecovery(),
+    private val timeoutController: VasuTimeoutController = VasuTimeoutController(),
+    private val retryPolicy: VasuRetryPolicy = VasuRetryPolicy(),
+    private val completionDetector: VasuWorkflowCompletionDetector = VasuWorkflowCompletionDetector(),
+    private val replanLoopGuard: VasuReplanLoopGuard = VasuReplanLoopGuard()
 ) {
     private val workflowState = VasuWorkflowState()
     private var workflowContext: VasuWorkflowContext? = null
+    private var workflowDeadline: VasuTimeoutController.Deadline? = null
 
     data class StepResult(
         val action: VasuAction,
@@ -39,6 +44,21 @@ class VasuExecutionEngine(
         val results = mutableListOf<StepResult>()
 
         for (action in actions) {
+            if (workflowDeadline?.expired() == true) {
+                val reason = "workflow_timeout"
+                workflowState.fail(reason)
+                workflowContext?.lastFailureReason = reason
+                println("VASU_WORKFLOW_TIMEOUT")
+                results += StepResult(action = action, success = false, verificationReason = reason)
+                break
+            }
+
+            val actionTimeout = when (action) {
+                is VasuAction.OpenApp -> VasuTimeoutController.OPEN_APP_TIMEOUT_MS
+                else -> VasuTimeoutController.DEFAULT_ACTION_TIMEOUT_MS
+            }
+            val deadline = timeoutController.start(actionTimeout)
+
             val stepIndex = workflowState.currentStepIndex + 1
             workflowState.beginStep(
                 index = stepIndex,
@@ -72,12 +92,31 @@ class VasuExecutionEngine(
 
             workflowReliability.recordExecution(signature)
             val firstAttempt = runCatching { executor.execute(action) }.getOrDefault(false)
+
+            if (deadline.expired()) {
+                val reason = "action_timeout"
+                workflowState.markFailed(reason)
+                workflowContext?.lastFailureReason = reason
+                println(
+                    "VASU_TIMEOUT action=${action::class.simpleName} timeoutMs=$actionTimeout"
+                )
+                results += StepResult(action = action, success = false, verificationReason = reason)
+                break
+            }
+
             if (firstAttempt) workflowReliability.boundedSleep(120L)
             val after = screenDetector.capture()
 
             if (!firstAttempt) {
-                if (isSafeToRetry(action)) {
-                    val retryState = VasuWorkflowReliability.RetryState()
+                val attemptsSoFar = workflowState.snapshot().lastOrNull()?.attempts ?: 1
+                val retryAllowed =
+                    isSafeToRetry(action) && retryPolicy.canRetry(action, attemptsSoFar)
+
+                if (retryAllowed && !deadline.expired()) {
+                    val retryState = VasuWorkflowReliability.RetryState(
+                        attempt = attemptsSoFar,
+                        maxAttempts = retryPolicy.maxRetriesFor(action)
+                    )
                     if (workflowReliability.shouldRetry(retryState, action::class.simpleName ?: "Unknown")) {
                         workflowReliability.boundedSleep(150L)
                         val retryBefore = screenDetector.capture()
@@ -90,13 +129,30 @@ class VasuExecutionEngine(
                                 it.lastActionVerified = false
                                 it.lastFailureReason = reason
                             }
-                            results += StepResult(action = action, success = false, attempts = 1, verificationReason = reason)
+                            results += StepResult(action = action, success = false, attempts = attemptsSoFar, verificationReason = reason)
                             break
                         }
 
                         workflowReliability.recordExecution(retrySignature)
                         workflowState.recordAttempt()
                         val recovered = runCatching { executor.execute(action) }.getOrDefault(false)
+
+                        if (SystemClock.uptimeMillis() - deadline.startedAt >= actionTimeout) {
+                            val reason = "action_timeout"
+                            workflowState.markFailed(reason)
+                            workflowContext?.lastFailureReason = reason
+                            println(
+                                "VASU_TIMEOUT action=${action::class.simpleName} timeoutMs=$actionTimeout"
+                            )
+                            results += StepResult(
+                                action = action,
+                                success = false,
+                                attempts = workflowState.snapshot().lastOrNull()?.attempts ?: 2,
+                                verificationReason = reason
+                            )
+                            break
+                        }
+
                         if (recovered) workflowReliability.boundedSleep(120L)
                         val retryAfter = screenDetector.capture()
 
@@ -113,6 +169,7 @@ class VasuExecutionEngine(
                                 verificationReason = verification.reason
                             )
                             logVerification(action, 2, verification)
+
                             if (!success) {
                                 recoverNavigation(action, retryAfter?.packageName)
                                 break
@@ -122,12 +179,17 @@ class VasuExecutionEngine(
                     }
                 }
 
-                workflowState.markFailed("executor_failed")
+                val reason =
+                    if (!retryPolicy.canRetry(action, attemptsSoFar)) "retry_budget_exhausted" else "executor_failed"
+                workflowState.markFailed(reason)
                 workflowContext?.let {
                     it.lastActionVerified = false
-                    it.lastFailureReason = "executor_failed"
+                    it.lastFailureReason = reason
                 }
-                results += StepResult(action = action, success = false, verificationReason = "executor_failed")
+                println(
+                    "VASU_RETRY_POLICY allowed=false action=${action::class.simpleName} attempts=$attemptsSoFar"
+                )
+                results += StepResult(action = action, success = false, verificationReason = reason)
                 break
             }
 
@@ -154,9 +216,27 @@ class VasuExecutionEngine(
 
     fun workflowSnapshot(): List<VasuWorkflowState.StepRecord> = workflowState.snapshot()
 
+    fun evaluateWorkflowCompletion(expectedStepCount: Int): VasuWorkflowCompletionDetector.CompletionResult {
+        if (expectedStepCount <= 0) {
+            return VasuWorkflowCompletionDetector.CompletionResult(false, "empty_expected_plan")
+        }
+        val snapshot = workflowState.snapshot()
+        if (snapshot.size < expectedStepCount) {
+            return VasuWorkflowCompletionDetector.CompletionResult(false, "steps_incomplete")
+        }
+        return completionDetector.evaluate(workflowState)
+    }
+
+    fun shouldStopReplan(actionType: String): Boolean =
+        replanLoopGuard.shouldStop(workflowState.currentStepIndex, actionType)
+
+    fun resetReplanLoopGuard() = replanLoopGuard.reset()
+
     fun completeWorkflow() {
         workflowState.complete()
         workflowContext = null
+        workflowDeadline = null
+        replanLoopGuard.reset()
     }
 
     fun failWorkflow(reason: String) {
@@ -171,6 +251,8 @@ class VasuExecutionEngine(
                 workflowId = UUID.randomUUID().toString(),
                 originalCommand = "runtime_workflow"
             )
+            workflowDeadline = timeoutController.start(VasuTimeoutController.WORKFLOW_TIMEOUT_MS)
+            replanLoopGuard.reset()
         }
     }
 
