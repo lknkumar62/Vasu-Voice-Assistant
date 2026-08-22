@@ -16,4 +16,25 @@ class VasuConfirmationAuditQuery(
     }
 
     fun size(): Int = auditLog.size()
+
+    fun byEventType(
+        eventType: VasuConfirmationAuditEvent.EventType
+    ): List<VasuConfirmationAuditEvent> =
+        VasuConfirmationAuditFilter.byEventType(
+            events = auditLog.snapshot(),
+            eventType = eventType
+        )
+
+    fun byActionType(
+        actionType: VasuSecurityActionType
+    ): List<VasuConfirmationAuditEvent> =
+        VasuConfirmationAuditFilter.byActionType(
+            events = auditLog.snapshot(),
+            actionType = actionType
+        )
+
+    fun rejected(): List<VasuConfirmationAuditEvent> =
+        VasuConfirmationAuditFilter.rejected(
+            auditLog.snapshot()
+        )
 }
