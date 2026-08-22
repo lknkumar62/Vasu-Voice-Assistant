@@ -20,6 +20,7 @@ import com.vasu.ai.R
 import com.vasu.ai.core.GeminiAutonomousBrain
 import com.vasu.ai.core.VasuAudioCaptureConfig
 import com.vasu.ai.core.VasuAudioCaptureManager
+import com.vasu.ai.core.VasuAudioLifecycleManager
 import com.vasu.ai.core.VasuCommandListeningTimeoutController
 import com.vasu.ai.core.VasuPorcupineWakeWordDetector
 import com.vasu.ai.core.VasuWakeWordAudioBridge
@@ -48,6 +49,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private var wakeMode = false
     private var wakeBridge: VasuWakeWordAudioBridge? = null
     private var wakeCoordinator: VasuWakeWordCoordinator? = null
+    private var wakeRecoveryAttempts = 0
     private lateinit var commandTimeoutController: VasuCommandListeningTimeoutController
 
     override fun onCreate() {
@@ -99,6 +101,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private fun startManualCommandListening() {
         wakeMode = false
+        wakeRecoveryAttempts = 0
         commandTimeoutController.stop()
         wakeBridge?.stop()
         wakeBridge = null
@@ -123,7 +126,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         val manager = VasuWakeWordManager(wakeConfig)
         val coordinator = VasuWakeWordCoordinator(
             manager,
-            com.vasu.ai.core.VasuAudioLifecycleManager(wakeConfig)
+            VasuAudioLifecycleManager(wakeConfig)
         )
         wakeCoordinator = coordinator
 
@@ -144,18 +147,23 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         )
         wakeBridge = bridge
 
+        manager.start()
         if (!bridge.start()) {
+            manager.stop()
             updateNotification("Wake word unavailable")
             return
         }
-        manager.start()
+        wakeRecoveryAttempts = 0
         updateNotification("Listening for Hello Vasu")
     }
 
     private fun startCommandListeningFromWake() {
         if (!wakeMode || destroyed) return
-        ensureRecognizer()
         commandTimeoutController.start()
+        if (!ensureRecognizer()) {
+            finishWakeCommand("recognizer_unavailable")
+            return
+        }
         startListeningSoon(150, requireWakeWord = false)
         updateNotification("Listening for command")
     }
@@ -225,6 +233,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             speak(response)
             processing = false
             if (wakeMode) {
+                wakeRecoveryAttempts = 0
                 handler.postDelayed({ startWakeWordMode() }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
             } else {
                 startListeningSoon(800, requireWakeWord = true)
@@ -237,7 +246,19 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         commandTimeoutController.stop()
         stopListening()
         processing = false
+        wakeRecoveryAttempts++
         println("VASU_COMMAND_LISTENING_STOPPED reason=$reason")
+
+        if (wakeRecoveryAttempts >= wakeConfig.maxRecoveryAttempts) {
+            println("VASU_AUDIO_RECOVERY_FAILED")
+            println("VASU_WAKEWORD_SAFE_STOP")
+            wakeBridge?.stop()
+            wakeBridge = null
+            wakeMode = false
+            return
+        }
+
+        println("VASU_AUDIO_RECOVERY attempt=$wakeRecoveryAttempts")
         handler.postDelayed({ startWakeWordMode() }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
     }
 
@@ -290,10 +311,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> finishWakeCommand("speech_timeout")
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
-                    println("VASU_AUDIO_RECOVERY")
-                    finishWakeCommand("recognizer_busy")
-                }
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> finishWakeCommand("recognizer_busy")
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> finishWakeCommand("permission_error")
                 SpeechRecognizer.ERROR_AUDIO,
                 SpeechRecognizer.ERROR_CLIENT,
