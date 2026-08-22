@@ -14,14 +14,15 @@ class VasuActionExecutor(private val context: Context) {
     private val device = VasuDeviceController(context)
     private val communication = VasuCommunicationController(context)
     private val elementRecovery = VasuElementRecovery()
+    private val elementResolver = VasuElementResolver()
 
     fun execute(action: VasuAction): Boolean {
         return when (action) {
             is VasuAction.OpenApp -> openApp(action.packageName)
-            is VasuAction.ClickText -> executeClickTextWithRecovery(action.text)
-            is VasuAction.LongClickText -> executeLongClickTextWithRecovery(action.text)
-            is VasuAction.ClickDescription -> executeClickDescriptionWithRecovery(action.description)
-            is VasuAction.ClickViewId -> executeClickViewIdWithRecovery(action.viewId)
+            is VasuAction.ClickText -> executeClickTextWithResolution(action.text)
+            is VasuAction.LongClickText -> executeLongClickTextWithResolution(action.text)
+            is VasuAction.ClickDescription -> executeClickDescriptionWithResolution(action.description)
+            is VasuAction.ClickViewId -> executeClickViewIdWithResolution(action.viewId)
             is VasuAction.TypeText -> executeTypeTextWithRecovery(action.text)
             VasuAction.ClearText -> executeClearTextWithRecovery()
             is VasuAction.Wait -> {
@@ -63,10 +64,11 @@ class VasuActionExecutor(private val context: Context) {
         }
     }
 
-    private fun executeClickTextWithRecovery(text: String): Boolean {
+    private fun executeClickTextWithResolution(text: String): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
-        var node = service.findByText(text)
-        if (node == null) {
+        var resolution = elementResolver.resolveText(text)
+
+        if (!resolution.found) {
             val recovery = elementRecovery.waitForText(text)
             println(
                 "VASU_ELEMENT_RECOVERY " +
@@ -74,47 +76,89 @@ class VasuActionExecutor(private val context: Context) {
                     "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
             )
             if (!recovery.found) return false
-            node = service.findByText(text)
+            resolution = elementResolver.resolveText(text)
         }
-        return node?.let(service::click) == true
+
+        val candidate = resolution.candidate ?: return false
+        println(
+            "VASU_ELEMENT_SELECTED " +
+                "type=TEXT query=$text score=${candidate.score} " +
+                "class=${candidate.className} bounds=${candidate.bounds}"
+        )
+
+        val node = candidate.node
+        return try {
+            service.click(node)
+        } finally {
+            node.recycle()
+        }
     }
 
-    private fun executeLongClickTextWithRecovery(text: String): Boolean {
+    private fun executeLongClickTextWithResolution(text: String): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
-        var node = service.findByText(text)
-        if (node == null) {
+        var resolution = elementResolver.resolveText(text)
+
+        if (!resolution.found) {
             val recovery = elementRecovery.waitForText(text)
-            println(
-                "VASU_ELEMENT_RECOVERY " +
-                    "type=LONG_CLICK_TEXT query=$text found=${recovery.found} " +
-                    "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
-            )
             if (!recovery.found) return false
-            node = service.findByText(text)
+            resolution = elementResolver.resolveText(text)
         }
-        return node?.let(service::longClick) == true
+
+        val candidate = resolution.candidate ?: return false
+        println(
+            "VASU_ELEMENT_SELECTED " +
+                "type=LONG_CLICK_TEXT query=$text score=${candidate.score} " +
+                "class=${candidate.className}"
+        )
+
+        val node = candidate.node
+        return try {
+            service.longClick(node)
+        } finally {
+            node.recycle()
+        }
     }
 
-    private fun executeClickDescriptionWithRecovery(description: String): Boolean {
+    private fun executeClickDescriptionWithResolution(description: String): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
-        var node = service.findByContentDescription(description) ?: service.findByText(description)
-        if (node == null) {
+        var resolution = elementResolver.resolveContentDescription(description)
+
+        if (!resolution.found) {
             val recovery = elementRecovery.waitForContentDescription(description)
             println(
                 "VASU_ELEMENT_RECOVERY " +
                     "type=CONTENT_DESCRIPTION query=$description found=${recovery.found} " +
                     "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
             )
-            if (!recovery.found) return false
-            node = service.findByContentDescription(description) ?: service.findByText(description)
+            if (!recovery.found) {
+                return service.findByText(description)?.let(service::click) == true
+            }
+            resolution = elementResolver.resolveContentDescription(description)
         }
-        return node?.let(service::click) == true
+
+        val candidate = resolution.candidate
+        if (candidate == null) {
+            return service.findByText(description)?.let(service::click) == true
+        }
+
+        println(
+            "VASU_ELEMENT_SELECTED " +
+                "type=CONTENT_DESCRIPTION query=$description score=${candidate.score} " +
+                "class=${candidate.className}"
+        )
+        val node = candidate.node
+        return try {
+            service.click(node)
+        } finally {
+            node.recycle()
+        }
     }
 
-    private fun executeClickViewIdWithRecovery(viewId: String): Boolean {
+    private fun executeClickViewIdWithResolution(viewId: String): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
-        var node = service.findByViewId(viewId)
-        if (node == null) {
+        var resolution = elementResolver.resolveViewId(viewId)
+
+        if (!resolution.found) {
             val recovery = elementRecovery.waitForViewId(viewId)
             println(
                 "VASU_ELEMENT_RECOVERY " +
@@ -122,9 +166,21 @@ class VasuActionExecutor(private val context: Context) {
                     "attempts=${recovery.attempts} elapsed=${recovery.elapsedMs}"
             )
             if (!recovery.found) return false
-            node = service.findByViewId(viewId)
+            resolution = elementResolver.resolveViewId(viewId)
         }
-        return node?.let(service::click) == true
+
+        val candidate = resolution.candidate ?: return false
+        println(
+            "VASU_ELEMENT_SELECTED " +
+                "type=VIEW_ID query=$viewId score=${candidate.score} " +
+                "class=${candidate.className}"
+        )
+        val node = candidate.node
+        return try {
+            service.click(node)
+        } finally {
+            node.recycle()
+        }
     }
 
     private fun executeTypeTextWithRecovery(text: String): Boolean {
