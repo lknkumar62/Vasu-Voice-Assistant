@@ -21,41 +21,47 @@ class VasuFollowUpResolver(
         val pending = clarificationManager.getPendingRequest()
 
         if (pending != null) {
-            val answer = clarificationManager.resolveAnswer(input)
-            if (answer != null) {
-                val resume = clarificationResumeResolver.resolve(answer)
-                val freshRequired =
-                    resume.requiresFreshUi || freshReferenceResolver.requiresFreshResolution(answer.referenceType)
+            if (clarificationManager.shouldTreatAsClarificationAnswer(input)) {
+                val answer = clarificationManager.resolveAnswer(input)
+                if (answer != null) {
+                    val resume = clarificationResumeResolver.resolve(answer)
+                    val freshRequired =
+                        resume.requiresFreshUi || freshReferenceResolver.requiresFreshResolution(answer.referenceType)
 
-                println(
-                    "VASU_CLARIFICATION_RESUME " +
-                        "reference=${answer.referenceType} " +
-                        "resolved=${resume.resolved} " +
-                        "freshUi=$freshRequired " +
-                        "reason=${resume.reason}"
-                )
+                    println(
+                        "VASU_CLARIFICATION_RESUME " +
+                            "reference=${answer.referenceType} " +
+                            "resolved=${resume.resolved} " +
+                            "freshUi=$freshRequired " +
+                            "reason=${resume.reason}"
+                    )
 
-                val reference = VasuConversationReference(
-                    type = if (resume.resolved) answer.referenceType else VasuReferenceType.UNKNOWN,
-                    originalText = input,
-                    confidence = answer.confidence,
-                    requiresFreshUiEvidence = freshRequired
-                )
+                    val reference = VasuConversationReference(
+                        type = if (resume.resolved) answer.referenceType else VasuReferenceType.UNKNOWN,
+                        originalText = input,
+                        confidence = answer.confidence,
+                        requiresFreshUiEvidence = freshRequired
+                    )
 
-                println(
-                    "VASU_CLARIFICATION_ANSWER " +
-                        "type=${answer.referenceType} " +
-                        "confidence=${answer.confidence}"
-                )
+                    println(
+                        "VASU_CLARIFICATION_ANSWER " +
+                            "type=${answer.referenceType} " +
+                            "confidence=${answer.confidence}"
+                    )
 
-                return Resolution(
-                    isFollowUp = true,
-                    resolvedCommand = if (resume.resolved) pending.originalCommand else input,
-                    context = context,
-                    reference = reference,
-                    clarificationAnswer = answer,
-                    clarificationHandled = true
-                )
+                    return Resolution(
+                        isFollowUp = true,
+                        resolvedCommand = if (resume.resolved) pending.originalCommand else input,
+                        context = context,
+                        reference = reference,
+                        clarificationAnswer = answer,
+                        clarificationHandled = true
+                    )
+                }
+            } else {
+                clarificationManager.cancel()
+                clarificationManager.clear()
+                println("VASU_CLARIFICATION_CANCELLED_FOR_NEW_COMMAND")
             }
         }
 
