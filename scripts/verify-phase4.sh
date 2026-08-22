@@ -4,9 +4,9 @@ set -euo pipefail
 
 echo "VASU Phase 4 verification started"
 
-./gradlew test
-./gradlew assembleDebug
-./gradlew lint
+gradle test
+gradle assembleDebug
+gradle lint
 
 APK_COUNT="$(find app/build/outputs/apk/debug -name '*.apk' | wc -l | tr -d ' ')"
 
