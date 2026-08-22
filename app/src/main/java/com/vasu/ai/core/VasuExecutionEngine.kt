@@ -2,15 +2,17 @@ package com.vasu.ai.core
 
 class VasuExecutionEngine(
     private val executor: VasuActionExecutor,
-    private val screenDetector: VasuScreenTransitionDetector =
-        VasuScreenTransitionDetector()
+    private val screenDetector: VasuScreenTransitionDetector = VasuScreenTransitionDetector(),
+    private val verifier: VasuActionVerifier = VasuActionVerifier(screenDetector)
 ) {
 
     data class StepResult(
         val action: VasuAction,
         val success: Boolean,
         val recovered: Boolean = false,
-        val attempts: Int = 1
+        val attempts: Int = 1,
+        val verification: VasuActionVerifier.Status = VasuActionVerifier.Status.UNKNOWN,
+        val verificationReason: String = ""
     )
 
     data class ExecutionResult(
@@ -25,75 +27,117 @@ class VasuExecutionEngine(
 
     fun execute(actions: List<VasuAction>): ExecutionResult {
         val results = mutableListOf<StepResult>()
+
         for (action in actions) {
-            /*
-             * Capture the UI before the action.
-             *
-             * This is observation only. We do not treat a screen change
-             * as proof that the action succeeded yet.
-             */
             val before = screenDetector.capture()
 
-            val firstAttempt = runCatching { executor.execute(action) }.getOrDefault(false)
+            val firstAttempt = runCatching {
+                executor.execute(action)
+            }.getOrDefault(false)
 
-            /*
-             * Give Android Accessibility a short opportunity to publish
-             * the resulting UI tree.
-             */
             if (firstAttempt) {
                 Thread.sleep(120L)
             }
 
             val after = screenDetector.capture()
 
-            val screenChanged = screenDetector.hasChanged(
+            if (!firstAttempt) {
+                if (isSafeToRetry(action)) {
+                    Thread.sleep(150L)
+
+                    val retryBefore = screenDetector.capture()
+                    val recovered = runCatching {
+                        executor.execute(action)
+                    }.getOrDefault(false)
+
+                    if (recovered) {
+                        Thread.sleep(120L)
+                    }
+
+                    val retryAfter = screenDetector.capture()
+
+                    if (recovered) {
+                        val verification = verifier.verify(
+                            action = action,
+                            before = retryBefore,
+                            after = retryAfter
+                        )
+                        val success = verification.status != VasuActionVerifier.Status.NOT_VERIFIED
+
+                        results += StepResult(
+                            action = action,
+                            success = success,
+                            recovered = true,
+                            attempts = 2,
+                            verification = verification.status,
+                            verificationReason = verification.reason
+                        )
+
+                        logVerification(action, 2, verification)
+
+                        if (!success) break
+                        continue
+                    }
+
+                    results += StepResult(
+                        action = action,
+                        success = false,
+                        recovered = false,
+                        attempts = 2,
+                        verification = VasuActionVerifier.Status.UNKNOWN,
+                        verificationReason = "executor_failed_after_safe_retry"
+                    )
+                    break
+                }
+
+                results += StepResult(
+                    action = action,
+                    success = false,
+                    recovered = false,
+                    attempts = 1,
+                    verification = VasuActionVerifier.Status.UNKNOWN,
+                    verificationReason = "executor_failed"
+                )
+                break
+            }
+
+            val verification = verifier.verify(
+                action = action,
                 before = before,
                 after = after
             )
 
-            if (firstAttempt) {
-                println(
-                    "VASU_SCREEN_TRANSITION " +
-                        "action=${action::class.simpleName} " +
-                        "changed=$screenChanged " +
-                        "before=${before?.fingerprint?.take(8)} " +
-                        "after=${after?.fingerprint?.take(8)}"
-                )
+            val success = verification.status != VasuActionVerifier.Status.NOT_VERIFIED
 
-                /*
-                 * The executor accepted the action.
-                 *
-                 * screenChanged is deliberately not used as the success
-                 * decision yet. Some valid actions legitimately leave the
-                 * accessibility tree unchanged.
-                 *
-                 * Step 2 will combine this signal with action-specific
-                 * verification.
-                 */
-                results += StepResult(
-                    action = action,
-                    success = true,
-                    recovered = false,
-                    attempts = 1
-                )
+            results += StepResult(
+                action = action,
+                success = success,
+                recovered = false,
+                attempts = 1,
+                verification = verification.status,
+                verificationReason = verification.reason
+            )
 
-                continue
-            }
+            logVerification(action, 1, verification)
 
-            // Only retry actions whose effect is idempotent. Never blindly retry clicks,
-            // typing, calls, SMS, gestures, or other potentially duplicated side effects.
-            if (isSafeToRetry(action)) {
-                Thread.sleep(150L)
-                val recovered = runCatching { executor.execute(action) }.getOrDefault(false)
-                results += StepResult(action, recovered, recovered, attempts = 2)
-                if (!recovered) break
-                continue
-            }
-
-            results += StepResult(action, false)
-            break
+            if (!success) break
         }
+
         return ExecutionResult(results)
+    }
+
+    private fun logVerification(
+        action: VasuAction,
+        attempt: Int,
+        verification: VasuActionVerifier.VerificationResult
+    ) {
+        println(
+            "VASU_ACTION_VERIFICATION " +
+                "action=${action::class.simpleName} " +
+                "attempt=$attempt " +
+                "status=${verification.status} " +
+                "reason=${verification.reason}"
+        )
     }
 
     private fun isSafeToRetry(action: VasuAction): Boolean = when (action) {
