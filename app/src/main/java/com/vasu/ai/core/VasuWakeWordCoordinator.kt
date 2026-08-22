@@ -65,13 +65,45 @@ class VasuWakeWordCoordinator(
     }
 
     @Synchronized
-    fun onAudioFailure() {
-        audioLifecycleManager.markRecovering()
+    fun onAudioFailure(): Boolean {
+        if (!audioLifecycleManager.markRecovering()) {
+            println("VASU_AUDIO_RECOVERY_FAILED")
+            println("VASU_WAKEWORD_SAFE_STOP")
+
+            wakeWordManager.stop()
+
+            if (audioCapture.isRunning()) {
+                audioCapture.stop()
+            }
+
+            return false
+        }
+
         wakeWordManager.recover()
 
         if (audioCapture.isRunning()) {
             audioCapture.stop()
         }
+
+        return true
+    }
+
+    @Synchronized
+    fun completeAudioRecovery(): Boolean {
+        if (!audioCapture.isRunning()) {
+            if (!audioCapture.start()) {
+                return false
+            }
+        }
+
+        if (!audioLifecycleManager.completeRecovery()) {
+            audioCapture.stop()
+            return false
+        }
+
+        wakeWordManager.start()
+
+        return true
     }
 
     @Synchronized
