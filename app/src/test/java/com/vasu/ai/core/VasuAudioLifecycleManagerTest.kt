@@ -79,8 +79,6 @@ class VasuAudioLifecycleManagerTest {
         repeat(20) {
             if (manager.markRecovering()) {
                 acceptedRecoveries++
-                manager.stop()
-                manager.start()
             }
         }
 
@@ -88,6 +86,11 @@ class VasuAudioLifecycleManagerTest {
             config.maxRecoveryAttempts,
             acceptedRecoveries
         )
+        assertEquals(
+            config.maxRecoveryAttempts,
+            manager.getRecoveryAttempts()
+        )
+        assertFalse(manager.canRecover())
     }
 
     @Test
