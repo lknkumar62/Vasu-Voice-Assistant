@@ -14,7 +14,14 @@ class VasuConfirmationAuditLog(
             events.removeFirst()
         }
 
-        events.addLast(event)
+        events.addLast(
+            event.copy(
+                requestId = VasuConfirmationAuditSanitizer
+                    .sanitizeRequestId(event.requestId),
+                reason = VasuConfirmationAuditSanitizer
+                    .sanitizeReason(event.reason)
+            )
+        )
     }
 
     @Synchronized
@@ -22,9 +29,16 @@ class VasuConfirmationAuditLog(
         events.toList()
 
     @Synchronized
+    fun snapshotData(): VasuConfirmationAuditSnapshot =
+        VasuConfirmationAuditSnapshot.from(events.toList())
+
+    @Synchronized
     fun clear() {
         events.clear()
     }
+
+    @Synchronized
+    fun size(): Int = events.size
 
     companion object {
         const val DEFAULT_MAX_ENTRIES = 100
