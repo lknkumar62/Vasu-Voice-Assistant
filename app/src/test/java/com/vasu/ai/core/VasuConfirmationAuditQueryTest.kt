@@ -69,4 +69,69 @@ class VasuConfirmationAuditQueryTest {
         assertEquals(2, query.snapshot().size)
         assertEquals(2, query.size())
     }
+
+    @Test
+    fun filtersByEventType() {
+        val log = VasuConfirmationAuditLog(maxEntries = 20)
+
+        log.record(
+            VasuConfirmationAuditEvent(
+                eventType = VasuConfirmationAuditEvent.EventType.REQUESTED,
+                actionType = VasuSecurityActionType.PHONE_CALL,
+                requestId = "r1",
+                timestamp = 1L
+            )
+        )
+
+        log.record(
+            VasuConfirmationAuditEvent(
+                eventType = VasuConfirmationAuditEvent.EventType.REJECTED,
+                actionType = VasuSecurityActionType.PHONE_CALL,
+                requestId = "r1",
+                timestamp = 2L
+            )
+        )
+
+        val query = VasuConfirmationAuditQuery(log)
+
+        val rejected = query.rejected()
+
+        assertEquals(1, rejected.size)
+        assertEquals(
+            VasuConfirmationAuditEvent.EventType.REJECTED,
+            rejected[0].eventType
+        )
+    }
+
+    @Test
+    fun filtersByActionType() {
+        val log = VasuConfirmationAuditLog(maxEntries = 20)
+
+        log.record(
+            VasuConfirmationAuditEvent(
+                eventType = VasuConfirmationAuditEvent.EventType.REQUESTED,
+                actionType = VasuSecurityActionType.PHONE_CALL,
+                requestId = "call-1",
+                timestamp = 1L
+            )
+        )
+
+        log.record(
+            VasuConfirmationAuditEvent(
+                eventType = VasuConfirmationAuditEvent.EventType.REQUESTED,
+                actionType = VasuSecurityActionType.SEND_SMS,
+                requestId = "sms-1",
+                timestamp = 2L
+            )
+        )
+
+        val query = VasuConfirmationAuditQuery(log)
+
+        val calls = query.byActionType(
+            VasuSecurityActionType.PHONE_CALL
+        )
+
+        assertEquals(1, calls.size)
+        assertEquals("call-1", calls[0].requestId)
+    }
 }
