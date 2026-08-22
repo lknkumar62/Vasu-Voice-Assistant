@@ -23,6 +23,7 @@ class GeminiAutonomousBrain(context: Context) {
     private val validator = GeminiActionValidator(appResolver)
     private val executor = VasuActionExecutor(context)
     private val executionEngine = VasuExecutionEngine(executor)
+    private val dynamicReplanner = VasuDynamicReplanner()
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -44,7 +45,23 @@ class GeminiAutonomousBrain(context: Context) {
             var geminiProducedResult = false
 
             for (stepIndex in 0 until MAX_GEMINI_STEPS) {
-                val plan = api.plan(trimmed, screenContext(lastExecution)) ?: break
+                val context = if (lastExecution != null &&
+                    lastExecution.steps.any { !it.success }
+                ) {
+                    val recovery = dynamicReplanner.capture(
+                        originalCommand = trimmed,
+                        execution = lastExecution
+                    )
+                    buildString {
+                        append(screenContext(lastExecution))
+                        append("\n\n")
+                        append(recovery.asPromptContext())
+                    }
+                } else {
+                    screenContext(lastExecution)
+                }
+
+                val plan = api.plan(trimmed, context) ?: break
                 geminiProducedResult = true
                 lastReply = plan.reply.ifBlank { lastReply }
 
@@ -62,19 +79,34 @@ class GeminiAutonomousBrain(context: Context) {
                     return Result(false, "Boss, Gemini ne koi safe Android action nahi diya.", lastExecution, true)
                 }
 
-                val execution = executionEngine.execute(validation.actions)
-                lastExecution = execution
-                if (!execution.success) {
-                    return Result(false, "Boss, ye step execute nahi hua. Permission ya Android/app restriction ho sakti hai.", execution, true)
+                val action = validation.actions.first()
+
+                if (stepIndex > 0 && isSensitiveSideEffect(action)) {
+                    return Result(
+                        false,
+                        "Boss, sensitive action ko automatic recovery ke liye repeat nahi kiya gaya.",
+                        lastExecution,
+                        true
+                    )
                 }
 
-                // Force a fresh accessibility hierarchy before Gemini is allowed to declare completion.
-                Thread.sleep(UI_SETTLE_DELAY_MS)
+                val execution = executionEngine.execute(listOf(action))
+                lastExecution = execution
 
-                if (stepIndex == MAX_GEMINI_STEPS - 1) break
+                if (execution.success) {
+                    Thread.sleep(UI_SETTLE_DELAY_MS)
+                    continue
+                }
+
+                println(
+                    "VASU_DYNAMIC_REPLAN " +
+                        "step=$stepIndex " +
+                        "failedAction=${execution.failedAction}"
+                )
+
+                Thread.sleep(RECOVERY_SETTLE_DELAY_MS)
             }
 
-            // Never run local fallback after Gemini has already executed a side-effecting action.
             if (geminiProducedResult) {
                 return Result(
                     false,
@@ -99,6 +131,12 @@ class GeminiAutonomousBrain(context: Context) {
         val execution = executionEngine.execute(actions)
         return if (execution.success) Result(true, "Ho gaya Boss.", execution, false)
         else Result(false, "Boss, command execute nahi ho paya. Required permission ya app restriction check kijiye.", execution, false)
+    }
+
+    private fun isSensitiveSideEffect(action: VasuAction): Boolean = when (action) {
+        is VasuAction.CallContact,
+        is VasuAction.SendSms -> true
+        else -> false
     }
 
     private fun isOnline(): Boolean {
@@ -135,5 +173,6 @@ class GeminiAutonomousBrain(context: Context) {
     private companion object {
         const val MAX_GEMINI_STEPS = 8
         const val UI_SETTLE_DELAY_MS = 350L
+        const val RECOVERY_SETTLE_DELAY_MS = 200L
     }
 }
