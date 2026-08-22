@@ -14,8 +14,7 @@ class VasuConfirmationIntegrationTest {
 
         val decision = gate.evaluate(
             action = VasuAction.CallContact("Rahul"),
-            description = "Call Rahul",
-            now = 1_000L
+            description = "Call Rahul"
         )
 
         assertTrue(
