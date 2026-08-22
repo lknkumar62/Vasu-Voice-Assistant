@@ -57,6 +57,16 @@ class GeminiAutonomousBrain(private val appContext: Context) {
                 clarificationManager.clear()
                 return Result(true, "Theek hai.")
             }
+            if (answer.normalizedAnswer == "max_attempts") {
+                clarificationManager.clear()
+                conversationStateMachine.fail()
+                return finalizeFailure(
+                    trimmed,
+                    "Boss, main target clearly identify nahi kar pa raha.",
+                    null,
+                    false
+                )
+            }
             if (!answer.matched) {
                 return Result(false, "Samajh nahi aaya. Pehla ya dusra?")
             }
@@ -119,6 +129,9 @@ class GeminiAutonomousBrain(private val appContext: Context) {
 
                 if (plan.steps.isEmpty()) {
                     if (plan.done) {
+                        if (resolution.clarificationHandled) {
+                            clarificationManager.completeFreshResolution()
+                        }
                         val reply = lastReply.ifBlank { "Ho gaya Boss." }
                         conversationStore.updateAssistantResponse(reply)
                         conversationStore.addTurn(VasuConversationTurn(trimmed, reply, System.currentTimeMillis(), true))
@@ -149,6 +162,9 @@ class GeminiAutonomousBrain(private val appContext: Context) {
                 lastExecution = execution
 
                 if (execution.success) {
+                    if (resolution.clarificationHandled) {
+                        clarificationManager.completeFreshResolution()
+                    }
                     conversationStore.updateLastAction(action::class.simpleName, true)
                     updateActiveAppFromCurrentScreen()
                     Thread.sleep(UI_SETTLE_DELAY_MS)
@@ -180,6 +196,9 @@ class GeminiAutonomousBrain(private val appContext: Context) {
             return finalizeFailure(trimmed, pendingClarification.question, result.execution, false)
         }
         if (result.execution?.success == true) {
+            if (resolution.clarificationHandled) {
+                clarificationManager.completeFreshResolution()
+            }
             result.execution.steps.lastOrNull()?.let { step ->
                 conversationStore.updateLastAction(step.action::class.simpleName, true)
                 updateActiveAppFromCurrentScreen()
