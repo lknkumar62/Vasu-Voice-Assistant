@@ -37,7 +37,7 @@ class VasuExecutionEngine(
         val totalAttempts: Int get() = steps.sumOf { it.attempts }
     }
 
-    fun execute(actions: List<VasuAction>): ExecutionResult {
+    fun execute(actions: List<VasuAction>, originalCommand: String? = null): ExecutionResult {
         if (actions.isEmpty()) return ExecutionResult(emptyList())
 
         ensureWorkflowStarted()
@@ -91,7 +91,19 @@ class VasuExecutionEngine(
             }
 
             workflowReliability.recordExecution(signature)
-            val firstAttempt = runCatching { executor.execute(action) }.getOrDefault(false)
+            val firstAttempt = runCatching { executor.execute(action, originalCommand) }.getOrDefault(false)
+
+            if (executor.blockedByClarification) {
+                val reason = "clarification_required"
+                workflowState.markFailed(reason)
+                workflowContext?.let {
+                    it.lastActionVerified = false
+                    it.lastFailureReason = reason
+                }
+                println("VASU_WORKFLOW_PAUSED reason=AMBIGUOUS_UI")
+                results += StepResult(action = action, success = false, verificationReason = reason)
+                break
+            }
 
             if (deadline.expired()) {
                 val reason = "action_timeout"
@@ -135,7 +147,19 @@ class VasuExecutionEngine(
 
                         workflowReliability.recordExecution(retrySignature)
                         workflowState.recordAttempt()
-                        val recovered = runCatching { executor.execute(action) }.getOrDefault(false)
+                        val recovered = runCatching { executor.execute(action, originalCommand) }.getOrDefault(false)
+
+                        if (executor.blockedByClarification) {
+                            val reason = "clarification_required"
+                            workflowState.markFailed(reason)
+                            workflowContext?.let {
+                                it.lastActionVerified = false
+                                it.lastFailureReason = reason
+                            }
+                            println("VASU_WORKFLOW_PAUSED reason=AMBIGUOUS_UI")
+                            results += StepResult(action = action, success = false, verificationReason = reason)
+                            break
+                        }
 
                         if (SystemClock.uptimeMillis() - deadline.startedAt >= actionTimeout) {
                             val reason = "action_timeout"

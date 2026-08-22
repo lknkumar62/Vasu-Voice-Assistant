@@ -34,12 +34,17 @@ class VasuElementResolver {
     )
 
     fun resolveText(text: String): ResolutionResult = resolve(TargetType.TEXT, text)
-    fun resolveContentDescription(description: String): ResolutionResult = resolve(TargetType.CONTENT_DESCRIPTION, description)
+
+    fun resolveContentDescription(description: String): ResolutionResult =
+        resolve(TargetType.CONTENT_DESCRIPTION, description)
+
     fun resolveViewId(viewId: String): ResolutionResult = resolve(TargetType.VIEW_ID, viewId)
 
     private fun resolve(targetType: TargetType, query: String): ResolutionResult {
-        val service = VasuAccessibilityService.instance ?: return failure("accessibility_service_unavailable")
-        val root = service.root() ?: return failure("accessibility_root_unavailable")
+        val service = VasuAccessibilityService.instance
+            ?: return failure("accessibility_service_unavailable")
+        val root = service.root()
+            ?: return failure("accessibility_root_unavailable")
         val candidates = mutableListOf<Candidate>()
         when (targetType) {
             TargetType.TEXT -> collectTextCandidates(root, query, 0, candidates)
@@ -50,7 +55,9 @@ class VasuElementResolver {
     }
 
     private fun collectTextCandidates(node: AccessibilityNodeInfo, expectedText: String, depth: Int, candidates: MutableList<Candidate>) {
-        if (node.text?.toString()?.equals(expectedText, ignoreCase = true) == true) candidates += buildCandidate(node, depth)
+        if (node.text?.toString()?.equals(expectedText, ignoreCase = true) == true) {
+            candidates += buildCandidate(node, depth)
+        }
         for (index in 0 until node.childCount) {
             val child = node.getChild(index) ?: continue
             collectTextCandidates(child, expectedText, depth + 1, candidates)
@@ -59,7 +66,9 @@ class VasuElementResolver {
     }
 
     private fun collectDescriptionCandidates(node: AccessibilityNodeInfo, expectedDescription: String, depth: Int, candidates: MutableList<Candidate>) {
-        if (node.contentDescription?.toString()?.equals(expectedDescription, ignoreCase = true) == true) candidates += buildCandidate(node, depth)
+        if (node.contentDescription?.toString()?.equals(expectedDescription, ignoreCase = true) == true) {
+            candidates += buildCandidate(node, depth)
+        }
         for (index in 0 until node.childCount) {
             val child = node.getChild(index) ?: continue
             collectDescriptionCandidates(child, expectedDescription, depth + 1, candidates)
@@ -68,7 +77,9 @@ class VasuElementResolver {
     }
 
     private fun collectViewIdCandidates(node: AccessibilityNodeInfo, expectedViewId: String, depth: Int, candidates: MutableList<Candidate>) {
-        if (resourceIdMatchScore(node.viewIdResourceName, expectedViewId) > 0) candidates += buildCandidate(node, depth)
+        if (resourceIdMatchScore(node.viewIdResourceName, expectedViewId) > 0) {
+            candidates += buildCandidate(node, depth)
+        }
         for (index in 0 until node.childCount) {
             val child = node.getChild(index) ?: continue
             collectViewIdCandidates(child, expectedViewId, depth + 1, candidates)
@@ -129,19 +140,41 @@ class VasuElementResolver {
 
     private fun selectBest(candidates: List<Candidate>, query: String, targetType: TargetType): ResolutionResult {
         if (candidates.isEmpty()) return failure("no_matching_${targetType.name.lowercase()}_candidate")
-        val sorted = candidates.filter { it.enabled && it.visible }
+
+        val sorted = candidates
+            .filter { it.enabled && it.visible }
             .map { it to calculateTargetScore(it, query, targetType) }
             .sortedByDescending { it.second }
+
         if (sorted.isEmpty()) {
             candidates.forEach { it.node.recycle() }
-            return ResolutionResult(false, null, candidates, "matching_candidates_not_interactable")
+            return ResolutionResult(
+                found = false,
+                candidate = null,
+                candidates = candidates,
+                reason = "matching_candidates_not_interactable"
+            )
         }
+
         val filteredCandidates = sorted.map { it.first }
         val scores = sorted.map { it.second }
         val selected = buildResolutionResult(filteredCandidates, scores)
         val best = selected.selected ?: return failure("best_candidate_unavailable")
-        println("VASU_ELEMENT_RESOLUTION type=$targetType candidates=${selected.candidateCount} best=${selected.bestScore} second=${selected.secondBestScore} gap=${selected.bestScore - selected.secondBestScore} ambiguous=${selected.ambiguous} class=${best.className} clickable=${best.clickable} enabled=${best.enabled} bounds=${best.bounds}")
-        println("VASU_ELEMENT_AMBIGUITY count=${selected.candidateCount} gap=${selected.bestScore - selected.secondBestScore} ambiguous=${selected.ambiguous}")
+
+        println(
+            "VASU_ELEMENT_RESOLUTION " +
+                "type=$targetType candidates=${selected.candidateCount} " +
+                "best=${selected.bestScore} second=${selected.secondBestScore} " +
+                "gap=${selected.bestScore - selected.secondBestScore} " +
+                "ambiguous=${selected.ambiguous} class=${best.className} " +
+                "clickable=${best.clickable} enabled=${best.enabled} bounds=${best.bounds}"
+        )
+        println(
+            "VASU_ELEMENT_AMBIGUITY " +
+                "count=${selected.candidateCount} gap=${selected.bestScore - selected.secondBestScore} " +
+                "ambiguous=${selected.ambiguous}"
+        )
+
         return ResolutionResult(
             found = true,
             candidate = best,
@@ -158,10 +191,28 @@ class VasuElementResolver {
         )
     }
 
-    private fun buildResolutionResult(candidates: List<Candidate>, scores: List<Int>): VasuElementResolutionResult<Candidate> {
-        if (candidates.isEmpty()) return VasuElementResolutionResult(null, false, 0, 0, 0)
+    private fun buildResolutionResult(
+        candidates: List<Candidate>,
+        scores: List<Int>
+    ): VasuElementResolutionResult<Candidate> {
+        if (candidates.isEmpty()) {
+            return VasuElementResolutionResult(
+                selected = null,
+                ambiguous = false,
+                candidateCount = 0,
+                bestScore = 0,
+                secondBestScore = 0
+            )
+        }
+
         val ambiguity = VasuElementAmbiguity.evaluate(scores)
-        return VasuElementResolutionResult(candidates.first(), ambiguity.ambiguous, ambiguity.candidateCount, ambiguity.bestScore, ambiguity.secondBestScore)
+        return VasuElementResolutionResult(
+            selected = candidates.first(),
+            ambiguous = ambiguity.ambiguous,
+            candidateCount = ambiguity.candidateCount,
+            bestScore = ambiguity.bestScore,
+            secondBestScore = ambiguity.secondBestScore
+        )
     }
 
     private fun calculateTargetScore(candidate: Candidate, query: String, targetType: TargetType): Int {
@@ -187,7 +238,14 @@ class VasuElementResolver {
         }
     }
 
-    private fun normalizeResourceId(value: String?): String = value?.lowercase()?.trim()?.replace(":id/", "/")?.replace("android:id/", "android/")?.replace("_", "")?.replace("-", "") ?: ""
+    private fun normalizeResourceId(value: String?): String = value
+        ?.lowercase()
+        ?.trim()
+        ?.replace(":id/", "/")
+        ?.replace("android:id/", "android/")
+        ?.replace("_", "")
+        ?.replace("-", "")
+        ?: ""
 
     private fun failure(reason: String) = ResolutionResult(false, null, emptyList(), reason)
 }

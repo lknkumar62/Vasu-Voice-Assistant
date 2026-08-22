@@ -10,20 +10,29 @@ import com.vasu.ai.accessibility.VasuAccessibilityService
 import com.vasu.ai.device.VasuCommunicationController
 import com.vasu.ai.device.VasuDeviceController
 
-class VasuActionExecutor(private val context: Context) {
+class VasuActionExecutor(
+    private val context: Context,
+    private val clarificationManager: VasuClarificationManager = VasuClarificationManager()
+) {
     private val device = VasuDeviceController(context)
     private val communication = VasuCommunicationController(context)
     private val elementRecovery = VasuElementRecovery()
     private val elementResolver = VasuElementResolver()
     private val searchFieldDetector = VasuSearchFieldDetector()
+    private val clarificationTrigger = VasuClarificationTrigger(clarificationManager)
 
-    fun execute(action: VasuAction): Boolean {
+    @Volatile
+    var blockedByClarification: Boolean = false
+        private set
+
+    fun execute(action: VasuAction, originalCommand: String? = null): Boolean {
+        blockedByClarification = false
         return when (action) {
             is VasuAction.OpenApp -> openApp(action.packageName)
-            is VasuAction.ClickText -> executeClickTextWithResolution(action.text)
-            is VasuAction.LongClickText -> executeLongClickTextWithResolution(action.text)
-            is VasuAction.ClickDescription -> executeClickDescriptionWithResolution(action.description)
-            is VasuAction.ClickViewId -> executeClickViewIdWithResolution(action.viewId)
+            is VasuAction.ClickText -> executeClickTextWithResolution(action.text, originalCommand)
+            is VasuAction.LongClickText -> executeLongClickTextWithResolution(action.text, originalCommand)
+            is VasuAction.ClickDescription -> executeClickDescriptionWithResolution(action.description, originalCommand)
+            is VasuAction.ClickViewId -> executeClickViewIdWithResolution(action.viewId, originalCommand)
             is VasuAction.TypeText -> executeTypeText(action.text)
             VasuAction.ClearText -> executeClearTextWithRecovery()
             is VasuAction.Wait -> {
@@ -65,7 +74,15 @@ class VasuActionExecutor(private val context: Context) {
         }
     }
 
-    private fun executeClickTextWithResolution(text: String): Boolean {
+    private fun blockForAmbiguity(originalCommand: String?): Boolean {
+        clarificationTrigger.requestForAmbiguousElement(originalCommand.orEmpty())
+        blockedByClarification = true
+        println("VASU_ACTION_BLOCKED reason=AMBIGUOUS_TARGET")
+        println("VASU_WORKFLOW_PAUSED reason=AMBIGUOUS_UI")
+        return false
+    }
+
+    private fun executeClickTextWithResolution(text: String, originalCommand: String?): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
         var resolution = elementResolver.resolveText(text)
         if (!resolution.found) {
@@ -74,13 +91,14 @@ class VasuActionExecutor(private val context: Context) {
             if (!recovery.found) return false
             resolution = elementResolver.resolveText(text)
         }
+        if (resolution.ambiguous) return blockForAmbiguity(originalCommand)
         val candidate = resolution.candidate ?: return false
-        println("VASU_ELEMENT_SELECTED type=TEXT query=$text score=${candidate.score} class=${candidate.className} bounds=${candidate.bounds}")
+        println("VASU_ELEMENT_SELECTED type=TEXT query=$text score=${resolution.bestScore} class=${candidate.className} bounds=${candidate.bounds}")
         val node = candidate.node
         return try { service.click(node) } finally { node.recycle() }
     }
 
-    private fun executeLongClickTextWithResolution(text: String): Boolean {
+    private fun executeLongClickTextWithResolution(text: String, originalCommand: String?): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
         var resolution = elementResolver.resolveText(text)
         if (!resolution.found) {
@@ -88,13 +106,14 @@ class VasuActionExecutor(private val context: Context) {
             if (!recovery.found) return false
             resolution = elementResolver.resolveText(text)
         }
+        if (resolution.ambiguous) return blockForAmbiguity(originalCommand)
         val candidate = resolution.candidate ?: return false
-        println("VASU_ELEMENT_SELECTED type=LONG_CLICK_TEXT query=$text score=${candidate.score} class=${candidate.className}")
+        println("VASU_ELEMENT_SELECTED type=LONG_CLICK_TEXT query=$text score=${resolution.bestScore} class=${candidate.className}")
         val node = candidate.node
         return try { service.longClick(node) } finally { node.recycle() }
     }
 
-    private fun executeClickDescriptionWithResolution(description: String): Boolean {
+    private fun executeClickDescriptionWithResolution(description: String, originalCommand: String?): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
         var resolution = elementResolver.resolveContentDescription(description)
         if (!resolution.found) {
@@ -103,13 +122,14 @@ class VasuActionExecutor(private val context: Context) {
             if (!recovery.found) return service.findByText(description)?.let(service::click) == true
             resolution = elementResolver.resolveContentDescription(description)
         }
+        if (resolution.ambiguous) return blockForAmbiguity(originalCommand)
         val candidate = resolution.candidate ?: return service.findByText(description)?.let(service::click) == true
-        println("VASU_ELEMENT_SELECTED type=CONTENT_DESCRIPTION query=$description score=${candidate.score} class=${candidate.className}")
+        println("VASU_ELEMENT_SELECTED type=CONTENT_DESCRIPTION query=$description score=${resolution.bestScore} class=${candidate.className}")
         val node = candidate.node
         return try { service.click(node) } finally { node.recycle() }
     }
 
-    private fun executeClickViewIdWithResolution(viewId: String): Boolean {
+    private fun executeClickViewIdWithResolution(viewId: String, originalCommand: String?): Boolean {
         val service = VasuAccessibilityService.instance ?: return false
         var resolution = elementResolver.resolveViewId(viewId)
         if (!resolution.found) {
@@ -118,8 +138,9 @@ class VasuActionExecutor(private val context: Context) {
             if (!recovery.found) return false
             resolution = elementResolver.resolveViewId(viewId)
         }
+        if (resolution.ambiguous) return blockForAmbiguity(originalCommand)
         val candidate = resolution.candidate ?: return false
-        println("VASU_ELEMENT_SELECTED type=VIEW_ID query=$viewId score=${candidate.score} class=${candidate.className}")
+        println("VASU_ELEMENT_SELECTED type=VIEW_ID query=$viewId score=${resolution.bestScore} class=${candidate.className}")
         val node = candidate.node
         return try { service.click(node) } finally { node.recycle() }
     }
