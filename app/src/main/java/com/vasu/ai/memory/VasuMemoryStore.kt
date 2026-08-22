@@ -52,14 +52,8 @@ class VasuMemoryStore(context: Context) {
         val now = System.currentTimeMillis()
 
         prefs.edit()
-            .putString(
-                "memory:$normalizedKey",
-                safeValue
-            )
-            .putLong(
-                "memory:$normalizedKey:updated",
-                now
-            )
+            .putString("memory:$normalizedKey", safeValue)
+            .putLong("memory:$normalizedKey:updated", now)
             .apply()
     }
 
@@ -70,10 +64,7 @@ class VasuMemoryStore(context: Context) {
             return null
         }
 
-        return prefs.getString(
-            "memory:$normalizedKey",
-            null
-        )
+        return prefs.getString("memory:$normalizedKey", null)
     }
 
     fun forget(key: String) {
@@ -87,6 +78,31 @@ class VasuMemoryStore(context: Context) {
             .remove("memory:$normalizedKey")
             .remove("memory:$normalizedKey:updated")
             .apply()
+    }
+
+    fun snapshot(): VasuMemorySnapshot {
+        val entries = prefs.all
+            .filterKeys {
+                it.startsWith("memory:") &&
+                    !it.endsWith(":updated")
+            }
+            .mapNotNull { (key, value) ->
+                val memoryKey = key.removePrefix("memory:")
+                val memoryValue = value as? String
+                    ?: return@mapNotNull null
+
+                VasuMemoryEntry(
+                    key = memoryKey,
+                    value = memoryValue,
+                    updatedAt = prefs.getLong(
+                        "$key:updated",
+                        0L
+                    )
+                )
+            }
+            .sortedByDescending { it.updatedAt }
+
+        return VasuMemorySnapshot(entries)
     }
 
     fun clear() = prefs.edit().remove(KEY_HISTORY).apply()
