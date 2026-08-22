@@ -3,13 +3,23 @@ package com.vasu.ai.core
 class VasuWakeWordCoordinator(
     private val wakeWordManager: VasuWakeWordManager,
     private val audioLifecycleManager: VasuAudioLifecycleManager,
-    private val audioCapture: VasuAudioCapture? = null
+    private val audioCapture: VasuAudioCapture
 ) {
+
     @Synchronized
     fun start(): Boolean {
-        if (!audioLifecycleManager.start()) return false
+        if (
+            audioLifecycleManager.getState() == VasuAudioLifecycleState.RUNNING &&
+            audioCapture.isRunning()
+        ) {
+            return true
+        }
 
-        if (audioCapture != null && !audioCapture.start()) {
+        if (!audioLifecycleManager.start()) {
+            return false
+        }
+
+        if (!audioCapture.isRunning() && !audioCapture.start()) {
             audioLifecycleManager.markRecovering()
             wakeWordManager.recover()
             return false
@@ -22,20 +32,30 @@ class VasuWakeWordCoordinator(
     @Synchronized
     fun stop() {
         wakeWordManager.stop()
-        audioCapture?.stop()
-        audioCapture?.release()
+
+        if (audioCapture.isRunning()) {
+            audioCapture.stop()
+        }
+
+        audioCapture.release()
         audioLifecycleManager.stop()
     }
 
     @Synchronized
     fun onWakeWordDetected() {
-        wakeWordManager.onWakeWordDetected()
+        if (!wakeWordManager.onWakeWordDetected()) {
+            return
+        }
+
         wakeWordManager.beginCommandListening()
     }
 
     @Synchronized
     fun onCommandReceived() {
-        wakeWordManager.onCommandReceived()
+        if (!wakeWordManager.onCommandReceived()) {
+            return
+        }
+
         wakeWordManager.beginProcessing()
     }
 
@@ -47,13 +67,27 @@ class VasuWakeWordCoordinator(
     @Synchronized
     fun onAudioFailure() {
         audioLifecycleManager.markRecovering()
-        audioCapture?.stop()
         wakeWordManager.recover()
+
+        if (audioCapture.isRunning()) {
+            audioCapture.stop()
+        }
     }
 
-    fun getWakeWordState(): VasuWakeWordState = wakeWordManager.getState()
+    @Synchronized
+    fun isHealthy(): Boolean {
+        return audioLifecycleManager.getState() == VasuAudioLifecycleState.RUNNING &&
+            audioCapture.isRunning() &&
+            wakeWordManager.getWakeWordState() ==
+                VasuWakeWordState.LISTENING_FOR_WAKE_WORD
+    }
 
-    fun getAudioState(): VasuAudioLifecycleState = audioLifecycleManager.getState()
+    fun getWakeWordState(): VasuWakeWordState =
+        wakeWordManager.getWakeWordState()
 
-    fun isAudioCaptureRunning(): Boolean = audioCapture?.isRunning() == true
+    fun getAudioState(): VasuAudioLifecycleState =
+        audioLifecycleManager.getState()
+
+    fun isAudioCaptureRunning(): Boolean =
+        audioCapture.isRunning()
 }
