@@ -78,12 +78,12 @@ class VasuWakeWordCoordinator(
     fun isHealthy(): Boolean {
         return audioLifecycleManager.getState() == VasuAudioLifecycleState.RUNNING &&
             audioCapture.isRunning() &&
-            wakeWordManager.getWakeWordState() ==
+            wakeWordManager.getState() ==
                 VasuWakeWordState.LISTENING_FOR_WAKE_WORD
     }
 
     fun getWakeWordState(): VasuWakeWordState =
-        wakeWordManager.getWakeWordState()
+        wakeWordManager.getState()
 
     fun getAudioState(): VasuAudioLifecycleState =
         audioLifecycleManager.getState()
