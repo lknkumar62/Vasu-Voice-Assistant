@@ -37,6 +37,10 @@ class VasuGeminiContextPromptBuilder {
         lines += "Never convert an ambiguous reference directly into a click without verified UI evidence."
         if (reference?.requiresFreshUiEvidence == true) {
             lines += "Inspect the current screen and require reliable fresh accessibility evidence before selecting a referenced item."
+            lines += "Never reuse a stale AccessibilityNodeInfo after clarification."
+            lines += "FIRST_RESULT and SECOND_RESULT refer only to the fresh current screen."
+            lines += "If the fresh screen remains ambiguous, ask for clarification again."
+            lines += "Never guess between equally valid candidates."
             lines += "If no reliable candidate exists or candidates are equally plausible, do not execute the action."
         }
         return lines.joinToString("\n")
