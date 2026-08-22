@@ -19,6 +19,8 @@ class VasuConfirmationGate(
             return VasuConfirmationDecision.Allowed
         }
 
+        confirmationManager.expireIfNeeded(now)
+
         val request = confirmationManager.requestConfirmation(
             actionType = type,
             description = description,
@@ -26,6 +28,25 @@ class VasuConfirmationGate(
         ) ?: return VasuConfirmationDecision.Rejected
 
         return VasuConfirmationDecision.RequiresConfirmation(request)
+    }
+
+    @Synchronized
+    fun authorizeConfirmed(
+        action: VasuAction,
+        requestId: String,
+        now: Long = System.currentTimeMillis()
+    ): Boolean {
+        val type = classifier.classify(action)
+
+        if (!confirmationPolicy(type)) {
+            return true
+        }
+
+        return confirmationManager.consumeConfirmed(
+            id = requestId,
+            actionType = type,
+            now = now
+        )
     }
 
     @Synchronized
@@ -37,6 +58,11 @@ class VasuConfirmationGate(
     @Synchronized
     fun cancel(requestId: String): Boolean =
         confirmationManager.cancel(requestId)
+
+    @Synchronized
+    fun expireIfNeeded(
+        now: Long = System.currentTimeMillis()
+    ): Boolean = confirmationManager.expireIfNeeded(now)
 
     fun pendingRequest(): VasuConfirmationRequest? =
         confirmationManager.getPendingRequest()
