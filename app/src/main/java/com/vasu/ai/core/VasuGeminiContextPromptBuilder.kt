@@ -35,6 +35,11 @@ class VasuGeminiContextPromptBuilder {
         lines += "If this command resolves a pending clarification, use the supplied reference type."
         lines += "Clarification-derived references require fresh current-screen UI evidence."
         lines += "Never convert an ambiguous reference directly into a click without verified UI evidence."
+        lines += "A pending clarification only applies to short, explicit reference answers."
+        lines += "A new actionable command must not be hijacked by an old clarification."
+        lines += "Expired clarification sessions must never be resumed."
+        lines += "Clarification attempts are bounded."
+        lines += "Never execute an ambiguous target merely because clarification attempts are exhausted."
         if (reference?.requiresFreshUiEvidence == true) {
             lines += "Inspect the current screen and require reliable fresh accessibility evidence before selecting a referenced item."
             lines += "Never reuse a stale AccessibilityNodeInfo after clarification."
