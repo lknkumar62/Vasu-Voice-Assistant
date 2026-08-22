@@ -9,7 +9,7 @@ import com.vasu.ai.accessibility.VasuAccessibilityService
 import com.vasu.ai.notification.VasuNotificationListener
 import java.util.concurrent.Executors
 
-class GeminiAutonomousBrain(context: Context) {
+class GeminiAutonomousBrain(private val appContext: Context) {
     data class Result(
         val handled: Boolean,
         val reply: String,
@@ -17,14 +17,14 @@ class GeminiAutonomousBrain(context: Context) {
         val usedGemini: Boolean = false
     )
 
-    private val appResolver = VasuAppResolver(context)
-    private val keyStore = GeminiKeyStore(context)
+    private val appResolver = VasuAppResolver(appContext)
+    private val keyStore = GeminiKeyStore(appContext)
     private val api = GeminiApiClient(keyStore::read)
     private val validator = GeminiActionValidator(appResolver)
-    private val executor = VasuActionExecutor(context)
+    private val executor = VasuActionExecutor(appContext)
     private val executionEngine = VasuExecutionEngine(executor)
     private val dynamicReplanner = VasuDynamicReplanner()
-    private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+    private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
@@ -77,7 +77,7 @@ class GeminiAutonomousBrain(context: Context) {
 
             for (stepIndex in 0 until MAX_GEMINI_STEPS) {
                 val screen = screenContext(lastExecution)
-                val context = if (lastExecution != null && lastExecution.steps.any { !it.success }) {
+                val promptContext = if (lastExecution != null && lastExecution.steps.any { !it.success }) {
                     val recovery = dynamicReplanner.capture(effectiveCommand, lastExecution)
                     buildString {
                         append(screen)
@@ -94,7 +94,7 @@ class GeminiAutonomousBrain(context: Context) {
                     }
                 }
 
-                val plan = api.plan(effectiveCommand, context) ?: break
+                val plan = api.plan(effectiveCommand, promptContext) ?: break
                 geminiProducedResult = true
                 lastReply = plan.reply.ifBlank { lastReply }
 
@@ -131,7 +131,7 @@ class GeminiAutonomousBrain(context: Context) {
 
                 if (execution.success) {
                     conversationStore.updateLastAction(action::class.simpleName, true)
-                    updateActiveAppFromCurrentScreen(context)
+                    updateActiveAppFromCurrentScreen()
                     Thread.sleep(UI_SETTLE_DELAY_MS)
                     continue
                 }
@@ -152,7 +152,7 @@ class GeminiAutonomousBrain(context: Context) {
         if (result.execution?.success == true) {
             result.execution.steps.lastOrNull()?.let { step ->
                 conversationStore.updateLastAction(step.action::class.simpleName, true)
-                updateActiveAppFromCurrentScreen(context)
+                updateActiveAppFromCurrentScreen()
             }
             conversationStateMachine.complete()
             conversationStore.updateAssistantResponse(result.reply)
@@ -172,12 +172,12 @@ class GeminiAutonomousBrain(context: Context) {
         return Result(false, reply, execution, usedGemini)
     }
 
-    private fun updateActiveAppFromCurrentScreen(context: Context) {
+    private fun updateActiveAppFromCurrentScreen() {
         val service = VasuAccessibilityService.instance ?: return
         val packageName = service.foregroundPackage() ?: return
         val label = runCatching {
-            context.packageManager.getApplicationLabel(
-                context.packageManager.getApplicationInfo(packageName, 0)
+            appContext.packageManager.getApplicationLabel(
+                appContext.packageManager.getApplicationInfo(packageName, 0)
             ).toString()
         }.getOrNull()
         conversationStore.updateActiveApp(label, packageName)
@@ -195,7 +195,8 @@ class GeminiAutonomousBrain(context: Context) {
     }
 
     private fun isSensitiveSideEffect(action: VasuAction): Boolean = when (action) {
-        is VasuAction.CallContact, is VasuAction.SendSms -> true
+        is VasuAction.CallContact,
+        is VasuAction.SendSms -> true
         else -> false
     }
 
