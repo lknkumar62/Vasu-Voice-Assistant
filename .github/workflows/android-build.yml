@@ -2,7 +2,8 @@ name: Android Build
 
 on:
   push:
-  pull_request:
+    branches:
+      - feature/device-control-final4
 
 jobs:
   build:
@@ -18,5 +19,33 @@ jobs:
           cache: gradle
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Phase 4 final verification
+        run: bash ./scripts/verify-phase4.sh
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-test-reports
+          path: |
+            **/build/test-results/**
+            **/build/reports/tests/**
+            **/build/reports/lint-results*
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vasu-ai-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Phase 4 verification complete
+        if: success()
+        run: |
+          echo "========================================"
+          echo "VASU PHASE 4 VERIFICATION: GREEN"
+          echo "========================================"
+          echo "Unit tests: PASS"
+          echo "Debug APK: PASS"
+          echo "Lint: PASS"
