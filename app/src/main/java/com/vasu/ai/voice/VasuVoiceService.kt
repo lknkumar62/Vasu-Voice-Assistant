@@ -10,10 +10,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -53,6 +56,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private var destroyed = false
     private var serviceGeneration = 0L
     private var deviceLocked = false
+    @Volatile private var batteryOptimizationRestricted = false
+    private var healthCheckScheduled = false
 
     private val wakeConfig = VasuWakeWordConfig()
     private var wakeMode = false
@@ -73,16 +78,14 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
                 Intent.ACTION_SCREEN_ON,
                 Intent.ACTION_USER_UNLOCKED -> {
                     updateDeviceLockState()
-
                     if (!wakeMode) return
-
                     if (
                         intent.action == Intent.ACTION_SCREEN_ON ||
                         intent.action == Intent.ACTION_USER_UNLOCKED
                     ) {
                         ensureWakeWordModeRunning()
                     } else if (hasHealthyWakeStack()) {
-                        updateWakeWordNotification()
+                        updateBackgroundReliabilityNotification()
                     }
                 }
             }
@@ -104,6 +107,16 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         deviceLocked = keyguardManager?.isKeyguardLocked == true
     }
 
+    private fun updateBatteryOptimizationState() {
+        batteryOptimizationRestricted =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = getSystemService(PowerManager::class.java)
+                powerManager?.isIgnoringBatteryOptimizations(packageName) != true
+            } else {
+                false
+            }
+    }
+
     private fun updateWakeWordNotification() {
         updateNotification(
             if (deviceLocked) {
@@ -114,6 +127,34 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         )
     }
 
+    private fun updateBackgroundReliabilityNotification() {
+        if (destroyed) return
+        updateBatteryOptimizationState()
+
+        if (!wakeMode) {
+            updateNotification("VASU ready")
+            return
+        }
+
+        when {
+            !hasHealthyWakeStack() -> {
+                updateNotification("Wake word recovering")
+            }
+            batteryOptimizationRestricted && deviceLocked -> {
+                updateNotification("Listening for Hello Vasu — battery optimization enabled")
+            }
+            deviceLocked -> {
+                updateNotification("Listening for Hello Vasu — screen locked")
+            }
+            batteryOptimizationRestricted -> {
+                updateNotification("Listening for Hello Vasu — battery optimization enabled")
+            }
+            else -> {
+                updateNotification("Listening for Hello Vasu")
+            }
+        }
+    }
+
     private fun hasHealthyWakeStack(): Boolean {
         val coordinator = wakeCoordinator ?: return false
         return wakeMode && coordinator.isHealthy()
@@ -121,28 +162,59 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private fun safeStopWakeWord(reason: String) {
         println("VASU_WAKEWORD_SAFE_STOP reason=$reason")
-
         recoveryScheduled = false
         commandTimeoutController.stop()
         stopListening()
-
         wakeCoordinator?.stop()
         wakeCoordinator = null
-
-        wakeBridge?.let {
-            runCatching {
-                it.release()
-            }
-        }
+        wakeBridge?.let { runCatching { it.release() } }
         wakeBridge = null
-
         wakeMode = false
         processing = false
         listening = false
-
+        healthCheckScheduled = false
         resetRecoveryState()
-
         updateNotification("Wake word stopped")
+    }
+
+    private fun openBatterySettings() {
+        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching {
+            startActivity(intent)
+        }.onFailure {
+            val fallback = Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            runCatching { startActivity(fallback) }
+        }
+    }
+
+    private fun scheduleWakeHealthCheck() {
+        if (destroyed || healthCheckScheduled) return
+        healthCheckScheduled = true
+        val generation = serviceGeneration
+
+        handler.postDelayed(
+            {
+                healthCheckScheduled = false
+                if (!isCurrentGeneration(generation)) return@postDelayed
+                if (!wakeMode || !wakeConfig.enabled) return@postDelayed
+
+                updateDeviceLockState()
+                updateBatteryOptimizationState()
+
+                if (!hasHealthyWakeStack()) {
+                    ensureWakeWordModeRunning()
+                } else {
+                    updateBackgroundReliabilityNotification()
+                }
+
+                scheduleWakeHealthCheck()
+            },
+            HEALTH_CHECK_INTERVAL_MS
+        )
     }
 
     override fun onCreate() {
@@ -150,6 +222,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         destroyed = false
         serviceGeneration++
         updateDeviceLockState()
+        updateBatteryOptimizationState()
+        healthCheckScheduled = false
 
         wakeMode = false
         listening = false
@@ -180,15 +254,12 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             .apply()
 
         createChannel()
-
         val screenFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_USER_UNLOCKED)
         }
-        runCatching {
-            registerReceiver(screenStateReceiver, screenFilter)
-        }
+        runCatching { registerReceiver(screenStateReceiver, screenFilter) }
 
         ServiceCompat.startForeground(
             this,
@@ -205,17 +276,14 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
         when {
             desiredMode == MODE_WAKE_WORD && wakeConfig.enabled -> startWakeWordMode()
-
             desiredMode == MODE_MANUAL && SpeechRecognizer.isRecognitionAvailable(this) -> {
                 ensureRecognizer()
                 startListeningSoon(500, requireWakeWord = false)
             }
-
             wakeConfig.enabled -> {
                 runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_WAKE_WORD).apply()
                 startWakeWordMode()
             }
-
             SpeechRecognizer.isRecognitionAvailable(this) -> {
                 runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_MANUAL).apply()
                 ensureRecognizer()
@@ -228,18 +296,18 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (destroyed) return START_NOT_STICKY
 
         updateDeviceLockState()
+        updateBatteryOptimizationState()
 
         when (intent?.action) {
             ACTION_MANUAL_COMMAND -> {
                 runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_MANUAL).apply()
                 startManualCommandListening()
             }
-
             ACTION_WAKE_WORD_MODE -> {
                 runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_WAKE_WORD).apply()
                 ensureWakeWordModeRunning()
             }
-
+            ACTION_BATTERY_SETTINGS -> openBatterySettings()
             null -> {
                 if (!wakeConfig.enabled) {
                     ensureRecognizer()
@@ -250,8 +318,12 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
                     ensureWakeWordModeRunning()
                 }
             }
-
             else -> if (wakeConfig.enabled) ensureWakeWordModeRunning()
+        }
+
+        if (wakeMode) {
+            ensureWakeWordModeRunning()
+            updateBackgroundReliabilityNotification()
         }
 
         return START_STICKY
@@ -259,14 +331,13 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private fun ensureWakeWordModeRunning() {
         if (destroyed || !wakeConfig.enabled) return
-
         updateDeviceLockState()
+        updateBatteryOptimizationState()
 
         if (hasHealthyWakeStack()) {
-            updateWakeWordNotification()
+            updateBackgroundReliabilityNotification()
             return
         }
-
         startWakeWordMode()
     }
 
@@ -274,7 +345,6 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (destroyed) return false
         if (recognizer != null) return true
         if (!SpeechRecognizer.isRecognitionAvailable(this)) return false
-
         recognizer = SpeechRecognizer.createSpeechRecognizer(this).also {
             it.setRecognitionListener(this)
         }
@@ -285,6 +355,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_MANUAL).apply()
         wakeMode = false
         recoveryScheduled = false
+        healthCheckScheduled = false
         resetRecoveryState()
         wakeCoordinator?.stop()
         wakeCoordinator = null
@@ -296,11 +367,12 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private fun startWakeWordMode() {
         if (destroyed || !wakeConfig.enabled) return
-
         updateDeviceLockState()
+        updateBatteryOptimizationState()
 
         if (hasHealthyWakeStack()) {
-            updateWakeWordNotification()
+            updateBackgroundReliabilityNotification()
+            scheduleWakeHealthCheck()
             return
         }
 
@@ -370,7 +442,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
         recoveryScheduled = false
         resetRecoveryState()
-        updateWakeWordNotification()
+        updateBackgroundReliabilityNotification()
+        scheduleWakeHealthCheck()
     }
 
     private fun startCommandListeningFromWake() {
@@ -386,21 +459,16 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private fun startListeningSoon(delay: Long, requireWakeWord: Boolean) {
         if (destroyed) return
-
         listeningRequireWakeWord = requireWakeWord
         val generation = serviceGeneration
-        handler.postDelayed(
-            {
-                if (!isCurrentGeneration(generation)) return@postDelayed
-                startListening()
-            },
-            delay.coerceAtLeast(0L)
-        )
+        handler.postDelayed({
+            if (!isCurrentGeneration(generation)) return@postDelayed
+            startListening()
+        }, delay.coerceAtLeast(0L))
     }
 
     private fun startListening() {
         if (destroyed || recognizer == null || listening || processing) return
-
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
@@ -409,7 +477,6 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         }
-
         listening = true
         try {
             recognizer?.startListening(request)
@@ -429,54 +496,37 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (processing) return
         val text = raw.trim()
         if (text.isBlank()) return
-
-        val command = if (!listeningRequireWakeWord) {
-            text
-        } else {
+        val command = if (!listeningRequireWakeWord) text else {
             val lower = text.lowercase(Locale.ROOT)
             val wakeVariants = listOf("hello vasu", "hey vasu", "helo vasu", "हेलो वासु", "हैलो वासु")
             val wake = wakeVariants.firstOrNull { lower.contains(it) } ?: return
             text.substring(wake.length.coerceAtMost(text.length)).trim()
         }
-
         if (command.isBlank()) {
             speak("Haan Boss, boliye.")
             if (wakeMode) finishWakeCommand("empty_command")
             return
         }
-
         processing = true
         commandTimeoutController.stop()
         stopListening()
         updateNotification("Processing command")
-
         val generation = serviceGeneration
         brain.handleAsync(command) { result ->
             handler.post {
                 if (!isCurrentGeneration(generation)) return@post
-
                 memory.add(command, result.reply, result.handled, result.usedGemini)
-                updateNotification(
-                    if (result.handled) "Ready — Hello Vasu" else "Command failed — Hello Vasu"
-                )
-
-                val response = result.reply.ifBlank {
-                    if (result.handled) "Ho gaya Boss." else "Command execute nahi hua."
-                }
-
+                updateNotification(if (result.handled) "Ready — Hello Vasu" else "Command failed — Hello Vasu")
+                val response = result.reply.ifBlank { if (result.handled) "Ho gaya Boss." else "Command execute nahi hua." }
                 speak(response)
                 processing = false
-
                 if (wakeMode) {
                     wakeRecoveryAttempts = 0
                     val callbackGeneration = serviceGeneration
-                    handler.postDelayed(
-                        {
-                            if (!isCurrentGeneration(callbackGeneration)) return@postDelayed
-                            startWakeWordMode()
-                        },
-                        wakeConfig.recoveryDelayMs.coerceAtLeast(0L)
-                    )
+                    handler.postDelayed({
+                        if (!isCurrentGeneration(callbackGeneration)) return@postDelayed
+                        startWakeWordMode()
+                    }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
                 } else {
                     startListeningSoon(800, requireWakeWord = true)
                 }
@@ -486,77 +536,58 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     private fun finishWakeCommand(reason: String) {
         if (!wakeMode || destroyed) return
-
         commandTimeoutController.stop()
         stopListening()
         processing = false
         println("VASU_COMMAND_LISTENING_STOPPED reason=$reason")
-
-        if (recoveryScheduled) {
-            return
-        }
-
+        if (recoveryScheduled) return
         val coordinator = wakeCoordinator
         if (coordinator == null) {
             safeStopWakeWord("coordinator_missing")
             return
         }
-
         if (!coordinator.onAudioFailure()) {
             safeStopWakeWord("recovery_exhausted")
             return
         }
-
         recoveryScheduled = true
         updateNotification("Recovering wake word")
         val generation = serviceGeneration
-        handler.postDelayed(
-            {
-                if (!isCurrentGeneration(generation)) return@postDelayed
-
-                recoveryScheduled = false
-                if (!wakeMode) return@postDelayed
-                recoverWakeWordMode()
-            },
-            wakeConfig.recoveryDelayMs.coerceAtLeast(0L)
-        )
+        handler.postDelayed({
+            if (!isCurrentGeneration(generation)) return@postDelayed
+            recoveryScheduled = false
+            if (!wakeMode) return@postDelayed
+            recoverWakeWordMode()
+        }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
     }
 
     private fun recoverWakeWordMode() {
         if (destroyed || !wakeMode) return
-
         val coordinator = wakeCoordinator
         if (coordinator == null) {
             recoveryScheduled = false
             startWakeWordMode()
             return
         }
-
         if (coordinator.completeAudioRecovery()) {
             recoveryScheduled = false
-            updateWakeWordNotification()
+            updateBackgroundReliabilityNotification()
+            scheduleWakeHealthCheck()
             return
         }
-
         println("VASU_AUDIO_RECOVERY_RETRY_FAILED")
-
         if (!coordinator.onAudioFailure()) {
             safeStopWakeWord("recovery_failed")
             return
         }
-
         recoveryScheduled = true
         val generation = serviceGeneration
-        handler.postDelayed(
-            {
-                if (!isCurrentGeneration(generation)) return@postDelayed
-
-                recoveryScheduled = false
-                if (!wakeMode) return@postDelayed
-                recoverWakeWordMode()
-            },
-            wakeConfig.recoveryDelayMs.coerceAtLeast(0L)
-        )
+        handler.postDelayed({
+            if (!isCurrentGeneration(generation)) return@postDelayed
+            recoveryScheduled = false
+            if (!wakeMode) return@postDelayed
+            recoverWakeWordMode()
+        }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
     }
 
     private fun speak(text: String) {
@@ -564,13 +595,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         stopListening()
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), "vasu-${System.currentTimeMillis()}")
         val generation = serviceGeneration
-        handler.postDelayed(
-            {
-                if (!isCurrentGeneration(generation)) return@postDelayed
-                if (!processing && !wakeMode) startListeningSoon(500, requireWakeWord = true)
-            },
-            (text.length * 55L).coerceIn(700, 5000)
-        )
+        handler.postDelayed({
+            if (!isCurrentGeneration(generation)) return@postDelayed
+            if (!processing && !wakeMode) startListeningSoon(500, requireWakeWord = true)
+        }, (text.length * 55L).coerceIn(700, 5000))
     }
 
     private fun updateNotification(text: String) {
@@ -587,11 +615,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         .build()
 
     private fun createChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "VASU Voice Assistant",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
+        val channel = NotificationChannel(CHANNEL_ID, "VASU Voice Assistant", NotificationManager.IMPORTANCE_LOW).apply {
             description = "VASU foreground voice service"
         }
         getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
@@ -605,9 +629,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onEndOfSpeech() {
         listening = false
         if (wakeMode) {
-            if (!processing && commandTimeoutController.isRunning()) {
-                startListeningSoon(150, requireWakeWord = false)
-            }
+            if (!processing && commandTimeoutController.isRunning()) startListeningSoon(150, requireWakeWord = false)
         } else if (!processing) {
             startListeningSoon(300, listeningRequireWakeWord)
         }
@@ -616,7 +638,6 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     override fun onError(error: Int) {
         listening = false
         if (processing) return
-
         if (wakeMode) {
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
@@ -629,24 +650,15 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
                 else -> finishWakeCommand("speech_error")
             }
         } else {
-            startListeningSoon(
-                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500,
-                listeningRequireWakeWord
-            )
+            startListeningSoon(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 500, listeningRequireWakeWord)
         }
     }
 
     override fun onResults(results: Bundle?) {
         listening = false
         if (processing) return
-
-        results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            ?.firstOrNull()
-            ?.let(::handleTranscript)
-
-        if (!processing && !wakeMode) {
-            startListeningSoon(250, listeningRequireWakeWord)
-        }
+        results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(::handleTranscript)
+        if (!processing && !wakeMode) startListeningSoon(250, listeningRequireWakeWord)
     }
 
     override fun onPartialResults(partialResults: Bundle?) = Unit
@@ -664,46 +676,26 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         destroyed = true
         serviceGeneration++
         recoveryScheduled = false
-
+        healthCheckScheduled = false
         wakeMode = false
         listening = false
         processing = false
-
         handler.removeCallbacksAndMessages(null)
-
-        runCatching {
-            unregisterReceiver(screenStateReceiver)
-        }
-
-        if (::commandTimeoutController.isInitialized) {
-            commandTimeoutController.stop()
-        }
-
+        runCatching { unregisterReceiver(screenStateReceiver) }
+        if (::commandTimeoutController.isInitialized) commandTimeoutController.stop()
         wakeCoordinator?.stop()
         wakeCoordinator = null
-
-        wakeBridge?.let {
-            runCatching {
-                it.release()
-            }
-        }
+        wakeBridge?.let { runCatching { it.release() } }
         wakeBridge = null
-
         stopListening()
         recognizer?.destroy()
         recognizer = null
-
         tts?.stop()
         tts?.shutdown()
         tts = null
         ttsReady = false
-
         resetRecoveryState()
-
-        runtimePrefs.edit()
-            .putBoolean(KEY_VOICE_RUNNING, false)
-            .apply()
-
+        runtimePrefs.edit().putBoolean(KEY_VOICE_RUNNING, false).apply()
         super.onDestroy()
     }
 
@@ -714,11 +706,13 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         const val NOTIFICATION_ID = 1001
         const val ACTION_MANUAL_COMMAND = "com.vasu.ai.voice.MANUAL_COMMAND"
         const val ACTION_WAKE_WORD_MODE = "com.vasu.ai.voice.WAKE_WORD_MODE"
+        const val ACTION_BATTERY_SETTINGS = "com.vasu.ai.voice.BATTERY_SETTINGS"
         const val PREFS_RUNTIME = "vasu_runtime"
         const val KEY_VOICE_RUNNING = "voice_running"
         const val KEY_VOICE_STARTED_AT = "voice_started_at"
         const val KEY_DESIRED_MODE = "desired_mode"
         const val MODE_WAKE_WORD = "wake_word"
         const val MODE_MANUAL = "manual"
+        const val HEALTH_CHECK_INTERVAL_MS = 30_000L
     }
 }
