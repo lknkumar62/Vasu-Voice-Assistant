@@ -24,7 +24,8 @@ class VasuExecutionEngine(
         val recovered: Boolean = false,
         val attempts: Int = 1,
         val verification: VasuActionVerifier.Status = VasuActionVerifier.Status.UNKNOWN,
-        val verificationReason: String = ""
+        val verificationReason: String = "",
+        val confirmationRequestId: String? = null
     )
 
     data class ExecutionResult(
@@ -35,9 +36,15 @@ class VasuExecutionEngine(
         val recoveredCount: Int get() = steps.count { it.recovered }
         val failedAction: VasuAction? get() = steps.lastOrNull { !it.success }?.action
         val totalAttempts: Int get() = steps.sumOf { it.attempts }
+        val pendingConfirmationRequestId: String?
+            get() = steps.lastOrNull { it.confirmationRequestId != null }?.confirmationRequestId
     }
 
-    fun execute(actions: List<VasuAction>, originalCommand: String? = null): ExecutionResult {
+    fun execute(
+        actions: List<VasuAction>,
+        originalCommand: String? = null,
+        confirmationRequestId: String? = null
+    ): ExecutionResult {
         if (actions.isEmpty()) return ExecutionResult(emptyList())
 
         ensureWorkflowStarted()
@@ -91,7 +98,13 @@ class VasuExecutionEngine(
             }
 
             workflowReliability.recordExecution(signature)
-            val firstAttempt = runCatching { executor.execute(action, originalCommand) }.getOrDefault(false)
+            val firstAttempt = runCatching {
+                executor.execute(
+                    action = action,
+                    originalCommand = originalCommand,
+                    confirmationRequestId = confirmationRequestId
+                )
+            }.getOrDefault(false)
 
             if (executor.blockedByClarification) {
                 val reason = "clarification_required"
@@ -103,6 +116,31 @@ class VasuExecutionEngine(
                 println("VASU_WORKFLOW_PAUSED reason=AMBIGUOUS_UI")
                 results += StepResult(action = action, success = false, verificationReason = reason)
                 break
+            }
+
+            if (!firstAttempt && isConfirmationSensitive(action)) {
+                val pending = executor.pendingConfirmationRequest()
+                if (pending != null) {
+                    val reason = "confirmation_required"
+                    workflowState.markFailed(reason)
+                    workflowContext?.let {
+                        it.lastActionVerified = false
+                        it.lastFailureReason = reason
+                    }
+                    println(
+                        "VASU_WORKFLOW_PAUSED " +
+                            "reason=CONFIRMATION_REQUIRED " +
+                            "requestId=${pending.id}"
+                    )
+                    results += StepResult(
+                        action = action,
+                        success = false,
+                        attempts = 1,
+                        verificationReason = reason,
+                        confirmationRequestId = pending.id
+                    )
+                    break
+                }
             }
 
             if (deadline.expired()) {
@@ -147,7 +185,13 @@ class VasuExecutionEngine(
 
                         workflowReliability.recordExecution(retrySignature)
                         workflowState.recordAttempt()
-                        val recovered = runCatching { executor.execute(action, originalCommand) }.getOrDefault(false)
+                        val recovered = runCatching {
+                            executor.execute(
+                                action = action,
+                                originalCommand = originalCommand,
+                                confirmationRequestId = confirmationRequestId
+                            )
+                        }.getOrDefault(false)
 
                         if (executor.blockedByClarification) {
                             val reason = "clarification_required"
@@ -159,6 +203,31 @@ class VasuExecutionEngine(
                             println("VASU_WORKFLOW_PAUSED reason=AMBIGUOUS_UI")
                             results += StepResult(action = action, success = false, verificationReason = reason)
                             break
+                        }
+
+                        if (!recovered && isConfirmationSensitive(action)) {
+                            val pending = executor.pendingConfirmationRequest()
+                            if (pending != null) {
+                                val reason = "confirmation_required"
+                                workflowState.markFailed(reason)
+                                workflowContext?.let {
+                                    it.lastActionVerified = false
+                                    it.lastFailureReason = reason
+                                }
+                                println(
+                                    "VASU_WORKFLOW_PAUSED " +
+                                        "reason=CONFIRMATION_REQUIRED " +
+                                        "requestId=${pending.id}"
+                                )
+                                results += StepResult(
+                                    action = action,
+                                    success = false,
+                                    attempts = workflowState.snapshot().lastOrNull()?.attempts ?: 2,
+                                    verificationReason = reason,
+                                    confirmationRequestId = pending.id
+                                )
+                                break
+                            }
                         }
 
                         if (SystemClock.uptimeMillis() - deadline.startedAt >= actionTimeout) {
@@ -190,7 +259,8 @@ class VasuExecutionEngine(
                                 recovered = true,
                                 attempts = 2,
                                 verification = verification.status,
-                                verificationReason = verification.reason
+                                verificationReason = verification.reason,
+                                confirmationRequestId = null
                             )
                             logVerification(action, 2, verification)
 
