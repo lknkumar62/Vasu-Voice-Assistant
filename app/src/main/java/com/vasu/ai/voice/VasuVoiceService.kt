@@ -63,6 +63,9 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     private var wakeRecoveryAttempts = 0
     private var recoveryScheduled = false
     private var recoveryDelayMs = 0L
+    private var stressTestEnabled = false
+    private var stressTestFailureCount = 0
+    private var stressTestRecoveryCount = 0
     private lateinit var commandTimeoutController: VasuCommandListeningTimeoutController
     private var listeningRequireWakeWord = true
 
@@ -120,6 +123,85 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             putBoolean(KEY_WAKE_HEALTH, healthy)
             if (failure != null) putString(KEY_LAST_FAILURE, failure)
         }.apply()
+    }
+
+    private fun persistStressTestSummary() {
+        if (!stressTestEnabled && stressTestFailureCount == 0 && stressTestRecoveryCount == 0) return
+        runtimePrefs.edit()
+            .putInt(KEY_STRESS_TEST_FAILURES, stressTestFailureCount)
+            .putInt(KEY_STRESS_TEST_RECOVERIES, stressTestRecoveryCount)
+            .apply()
+    }
+
+    private fun logStressTestSnapshot() {
+        println(
+            "VASU_STRESS_SNAPSHOT " +
+                "enabled=$stressTestEnabled " +
+                "failures=$stressTestFailureCount " +
+                "recoveries=$stressTestRecoveryCount " +
+                "generation=$serviceGeneration " +
+                "wakeMode=$wakeMode " +
+                "listening=$listening " +
+                "processing=$processing " +
+                "locked=$deviceLocked " +
+                "batteryRestricted=$batteryOptimizationRestricted"
+        )
+    }
+
+    private fun enableStressTestingForRuntime() {
+        stressTestEnabled = true
+        stressTestFailureCount = 0
+        stressTestRecoveryCount = 0
+        println("VASU_STRESS_TEST_ENABLED")
+    }
+
+    private fun disableStressTestingForRuntime() {
+        stressTestEnabled = false
+        println(
+            "VASU_STRESS_TEST_DISABLED " +
+                "failures=$stressTestFailureCount " +
+                "recoveries=$stressTestRecoveryCount"
+        )
+    }
+
+    private fun handleStressTestIntent(intent: Intent?) {
+        if (destroyed) return
+
+        val testCase = intent?.getStringExtra(EXTRA_STRESS_TEST_CASE) ?: STRESS_TEST_DISABLED
+        if (!stressTestEnabled && testCase != STRESS_TEST_DISABLED) {
+            println("VASU_STRESS_TEST_DISABLED")
+            return
+        }
+
+        when (testCase) {
+            STRESS_TEST_AUDIO_FAILURE -> {
+                stressTestFailureCount++
+                println("VASU_STRESS_AUDIO_FAILURE count=$stressTestFailureCount")
+                finishWakeCommand("audio_failure")
+            }
+            STRESS_TEST_RECOGNIZER_BUSY -> {
+                stressTestFailureCount++
+                println("VASU_STRESS_RECOGNIZER_BUSY count=$stressTestFailureCount")
+                finishWakeCommand("recognizer_busy")
+            }
+            STRESS_TEST_TIMEOUT -> {
+                stressTestFailureCount++
+                println("VASU_STRESS_TIMEOUT count=$stressTestFailureCount")
+                finishWakeCommand("speech_timeout")
+            }
+            STRESS_TEST_RECOVERY -> {
+                stressTestRecoveryCount++
+                println("VASU_STRESS_RECOVERY count=$stressTestRecoveryCount")
+                recoverWakeWordMode()
+            }
+            STRESS_TEST_SAFE_STOP -> {
+                println("VASU_STRESS_SAFE_STOP")
+                safeStopWakeWord("stress_test")
+            }
+            STRESS_TEST_DISABLED -> disableStressTestingForRuntime()
+        }
+
+        logStressTestSnapshot()
     }
 
     private fun logVoiceLifecycle(event: String) {
@@ -184,17 +266,14 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         updateDeviceLockState(); updateBatteryOptimizationState(); healthCheckScheduled = false
         wakeMode = false; listening = false; processing = false; wakeBridge = null; wakeCoordinator = null
         recoveryScheduled = false; wakeRecoveryAttempts = 0
+        stressTestEnabled = false; stressTestFailureCount = 0; stressTestRecoveryCount = 0
         val desiredMode = runtimePrefs.getString(KEY_DESIRED_MODE, if (wakeConfig.enabled) MODE_WAKE_WORD else MODE_MANUAL)
         brain = GeminiAutonomousBrain(this); memory = VasuMemoryStore(this); tts = TextToSpeech(this, this)
         commandTimeoutController = VasuCommandListeningTimeoutController(wakeConfig.commandTimeoutMs) { finishWakeCommand("timeout") }
         resetRecoveryState()
         runtimePrefs.edit().putBoolean(KEY_VOICE_RUNNING, true).putLong(KEY_VOICE_STARTED_AT, System.currentTimeMillis()).apply()
         createChannel()
-        runCatching {
-            registerReceiver(screenStateReceiver, IntentFilter().apply {
-                addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_UNLOCKED)
-            })
-        }
+        runCatching { registerReceiver(screenStateReceiver, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_UNLOCKED) }) }
         ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(if (wakeConfig.enabled && deviceLocked) "Wake word: Hello Vasu — screen locked" else "Wake word: Hello Vasu"), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         logVoiceLifecycle("created")
         when {
@@ -212,6 +291,7 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             ACTION_MANUAL_COMMAND -> { runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_MANUAL).apply(); startManualCommandListening() }
             ACTION_WAKE_WORD_MODE -> { runtimePrefs.edit().putString(KEY_DESIRED_MODE, MODE_WAKE_WORD).apply(); ensureWakeWordModeRunning() }
             ACTION_BATTERY_SETTINGS -> openBatterySettings()
+            ACTION_STRESS_TEST -> handleStressTestIntent(intent)
             null -> if (wakeConfig.enabled) ensureWakeWordModeRunning() else { ensureRecognizer(); if (!listening && !processing) startListeningSoon(200, true) }
             else -> if (wakeConfig.enabled) ensureWakeWordModeRunning()
         }
@@ -322,17 +402,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         if (recoveryScheduled) return
         val coordinator = wakeCoordinator ?: run { safeStopWakeWord("coordinator_missing"); return }
         if (!coordinator.onAudioFailure()) { safeStopWakeWord("recovery_exhausted"); return }
-        wakeRecoveryAttempts++
-        recoveryDelayMs = calculateRecoveryDelay()
-        recoveryScheduled = true
+        wakeRecoveryAttempts++; recoveryDelayMs = calculateRecoveryDelay(); recoveryScheduled = true
         logVoiceLifecycle("wake_recovery"); updateNotification("Recovering wake word")
         val generation = serviceGeneration
-        handler.postDelayed({
-            if (!isCurrentGeneration(generation)) return@postDelayed
-            recoveryScheduled = false
-            if (!wakeMode) return@postDelayed
-            recoverWakeWordMode()
-        }, recoveryDelayMs)
+        handler.postDelayed({ if (!isCurrentGeneration(generation)) return@postDelayed; recoveryScheduled = false; if (!wakeMode) return@postDelayed; recoverWakeWordMode() }, recoveryDelayMs)
     }
 
     private fun recoverWakeWordMode() {
@@ -390,6 +463,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
     override fun onDestroy() {
         logVoiceLifecycle("destroyed")
+        persistStressTestSummary()
+        stressTestEnabled = false
+        stressTestFailureCount = 0
+        stressTestRecoveryCount = 0
         destroyed = true; serviceGeneration++; recoveryScheduled = false; healthCheckScheduled = false
         wakeMode = false; listening = false; processing = false
         handler.removeCallbacksAndMessages(null)
@@ -411,6 +488,14 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         const val ACTION_MANUAL_COMMAND = "com.vasu.ai.voice.MANUAL_COMMAND"
         const val ACTION_WAKE_WORD_MODE = "com.vasu.ai.voice.WAKE_WORD_MODE"
         const val ACTION_BATTERY_SETTINGS = "com.vasu.ai.voice.BATTERY_SETTINGS"
+        const val ACTION_STRESS_TEST = "com.vasu.ai.voice.STRESS_TEST"
+        const val EXTRA_STRESS_TEST_CASE = "stress_test_case"
+        const val STRESS_TEST_DISABLED = "disabled"
+        const val STRESS_TEST_AUDIO_FAILURE = "audio_failure"
+        const val STRESS_TEST_RECOGNIZER_BUSY = "recognizer_busy"
+        const val STRESS_TEST_TIMEOUT = "timeout"
+        const val STRESS_TEST_RECOVERY = "recovery"
+        const val STRESS_TEST_SAFE_STOP = "safe_stop"
         const val PREFS_RUNTIME = "vasu_runtime"
         const val KEY_VOICE_RUNNING = "voice_running"
         const val KEY_VOICE_STARTED_AT = "voice_started_at"
@@ -418,6 +503,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         const val KEY_WAKE_HEALTH = "wake_health"
         const val KEY_LAST_FAILURE = "last_voice_failure"
         const val KEY_LAST_RECOVERY = "last_voice_recovery"
+        const val KEY_STRESS_TEST_FAILURES = "stress_test_failures"
+        const val KEY_STRESS_TEST_RECOVERIES = "stress_test_recoveries"
         const val MODE_WAKE_WORD = "wake_word"
         const val MODE_MANUAL = "manual"
         const val HEALTH_CHECK_INTERVAL_MS = 30_000L
