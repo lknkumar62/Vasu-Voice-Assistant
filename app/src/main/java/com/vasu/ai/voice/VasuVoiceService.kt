@@ -36,6 +36,9 @@ import java.util.Locale
 /** Foreground voice loop. Android still controls microphone/background availability. */
 class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitListener {
     private val handler = Handler(Looper.getMainLooper())
+    private val runtimePrefs by lazy {
+        getSharedPreferences(PREFS_RUNTIME, MODE_PRIVATE)
+    }
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private lateinit var brain: GeminiAutonomousBrain
@@ -63,6 +66,11 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         wakeBridge = null
         wakeCoordinator = null
 
+        val desiredMode = runtimePrefs.getString(
+            KEY_DESIRED_MODE,
+            if (wakeConfig.enabled) MODE_WAKE_WORD else MODE_MANUAL
+        )
+
         brain = GeminiAutonomousBrain(this)
         memory = VasuMemoryStore(this)
         tts = TextToSpeech(this, this)
@@ -71,10 +79,9 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         ) {
             finishWakeCommand("timeout")
         }
-        getSharedPreferences("vasu_runtime", MODE_PRIVATE)
-            .edit()
-            .putBoolean("voice_running", true)
-            .putLong("voice_started_at", System.currentTimeMillis())
+        runtimePrefs.edit()
+            .putBoolean(KEY_VOICE_RUNNING, true)
+            .putLong(KEY_VOICE_STARTED_AT, System.currentTimeMillis())
             .apply()
         createChannel()
         ServiceCompat.startForeground(
@@ -84,11 +91,37 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         )
 
-        if (wakeConfig.enabled) {
-            startWakeWordMode()
-        } else if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            ensureRecognizer()
-            startListeningSoon(500, requireWakeWord = true)
+        when {
+            desiredMode == MODE_WAKE_WORD && wakeConfig.enabled -> {
+                startWakeWordMode()
+            }
+
+            desiredMode == MODE_MANUAL &&
+                SpeechRecognizer.isRecognitionAvailable(this) -> {
+                ensureRecognizer()
+                startListeningSoon(
+                    500,
+                    requireWakeWord = false
+                )
+            }
+
+            wakeConfig.enabled -> {
+                runtimePrefs.edit()
+                    .putString(KEY_DESIRED_MODE, MODE_WAKE_WORD)
+                    .apply()
+                startWakeWordMode()
+            }
+
+            SpeechRecognizer.isRecognitionAvailable(this) -> {
+                runtimePrefs.edit()
+                    .putString(KEY_DESIRED_MODE, MODE_MANUAL)
+                    .apply()
+                ensureRecognizer()
+                startListeningSoon(
+                    500,
+                    requireWakeWord = true
+                )
+            }
         }
     }
 
@@ -103,22 +136,22 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
 
         when (intent?.action) {
             ACTION_MANUAL_COMMAND -> {
+                runtimePrefs.edit()
+                    .putString(KEY_DESIRED_MODE, MODE_MANUAL)
+                    .apply()
                 startManualCommandListening()
             }
 
             ACTION_WAKE_WORD_MODE -> {
+                runtimePrefs.edit()
+                    .putString(KEY_DESIRED_MODE, MODE_WAKE_WORD)
+                    .apply()
                 ensureWakeWordModeRunning()
             }
 
             null -> {
-                /*
-                 * START_STICKY recreation can arrive with a null intent.
-                 * onCreate() already starts the default wake-word mode,
-                 * so do not create another wake stack here.
-                 */
                 if (!wakeConfig.enabled) {
                     ensureRecognizer()
-
                     if (!listening && !processing) {
                         startListeningSoon(
                             200,
@@ -170,6 +203,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
     }
 
     private fun startManualCommandListening() {
+        runtimePrefs.edit()
+            .putString(KEY_DESIRED_MODE, MODE_MANUAL)
+            .apply()
+
         wakeMode = false
         wakeRecoveryAttempts = 0
         commandTimeoutController.stop()
@@ -193,6 +230,10 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             updateNotification("Listening for Hello Vasu")
             return
         }
+
+        runtimePrefs.edit()
+            .putString(KEY_DESIRED_MODE, MODE_WAKE_WORD)
+            .apply()
 
         wakeMode = true
         commandTimeoutController.stop()
@@ -349,7 +390,6 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
             speak(response)
             processing = false
             if (wakeMode) {
-                wakeRecoveryAttempts = 0
                 handler.postDelayed({ startWakeWordMode() }, wakeConfig.recoveryDelayMs.coerceAtLeast(0L))
             } else {
                 startListeningSoon(800, requireWakeWord = true)
@@ -393,7 +433,6 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         handler.postDelayed(
             {
                 if (destroyed || !wakeMode) return@postDelayed
-
                 recoverWakeWordMode()
             },
             wakeConfig.recoveryDelayMs.coerceAtLeast(0L)
@@ -558,9 +597,8 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         tts?.shutdown()
         tts = null
 
-        getSharedPreferences("vasu_runtime", MODE_PRIVATE)
-            .edit()
-            .putBoolean("voice_running", false)
+        runtimePrefs.edit()
+            .putBoolean(KEY_VOICE_RUNNING, false)
             .apply()
 
         super.onDestroy()
@@ -573,5 +611,11 @@ class VasuVoiceService : Service(), RecognitionListener, TextToSpeech.OnInitList
         const val NOTIFICATION_ID = 1001
         const val ACTION_MANUAL_COMMAND = "com.vasu.ai.voice.MANUAL_COMMAND"
         const val ACTION_WAKE_WORD_MODE = "com.vasu.ai.voice.WAKE_WORD_MODE"
+        const val PREFS_RUNTIME = "vasu_runtime"
+        const val KEY_VOICE_RUNNING = "voice_running"
+        const val KEY_VOICE_STARTED_AT = "voice_started_at"
+        const val KEY_DESIRED_MODE = "desired_mode"
+        const val MODE_WAKE_WORD = "wake_word"
+        const val MODE_MANUAL = "manual"
     }
 }
