@@ -21,16 +21,15 @@ class GeminiAutonomousBrain(private val appContext: Context) {
     private val keyStore = GeminiKeyStore(appContext)
     private val api = GeminiApiClient(keyStore::read)
     private val validator = GeminiActionValidator(appResolver)
-    private val executor = VasuActionExecutor(appContext)
+    private val conversationStore = VasuConversationContextStore()
+    private val conversationStateMachine = VasuConversationStateMachine(conversationStore)
+    private val clarificationManager = VasuClarificationManager()
+    private val executor = VasuActionExecutor(appContext, clarificationManager)
     private val executionEngine = VasuExecutionEngine(executor)
     private val dynamicReplanner = VasuDynamicReplanner()
     private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
-
-    private val conversationStore = VasuConversationContextStore()
-    private val conversationStateMachine = VasuConversationStateMachine(conversationStore)
-    private val clarificationManager = VasuClarificationManager()
     private val followUpResolver = VasuFollowUpResolver(
         contextStore = conversationStore,
         clarificationManager = clarificationManager
@@ -146,7 +145,7 @@ class GeminiAutonomousBrain(private val appContext: Context) {
                     return finalizeFailure(trimmed, "Boss, sensitive action ko automatic recovery ke liye repeat nahi kiya gaya.", lastExecution, true)
                 }
 
-                val execution = executionEngine.execute(listOf(action))
+                val execution = executionEngine.execute(listOf(action), effectiveCommand)
                 lastExecution = execution
 
                 if (execution.success) {
@@ -154,6 +153,12 @@ class GeminiAutonomousBrain(private val appContext: Context) {
                     updateActiveAppFromCurrentScreen()
                     Thread.sleep(UI_SETTLE_DELAY_MS)
                     continue
+                }
+
+                val pendingClarification = clarificationManager.getPendingRequest()
+                if (pendingClarification != null) {
+                    conversationStateMachine.waitForFollowUp()
+                    return finalizeFailure(trimmed, pendingClarification.question, execution, true)
                 }
 
                 conversationStore.updateLastAction(action::class.simpleName, false)
@@ -169,6 +174,11 @@ class GeminiAutonomousBrain(private val appContext: Context) {
 
         conversationStateMachine.startExecuting()
         val result = localFallback(effectiveCommand)
+        val pendingClarification = clarificationManager.getPendingRequest()
+        if (pendingClarification != null) {
+            conversationStateMachine.waitForFollowUp()
+            return finalizeFailure(trimmed, pendingClarification.question, result.execution, false)
+        }
         if (result.execution?.success == true) {
             result.execution.steps.lastOrNull()?.let { step ->
                 conversationStore.updateLastAction(step.action::class.simpleName, true)
@@ -209,7 +219,7 @@ class GeminiAutonomousBrain(private val appContext: Context) {
             return if (isOnline()) Result(false, "Boss, Gemini API response nahi de saka ya valid action nahi mila.")
             else Result(false, "Internet nahi hai Boss, lekin main offline-capable phone commands kar sakta hoon.")
         }
-        val execution = executionEngine.execute(actions)
+        val execution = executionEngine.execute(actions, command)
         return if (execution.success) Result(true, "Ho gaya Boss.", execution, false)
         else Result(false, "Boss, command execute nahi ho paya. Required permission ya app restriction check kijiye.", execution, false)
     }
