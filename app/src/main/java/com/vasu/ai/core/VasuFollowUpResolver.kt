@@ -2,20 +2,45 @@ package com.vasu.ai.core
 
 class VasuFollowUpResolver(
     private val contextStore: VasuConversationContextStore,
-    private val referenceResolver: VasuReferenceResolver = VasuReferenceResolver(contextStore)
+    private val referenceResolver: VasuReferenceResolver = VasuReferenceResolver(contextStore),
+    private val clarificationManager: VasuClarificationManager = VasuClarificationManager()
 ) {
     data class Resolution(
         val isFollowUp: Boolean,
         val resolvedCommand: String,
         val context: VasuConversationContext,
-        val reference: VasuConversationReference
+        val reference: VasuConversationReference,
+        val clarificationAnswer: VasuClarificationAnswer? = null,
+        val clarificationHandled: Boolean = false
     )
 
     fun resolve(input: String): Resolution {
         val context = contextStore.get()
+        val pending = clarificationManager.getPendingRequest()
+
+        if (pending != null) {
+            val answer = clarificationManager.resolveAnswer(input)
+            if (answer != null) {
+                val reference = VasuConversationReference(
+                    type = if (answer.matched) answer.referenceType else VasuReferenceType.UNKNOWN,
+                    originalText = input,
+                    confidence = answer.confidence,
+                    requiresFreshUiEvidence = answer.requiresFreshUiEvidence
+                )
+                println("VASU_CLARIFICATION_ANSWER type=${answer.referenceType} confidence=${answer.confidence}")
+                return Resolution(
+                    isFollowUp = true,
+                    resolvedCommand = if (answer.matched) pending.originalCommand else input,
+                    context = context,
+                    reference = reference,
+                    clarificationAnswer = answer,
+                    clarificationHandled = true
+                )
+            }
+        }
+
         val referenceResult = referenceResolver.resolve(input)
         val reference = referenceResult.reference
-
         if (reference.type == VasuReferenceType.NONE) {
             return Resolution(false, input, context, reference)
         }
