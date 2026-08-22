@@ -105,6 +105,59 @@ class VasuMemoryStore(context: Context) {
         return VasuMemorySnapshot(entries)
     }
 
+    fun rememberPreference(key: String, value: String) {
+        val normalizedKey = key.trim()
+        val normalizedValue = value.trim()
+
+        if (normalizedKey.isBlank() || normalizedValue.isBlank()) {
+            return
+        }
+
+        val safeKey = normalizedKey
+            .lowercase()
+            .replace(Regex("\\s+"), " ")
+            .take(MAX_KEY_LENGTH)
+
+        if (safeKey.isBlank()) return
+
+        val safeValue = normalizedValue.take(MAX_VALUE_LENGTH)
+        if (safeValue.isBlank()) return
+
+        val now = System.currentTimeMillis()
+
+        prefs.edit()
+            .putString("preference:$safeKey", safeValue)
+            .putLong("preference:$safeKey:updated", now)
+            .apply()
+    }
+
+    fun recallPreference(key: String): String? {
+        val safeKey = key
+            .trim()
+            .lowercase()
+            .replace(Regex("\\s+"), " ")
+            .take(MAX_KEY_LENGTH)
+
+        if (safeKey.isBlank()) return null
+
+        return prefs.getString("preference:$safeKey", null)
+    }
+
+    fun forgetPreference(key: String) {
+        val safeKey = key
+            .trim()
+            .lowercase()
+            .replace(Regex("\\s+"), " ")
+            .take(MAX_KEY_LENGTH)
+
+        if (safeKey.isBlank()) return
+
+        prefs.edit()
+            .remove("preference:$safeKey")
+            .remove("preference:$safeKey:updated")
+            .apply()
+    }
+
     fun clear() = prefs.edit().remove(KEY_HISTORY).apply()
 
     data class Entry(val time: Long, val command: String, val reply: String, val handled: Boolean, val gemini: Boolean)
@@ -112,6 +165,7 @@ class VasuMemoryStore(context: Context) {
     private companion object {
         const val KEY_HISTORY = "history"
         const val MAX_ITEMS = 100
+        const val MAX_KEY_LENGTH = 120
         const val MAX_VALUE_LENGTH = 1000
     }
 }
