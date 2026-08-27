@@ -1,0 +1,36 @@
+name: Auto Bug Fix
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  fix-bugs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install OpenCode
+        run: npm install -g opencode-ai
+
+      - name: Run Fixer Agent
+        env:
+          OPENCODE_ZEN_API_KEY: sk-B7oDdo8oiIeg8JRrlfWJfOxBVYn0ZbQlxKQjns9ayA3ImO7Zdi8EF4FnRBXMqn9z
+        run: |
+          opencode run --agent fixer "Check the latest git diff for bugs, errors, or issues. If you find any, fix them directly in the files. If no bugs found, do nothing."
+
+      - name: Commit and push fixes
+        run: |
+          git config user.name "VASU Auto-Fixer"
+          git config user.email "autofix@vasu.ai"
+          git add -A
+          git diff --cached --quiet || git commit -m "Auto-fix: bugs fixed automatically"
+          git push
