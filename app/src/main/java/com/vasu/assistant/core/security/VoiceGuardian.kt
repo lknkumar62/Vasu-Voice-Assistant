@@ -74,8 +74,8 @@ class VoiceGuardian @Inject constructor(
 
         _state.value = GuardianState.Verifying
 
-        // Generate embedding from audio
-        val embedding = generateEmbedding(audioData)
+        // Generate embedding from audio using shared generator
+        val embedding = SpeakerEmbeddingGenerator.generate(audioData)
 
         // Verify against enrolled voices
         val result = speakerVerifier.verify(embedding)
@@ -145,36 +145,5 @@ class VoiceGuardian @Inject constructor(
      */
     fun listVoices(): List<EnrolledVoice> {
         return roleManager.listVoices()
-    }
-
-    /**
-     * Generate speaker embedding (simplified)
-     */
-    private fun generateEmbedding(audioData: FloatArray): FloatArray {
-        val embeddingSize = 128
-        val embedding = FloatArray(embeddingSize)
-
-        // Simple feature extraction
-        val chunkSize = audioData.size / embeddingSize
-        for (i in 0 until embeddingSize) {
-            var sum = 0f
-            for (j in 0 until chunkSize) {
-                val index = i * chunkSize + j
-                if (index < audioData.size) {
-                    sum += audioData[index] * audioData[index]
-                }
-            }
-            embedding[i] = kotlin.math.sqrt(sum / chunkSize)
-        }
-
-        // Normalize
-        val norm = kotlin.math.sqrt(embedding.sumOf { (it * it).toDouble() }).toFloat()
-        if (norm > 0) {
-            for (i in embedding.indices) {
-                embedding[i] /= norm
-            }
-        }
-
-        return embedding
     }
 }

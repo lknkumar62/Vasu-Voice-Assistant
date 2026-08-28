@@ -457,7 +457,8 @@ fun EnrollmentDialog(
                 Button(
                     onClick = onCompleteEnrollment,
                     colors = ButtonDefaults.buttonColors(containerColor = VasuGreen),
-                    enabled = enrollmentState is com.vasu.assistant.core.security.EnrollmentState.SampleRecorded
+                    enabled = enrollmentState is com.vasu.assistant.core.security.EnrollmentState.SampleRecorded ||
+                            enrollmentState is com.vasu.assistant.core.security.EnrollmentState.Processing
                 ) {
                     Text("Complete", color = VasuDarkBg)
                 }
