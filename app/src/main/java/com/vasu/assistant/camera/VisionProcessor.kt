@@ -9,6 +9,8 @@ import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.vasu.assistant.core.automation.ActionResult
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +24,8 @@ class VisionProcessor @Inject constructor(
     fun analyzeImage(imageUri: Uri): ActionResult {
         return try {
             val image = InputImage.fromFilePath(context, imageUri)
-            var result: ActionResult = ActionResult.error("vision", "Processing...", "Pending")
+            val latch = CountDownLatch(1)
+            @Volatile var result: ActionResult = ActionResult.error("vision", "Analysis timed out")
             labeler.process(image)
                 .addOnSuccessListener { labels ->
                     val detected = labels.map { label ->
@@ -33,11 +36,13 @@ class VisionProcessor @Inject constructor(
                         "Detected ${labels.size} labels",
                         mapOf("labels" to detected)
                     )
+                    latch.countDown()
                 }
                 .addOnFailureListener { e ->
                     result = ActionResult.error("vision", "Analysis failed", e.message ?: "Unknown")
+                    latch.countDown()
                 }
-            Thread.sleep(3000)
+            latch.await(5, TimeUnit.SECONDS)
             result
         } catch (e: Exception) {
             ActionResult.error("vision", "Analysis failed", e.message ?: "Unknown")
@@ -47,7 +52,8 @@ class VisionProcessor @Inject constructor(
     fun scanQrCode(imageUri: Uri): ActionResult {
         return try {
             val image = InputImage.fromFilePath(context, imageUri)
-            var result: ActionResult = ActionResult.error("qr", "Scanning...", "Pending")
+            val latch = CountDownLatch(1)
+            @Volatile var result: ActionResult = ActionResult.error("qr", "Scan timed out")
             barcodeScanner.process(image)
                 .addOnSuccessListener { barcodes ->
                     if (barcodes.isEmpty()) {
@@ -62,11 +68,13 @@ class VisionProcessor @Inject constructor(
                         }
                         result = ActionResult.success("qr", "Found ${barcodes.size} barcodes", mapOf("barcodes" to found))
                     }
+                    latch.countDown()
                 }
                 .addOnFailureListener { e ->
                     result = ActionResult.error("qr", "Scan failed", e.message ?: "Unknown")
+                    latch.countDown()
                 }
-            Thread.sleep(3000)
+            latch.await(5, TimeUnit.SECONDS)
             result
         } catch (e: Exception) {
             ActionResult.error("qr", "QR scan failed", e.message ?: "Unknown")

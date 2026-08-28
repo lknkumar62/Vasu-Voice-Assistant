@@ -58,7 +58,7 @@ fun MissionsScreen(viewModel: MissionsViewModel = hiltViewModel()) {
                             Text("Trigger: ${macro["trigger"]}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Text("Runs: ${macro["runCount"]}", style = MaterialTheme.typography.bodySmall)
-                        IconButton(onClick = { viewModel.runMacro(macro["id"] as String) }) {
+                        IconButton(onClick = { viewModel.runMacro(macro["id"] as? String ?: return@items) }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = "Run")
                         }
                     }

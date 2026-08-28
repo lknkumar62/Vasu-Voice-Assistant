@@ -7,6 +7,8 @@ import com.vasu.assistant.core.automation.ActionResult
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +22,8 @@ class PhotoCapture @Inject constructor() {
         val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
 
         return try {
-            var result: ActionResult = ActionResult.error("photo", "Capture pending", "Waiting")
+            val latch = CountDownLatch(1)
+            @Volatile var result: ActionResult = ActionResult.error("photo", "Capture timed out")
             imageCapture.takePicture(
                 outputOptions,
                 java.util.concurrent.Executors.newSingleThreadExecutor(),
@@ -31,13 +34,15 @@ class PhotoCapture @Inject constructor() {
                             "Photo saved: ${photoFile.name}",
                             mapOf("path" to photoFile.absolutePath, "uri" to Uri.fromFile(photoFile).toString())
                         )
+                        latch.countDown()
                     }
                     override fun onError(exc: ImageCaptureException) {
                         result = ActionResult.error("photo", "Capture failed", exc.message ?: "Unknown error")
+                        latch.countDown()
                     }
                 }
             )
-            Thread.sleep(2000)
+            latch.await(5, TimeUnit.SECONDS)
             result
         } catch (e: Exception) {
             ActionResult.error("photo", "Capture failed", e.message ?: "Unknown")
