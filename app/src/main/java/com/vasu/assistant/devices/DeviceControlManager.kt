@@ -18,7 +18,8 @@ class DeviceControlManager @Inject constructor(
     private val mediaManager: MediaManager
 ) {
     fun getBatteryInfo(): Map<String, Any> {
-        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            ?: return mapOf("level" to -1, "isCharging" to false)
         val level = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         val isCharging = batteryManager.isCharging
         return mapOf(

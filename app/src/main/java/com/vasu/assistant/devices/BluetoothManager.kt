@@ -29,8 +29,17 @@ class BluetoothManager @Inject constructor(
         } else {
             try {
                 @Suppress("DEPRECATION")
-                bluetoothAdapter?.enable()
-                ActionResult.success("bluetooth", "Bluetooth turned on")
+                val success = bluetoothAdapter?.enable()
+                if (success == true) {
+                    ActionResult.success("bluetooth", "Bluetooth turned on")
+                } else {
+                    // Fallback: open Bluetooth settings
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    ActionResult.success("bluetooth", "Opening Bluetooth settings")
+                }
             } catch (e: SecurityException) {
                 // Open Bluetooth settings as fallback
                 val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
@@ -50,8 +59,16 @@ class BluetoothManager @Inject constructor(
         } else {
             try {
                 @Suppress("DEPRECATION")
-                bluetoothAdapter?.disable()
-                ActionResult.success("bluetooth", "Bluetooth turned off")
+                val success = bluetoothAdapter?.disable()
+                if (success == true) {
+                    ActionResult.success("bluetooth", "Bluetooth turned off")
+                } else {
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    ActionResult.success("bluetooth", "Opening Bluetooth settings")
+                }
             } catch (e: SecurityException) {
                 val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
