@@ -27,7 +27,7 @@ class MemoryViewModel @Inject constructor(
     fun loadMemories() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val memories = memoryRepository.getAllUserMemory().map { mem ->
+            val memories = memoryRepository.getAllMemory().map { mem ->
                 mapOf("key" to mem.key, "value" to mem.value, "confidence" to mem.confidence)
             }
             _uiState.value = MemoryUiState(memories = memories, isLoading = false)
@@ -36,7 +36,7 @@ class MemoryViewModel @Inject constructor(
 
     fun deleteMemory(key: String) {
         viewModelScope.launch {
-            memoryRepository.deleteUserMemory(key)
+            memoryRepository.forget(key)
             loadMemories()
         }
     }

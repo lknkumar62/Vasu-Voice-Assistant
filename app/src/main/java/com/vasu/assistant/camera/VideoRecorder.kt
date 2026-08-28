@@ -21,7 +21,7 @@ class VideoRecorder @Inject constructor(
     private var currentFile: File? = null
 
     fun startRecording(outputDir: File): ActionResult {
-        if (isRecording) return ActionResult.error("video", "Already recording")
+        if (isRecording) return ActionResult.error("video", "Already recording", "Recording in progress")
         return try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
             val file = File(outputDir, "VASU_VID_${timestamp}.mp4")
@@ -51,7 +51,7 @@ class VideoRecorder @Inject constructor(
     }
 
     fun stopRecording(): ActionResult {
-        if (!isRecording) return ActionResult.error("video", "Not recording")
+        if (!isRecording) return ActionResult.error("video", "Not recording", "No active recording")
         return try {
             recorder?.apply {
                 stop()
@@ -64,7 +64,7 @@ class VideoRecorder @Inject constructor(
             if (file != null && file.exists()) {
                 ActionResult.success("video", "Recording saved: ${file.name}", mapOf("path" to file.absolutePath, "size" to file.length()))
             } else {
-                ActionResult.error("video", "Recording file not found")
+                ActionResult.error("video", "Recording file not found", "File missing")
             }
         } catch (e: Exception) {
             isRecording = false

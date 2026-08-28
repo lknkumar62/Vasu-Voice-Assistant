@@ -7,12 +7,15 @@ import android.location.Geocoder
 import android.location.Location
 import android.os.Looper
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.*
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.vasu.assistant.core.automation.ActionResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +23,7 @@ import javax.inject.Singleton
 class VasuLocationManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+    private val fusedClient: FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(context)
     private var lastKnownLocation: Location? = null
     private var locationHistory = mutableListOf<LocationRecord>()
 
@@ -34,10 +37,9 @@ class VasuLocationManager @Inject constructor(
     }
 
     fun getCurrentLocation(): ActionResult {
-        if (!hasPermission()) return ActionResult.error("location", "Location permission not granted")
+        if (!hasPermission()) return ActionResult.error("location", "Location permission not granted", "No location permission")
         return try {
-            val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("location", "Location request timed out")
+            var result: ActionResult = ActionResult.error("location", "Getting location...", "In progress")
             val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L).setMaxUpdates(1).build()
             fusedClient.requestLocationUpdate(request, object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
@@ -50,12 +52,11 @@ class VasuLocationManager @Inject constructor(
                             "address" to addr, "accuracy" to location.accuracy
                         ))
                     } else {
-                        result = ActionResult.error("location", "Could not get location")
+                        result = ActionResult.error("location", "Could not get location", "Location is null")
                     }
-                    latch.countDown()
                 }
             }, Looper.getMainLooper())
-            latch.await(8, TimeUnit.SECONDS)
+            Thread.sleep(5000)
             result
         } catch (e: Exception) {
             ActionResult.error("location", "Failed to get location", e.message ?: "Unknown")
@@ -63,7 +64,7 @@ class VasuLocationManager @Inject constructor(
     }
 
     fun saveParkingLocation(): ActionResult {
-        val loc = lastKnownLocation ?: return ActionResult.error("parking", "No location available. Get location first.")
+        val loc = lastKnownLocation ?: return ActionResult.error("parking", "No location available", "Get location first")
         val addr = getAddress(loc.latitude, loc.longitude)
         locationHistory.add(LocationRecord(loc.latitude, loc.longitude, "Parking - $addr", System.currentTimeMillis()))
         return ActionResult.success("parking", "Parking saved: $addr", mapOf("lat" to loc.latitude, "lng" to loc.longitude))

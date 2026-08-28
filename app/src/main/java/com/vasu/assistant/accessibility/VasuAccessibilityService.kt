@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import com.vasu.assistant.core.automation.ActionResult
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,15 +13,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
-/**
- * VasuAccessibilityService - Main accessibility service for VASU.
- *
- * Provides:
- * - Screen reading and interpretation
- * - UI interaction (click, type, scroll)
- * - App automation
- * - Screen state monitoring
- */
 @AndroidEntryPoint
 class VasuAccessibilityService : AccessibilityService() {
 
@@ -47,7 +39,6 @@ class VasuAccessibilityService : AccessibilityService() {
         screenReader = ScreenReader()
         interactionManager = ScreenInteractionManager(this)
 
-        // Configure service info
         serviceInfo = serviceInfo.apply {
             eventTypes = AccessibilityEvent.TYPES_ALL_MASK
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -64,10 +55,7 @@ class VasuAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Monitor screen changes
         event?.let {
-            // In Phase 6, AI will process these events
-            // For now, just log important events
             when (it.eventType) {
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                     Log.d(TAG, "Window changed: ${it.packageName}")
@@ -75,6 +63,7 @@ class VasuAccessibilityService : AccessibilityService() {
                 AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                     Log.d(TAG, "View clicked: ${it.text}")
                 }
+                else -> { /* ignore other event types */ }
             }
         }
     }
@@ -90,81 +79,46 @@ class VasuAccessibilityService : AccessibilityService() {
         Log.d(TAG, "VASU Accessibility Service destroyed")
     }
 
-    // Public API for automation
-
-    /**
-     * Get screen content
-     */
     fun getScreenContent(): ScreenContent {
         return screenReader.readScreen(rootInActiveWindow)
     }
 
-    /**
-     * Find element by text
-     */
     fun findElement(text: String): AccessibilityNodeInfo? {
         return nodeFinder.findNodeContainingText(rootInActiveWindow, text)
     }
 
-    /**
-     * Click element by text
-     */
     fun clickElement(text: String): ActionResult {
         return actions.clickByText(text)
     }
 
-    /**
-     * Type text
-     */
     fun typeText(label: String, text: String): ActionResult {
         return actions.typeTextByLabel(label, text)
     }
 
-    /**
-     * Scroll down
-     */
     fun scrollDown(): ActionResult {
         return actions.scrollDown()
     }
 
-    /**
-     * Scroll up
-     */
     fun scrollUp(): ActionResult {
         return actions.scrollUp()
     }
 
-    /**
-     * Press back
-     */
     fun pressBack(): ActionResult {
         return actions.pressBack()
     }
 
-    /**
-     * Press home
-     */
     fun pressHome(): ActionResult {
         return actions.pressHome()
     }
 
-    /**
-     * Open app
-     */
     fun openApp(packageName: String): ActionResult {
         return interactionManager.openApp(packageName)
     }
 
-    /**
-     * Read screen
-     */
     fun readScreen(): ActionResult {
         return actions.readScreen()
     }
 
-    /**
-     * Get interaction manager
-     */
     fun getInteractionManager(): ScreenInteractionManager {
         return interactionManager
     }

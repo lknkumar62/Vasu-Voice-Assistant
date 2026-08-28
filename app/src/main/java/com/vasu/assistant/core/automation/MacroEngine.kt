@@ -32,20 +32,20 @@ class MacroEngine @Inject constructor(
         return if (macros.remove(macroId) != null) {
             ActionResult.success("macro", "Macro deleted")
         } else {
-            ActionResult.error("macro", "Macro not found")
+            ActionResult.error("macro", "Macro not found", "No macro: $macroId")
         }
     }
 
     fun toggleMacro(macroId: String): ActionResult {
-        val macro = macros[macroId] ?: return ActionResult.error("macro", "Macro not found")
+        val macro = macros[macroId] ?: return ActionResult.error("macro", "Macro not found", "No macro: $macroId")
         val updated = macro.copy(enabled = !macro.enabled)
         macros[macroId] = updated
         return ActionResult.success("macro", "Macro ${if (updated.enabled) "enabled" else "disabled"}: ${updated.name}")
     }
 
     fun runMacro(macroId: String): ActionResult {
-        val macro = macros[macroId] ?: return ActionResult.error("macro", "Macro not found")
-        if (!macro.enabled) return ActionResult.error("macro", "Macro is disabled: ${macro.name}")
+        val macro = macros[macroId] ?: return ActionResult.error("macro", "Macro not found", "No macro: $macroId")
+        if (!macro.enabled) return ActionResult.error("macro", "Macro is disabled: ${macro.name}", "Macro disabled")
 
         return try {
             val mission = missionEngine.createMission("Macro: ${macro.name}", macro.actions)

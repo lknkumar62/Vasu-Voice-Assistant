@@ -1,11 +1,7 @@
 package com.vasu.assistant.notifications
 
-import android.app.Notification
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.os.Build
 import com.vasu.assistant.core.automation.ActionResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -19,7 +15,7 @@ class NotificationActionManager @Inject constructor(
         val replyAction = notification.actions.find { it.title.contains("Reply", ignoreCase = true) }
         if (replyAction?.actionIntent != null) {
             return try {
-                val intent = Intent().apply {
+                val intent = android.content.Intent().apply {
                     putExtra("android.intent.extra.REPLY", replyText)
                 }
                 replyAction.actionIntent.send(context, 0, intent)
@@ -34,11 +30,7 @@ class NotificationActionManager @Inject constructor(
     fun dismissNotification(packageName: String, notificationId: Int): ActionResult {
         return try {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                nm.cancelNotification(packageName, notificationId, 0)
-            } else {
-                nm.cancel(notificationId)
-            }
+            nm.cancel(notificationId)
             ActionResult.success("dismiss", "Notification dismissed")
         } catch (e: Exception) {
             ActionResult.error("dismiss", "Failed to dismiss", e.message ?: "Unknown")
@@ -47,7 +39,7 @@ class NotificationActionManager @Inject constructor(
 
     fun performNotificationAction(notification: ParsedNotification, actionIndex: Int): ActionResult {
         val action = notification.actions.getOrNull(actionIndex)
-            ?: return ActionResult.error("notif_action", "Action not found at index $actionIndex")
+            ?: return ActionResult.error("notif_action", "Action not found at index $actionIndex", "Invalid index")
         return try {
             action.actionIntent?.send()
             ActionResult.success("notif_action", "Performed: ${action.title}")
@@ -58,7 +50,7 @@ class NotificationActionManager @Inject constructor(
 
     fun summarizeNotifications(notifications: List<ParsedNotification>): Map<String, Any> {
         val grouped = notifications.groupBy { it.packageName }
-        val summaries = grouped.map { (pkg, notifs) ->
+        val summaries = grouped.map { (_, notifs) ->
             mapOf(
                 "app" to notifs.first().appName,
                 "count" to notifs.size,

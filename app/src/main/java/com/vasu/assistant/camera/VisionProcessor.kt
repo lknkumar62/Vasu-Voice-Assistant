@@ -3,7 +3,6 @@ package com.vasu.assistant.camera
 import android.content.Context
 import android.net.Uri
 import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
@@ -25,17 +24,13 @@ class VisionProcessor @Inject constructor(
         return try {
             val image = InputImage.fromFilePath(context, imageUri)
             val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("vision", "Analysis timed out")
+            @Volatile var result: ActionResult = ActionResult.error("vision", "Analysis timed out", "Timeout")
             labeler.process(image)
                 .addOnSuccessListener { labels ->
                     val detected = labels.map { label ->
                         mapOf("text" to label.text, "confidence" to label.confidence, "index" to label.index)
                     }
-                    result = ActionResult.success(
-                        "vision",
-                        "Detected ${labels.size} labels",
-                        mapOf("labels" to detected)
-                    )
+                    result = ActionResult.success("vision", "Detected ${labels.size} labels", mapOf("labels" to detected))
                     latch.countDown()
                 }
                 .addOnFailureListener { e ->
@@ -53,11 +48,11 @@ class VisionProcessor @Inject constructor(
         return try {
             val image = InputImage.fromFilePath(context, imageUri)
             val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("qr", "Scan timed out")
+            @Volatile var result: ActionResult = ActionResult.error("qr", "Scan timed out", "Timeout")
             barcodeScanner.process(image)
                 .addOnSuccessListener { barcodes ->
                     if (barcodes.isEmpty()) {
-                        result = ActionResult.error("qr", "No QR/barcode found")
+                        result = ActionResult.error("qr", "No QR/barcode found", "Nothing detected")
                     } else {
                         val found = barcodes.map { barcode ->
                             mapOf(

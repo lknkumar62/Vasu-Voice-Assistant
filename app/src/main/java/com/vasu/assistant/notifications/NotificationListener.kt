@@ -1,6 +1,5 @@
 package com.vasu.assistant.notifications
 
-import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import dagger.hilt.android.AndroidEntryPoint
@@ -27,15 +26,16 @@ class NotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        // Notification dismissed - could track if needed
+        // Notification dismissed
     }
 
     fun addCallback(callback: NotificationCallback) { listeners.add(callback) }
     fun removeCallback(callback: NotificationCallback) { listeners.remove(callback) }
 
-    fun getActiveNotifications(): List<ParsedNotification> {
+    fun getActiveParsedNotifications(): List<ParsedNotification> {
         return try {
-            activeNotifications?.mapNotNull { notificationParser.parse(it) } ?: emptyList()
+            val notifications = super.getActiveNotifications() ?: return emptyList()
+            notifications.mapNotNull { notificationParser.parse(it) }
         } catch (e: Exception) {
             emptyList()
         }

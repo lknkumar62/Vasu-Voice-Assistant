@@ -158,7 +158,7 @@ fun HomeScreen(
                             Column {
                                 Text("Wake Word", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 Text(
-                                    text = if (uiState.isWakeWordActive) '"Hello Vasu" active' else "Tap to enable",
+                                    text = if (uiState.isWakeWordActive) "\"Hello Vasu\" active" else "Tap to enable",
                                     color = VasuTextMuted, fontSize = 12.sp
                                 )
                             }

@@ -10,8 +10,8 @@ data class Mission(
     val name: String,
     val steps: List<MissionStep>,
     val createdAt: Long = System.currentTimeMillis(),
-    val status: MissionStatus = MissionStatus.CREATED,
-    val currentStep: Int = 0,
+    var status: MissionStatus = MissionStatus.CREATED,
+    var currentStep: Int = 0,
     val logs: MutableList<String> = mutableListOf()
 )
 
@@ -40,8 +40,8 @@ class MissionEngine @Inject constructor(
     }
 
     suspend fun executeMission(missionId: String): ActionResult {
-        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found")
-        if (runningMissionId != null) return ActionResult.error("mission", "Another mission is running")
+        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found", "No mission with id: $missionId")
+        if (runningMissionId != null) return ActionResult.error("mission", "Another mission is running", "Mission $runningMissionId is active")
 
         runningMissionId = missionId
         mission.status = MissionStatus.RUNNING
@@ -86,28 +86,28 @@ class MissionEngine @Inject constructor(
     }
 
     fun pauseMission(): ActionResult {
-        val id = runningMissionId ?: return ActionResult.error("mission", "No running mission")
+        val id = runningMissionId ?: return ActionResult.error("mission", "No running mission", "No active mission")
         missions[id]?.status = MissionStatus.PAUSED
         runningMissionId = null
         return ActionResult.success("mission", "Mission paused")
     }
 
     fun resumeMission(missionId: String): ActionResult {
-        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found")
-        if (mission.status != MissionStatus.PAUSED) return ActionResult.error("mission", "Mission is not paused")
+        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found", "No mission: $missionId")
+        if (mission.status != MissionStatus.PAUSED) return ActionResult.error("mission", "Mission is not paused", "Status: ${mission.status}")
         mission.status = MissionStatus.RUNNING
         return ActionResult.success("mission", "Mission resumed")
     }
 
     fun cancelMission(missionId: String): ActionResult {
-        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found")
+        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found", "No mission: $missionId")
         mission.status = MissionStatus.CANCELLED
         if (runningMissionId == missionId) runningMissionId = null
         return ActionResult.success("mission", "Mission cancelled")
     }
 
     fun getMissionStatus(missionId: String): ActionResult {
-        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found")
+        val mission = missions[missionId] ?: return ActionResult.error("mission", "Mission not found", "No mission: $missionId")
         return ActionResult.success("mission", mission.status.name, mapOf(
             "id" to mission.id, "name" to mission.name,
             "status" to mission.status.name,

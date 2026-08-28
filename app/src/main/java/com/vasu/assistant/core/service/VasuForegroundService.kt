@@ -1,13 +1,17 @@
 package com.vasu.assistant.core.service
 
-import android.app.*
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.vasu.assistant.MainActivity
-import com.vasu.assistant.R
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -28,7 +32,6 @@ class VasuForegroundService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 startForeground(notificationId, buildNotification("VASU is listening..."), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-                // Wake word detector would be started here
             }
             ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)

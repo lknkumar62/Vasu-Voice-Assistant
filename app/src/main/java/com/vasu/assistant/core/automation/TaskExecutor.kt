@@ -15,44 +15,31 @@ class TaskExecutor @Inject constructor(
             "open_app" -> {
                 val pkg = step.parameters["package"] as? String ?: ""
                 val result = toolRouter.executeTool("open_app", mapOf("package" to pkg))
-                verify(result, "Open app: $pkg")
+                if (result.success) result else ActionResult.error("open_app", "Open app failed: $pkg", result.error ?: result.message)
             }
             "click" -> {
                 val text = step.parameters["text"] as? String ?: ""
-                val result = accessibilityActions.clickByText(text)
-                if (result) ActionResult.success("click", "Clicked: $text")
-                else ActionResult.error("click", "Failed to click: $text")
+                accessibilityActions.clickByText(text)
             }
             "type" -> {
                 val label = step.parameters["label"] as? String ?: ""
                 val text = step.parameters["text"] as? String ?: ""
-                val result = accessibilityActions.typeText(label, text)
-                if (result) ActionResult.success("type", "Typed: $text")
-                else ActionResult.error("type", "Failed to type")
+                accessibilityActions.typeTextByLabel(label, text)
             }
             "read_screen" -> {
-                val result = accessibilityActions.readScreen()
-                ActionResult.success("read_screen", result)
+                accessibilityActions.readScreen()
             }
             "scroll_down" -> {
-                val result = accessibilityActions.scrollDown()
-                if (result) ActionResult.success("scroll", "Scrolled down")
-                else ActionResult.error("scroll", "Scroll failed")
+                accessibilityActions.scrollDown()
             }
             "scroll_up" -> {
-                val result = accessibilityActions.scrollUp()
-                if (result) ActionResult.success("scroll", "Scrolled up")
-                else ActionResult.error("scroll", "Scroll failed")
+                accessibilityActions.scrollUp()
             }
             "back" -> {
-                val result = accessibilityActions.pressBack()
-                if (result) ActionResult.success("back", "Back pressed")
-                else ActionResult.error("back", "Back press failed")
+                accessibilityActions.pressBack()
             }
             "home" -> {
-                val result = accessibilityActions.pressHome()
-                if (result) ActionResult.success("home", "Home pressed")
-                else ActionResult.error("home", "Home press failed")
+                accessibilityActions.pressHome()
             }
             "wait" -> {
                 val ms = (step.parameters["duration"] as? Number)?.toLong() ?: 2000L
@@ -70,9 +57,5 @@ class TaskExecutor @Inject constructor(
                 toolRouter.executeTool(step.action, params)
             }
         }
-    }
-
-    private fun verify(result: ActionResult, description: String): ActionResult {
-        return if (result.success) result else ActionResult.error(result.action, "$description failed", result.error ?: result.message)
     }
 }

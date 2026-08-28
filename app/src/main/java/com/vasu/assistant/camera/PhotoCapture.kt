@@ -18,12 +18,11 @@ class PhotoCapture @Inject constructor() {
     fun capturePhoto(imageCapture: ImageCapture, outputDir: File): ActionResult {
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
         val photoFile = File(outputDir, "VASU_${timestamp}.jpg")
-
         val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
 
         return try {
             val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("photo", "Capture timed out")
+            @Volatile var result: ActionResult = ActionResult.error("photo", "Capture timed out", "Timeout")
             imageCapture.takePicture(
                 outputOptions,
                 java.util.concurrent.Executors.newSingleThreadExecutor(),

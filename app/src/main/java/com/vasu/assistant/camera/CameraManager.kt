@@ -3,20 +3,15 @@ package com.vasu.assistant.camera
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
-import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.vasu.assistant.core.automation.ActionResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -63,7 +58,7 @@ class VasuCameraManager @Inject constructor(
     }
 
     fun takePhoto(): ActionResult {
-        val capture = imageCapture ?: return ActionResult.error("photo", "Camera not initialized")
+        val capture = imageCapture ?: return ActionResult.error("photo", "Camera not initialized", "No imageCapture")
         return photoCapture.capturePhoto(capture, getOutputDir())
     }
 
@@ -77,8 +72,7 @@ class VasuCameraManager @Inject constructor(
 
     fun toggleFlash(): ActionResult {
         flashEnabled = !flashEnabled
-        val capture = imageCapture
-        capture?.flashMode = if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+        imageCapture?.flashMode = if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
         return ActionResult.success("flash", if (flashEnabled) "Flash ON" else "Flash OFF")
     }
 
@@ -87,17 +81,9 @@ class VasuCameraManager @Inject constructor(
         return initializeCamera(lifecycleOwner, previewView, newFront)
     }
 
-    fun analyzeImage(imageUri: Uri): ActionResult {
-        return visionProcessor.analyzeImage(imageUri)
-    }
-
-    fun scanQrCode(imageUri: Uri): ActionResult {
-        return visionProcessor.scanQrCode(imageUri)
-    }
-
-    fun extractText(imageUri: Uri): ActionResult {
-        return ocrManager.extractText(imageUri)
-    }
+    fun analyzeImage(imageUri: Uri): ActionResult = visionProcessor.analyzeImage(imageUri)
+    fun scanQrCode(imageUri: Uri): ActionResult = visionProcessor.scanQrCode(imageUri)
+    fun extractText(imageUri: Uri): ActionResult = ocrManager.extractText(imageUri)
 
     fun getPhotoGallery(): ActionResult {
         val dir = getOutputDir()

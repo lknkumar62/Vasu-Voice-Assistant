@@ -10,9 +10,6 @@ import com.vasu.assistant.core.automation.ActionResult
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Contact data
- */
 data class Contact(
     val id: Long,
     val name: String,
@@ -20,22 +17,10 @@ data class Contact(
     val email: String? = null
 )
 
-/**
- * CallManager - Manages phone calls and contact lookups.
- *
- * Features:
- * - Contact lookup by name
- * - Make calls
- * - Call history
- * - Contact search
- */
 @Singleton
 class CallManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    /**
-     * Make a phone call
-     */
     fun makeCall(contactName: String): ActionResult {
         val contact = findContact(contactName)
             ?: return ActionResult.error("make_call", "Contact not found: $contactName", "Contact not found")
@@ -48,7 +33,6 @@ class CallManager @Inject constructor(
             context.startActivity(intent)
             ActionResult.success("make_call", "Calling ${contact.name}")
         } catch (e: Exception) {
-            // Try with DIAL instead of CALL (doesn't require CALL_PHONE permission)
             try {
                 val intent = Intent(Intent.ACTION_DIAL).apply {
                     data = Uri.parse("tel:${contact.phoneNumber}")
@@ -62,9 +46,6 @@ class CallManager @Inject constructor(
         }
     }
 
-    /**
-     * Make a call to a phone number directly
-     */
     fun callNumber(number: String): ActionResult {
         return try {
             val intent = Intent(Intent.ACTION_DIAL).apply {
@@ -78,25 +59,17 @@ class CallManager @Inject constructor(
         }
     }
 
-    /**
-     * Find contact by name (fuzzy matching)
-     */
     fun findContact(name: String): Contact? {
-        val contacts = searchContacts(name)
-        return contacts.firstOrNull()
+        return searchContacts(name).firstOrNull()
     }
 
-    /**
-     * Search contacts
-     */
     fun searchContacts(query: String): List<Contact> {
         val contacts = mutableListOf<Contact>()
 
         val projection = arrayOf(
             ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-            ContactsContract.CommonDataKinds.Phone.NUMBER,
-            ContactsContract.CommonDataKinds.Phone.EMAIL
+            ContactsContract.CommonDataKinds.Phone.NUMBER
         )
 
         val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
@@ -117,7 +90,6 @@ class CallManager @Inject constructor(
                 val id = cursor.getLong(idCol)
                 val name = cursor.getString(nameCol) ?: ""
                 val number = cursor.getString(numberCol) ?: ""
-
                 if (number.isNotBlank()) {
                     contacts.add(Contact(id = id, name = name, phoneNumber = number))
                 }
@@ -127,9 +99,6 @@ class CallManager @Inject constructor(
         return contacts.distinctBy { it.phoneNumber }
     }
 
-    /**
-     * Get call history
-     */
     fun getCallHistory(limit: Int = 10): List<CallLogEntry> {
         val calls = mutableListOf<CallLogEntry>()
 
@@ -176,9 +145,6 @@ class CallManager @Inject constructor(
     }
 }
 
-/**
- * Call log entry
- */
 data class CallLogEntry(
     val name: String,
     val number: String,
