@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.vasu.assistant.ui.chat.ChatScreen
+import com.vasu.assistant.ui.guardian.GuardianScreen
 import com.vasu.assistant.ui.home.HomeScreen
 import com.vasu.assistant.ui.settings.SettingsScreen
 import com.vasu.assistant.ui.voice.VoiceScreen
@@ -50,6 +51,14 @@ fun VasuNavGraph(
 
         composable(Screen.Settings.route) {
             SettingsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.Guardian.route) {
+            GuardianScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }
