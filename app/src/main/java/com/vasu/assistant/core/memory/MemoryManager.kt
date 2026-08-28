@@ -27,13 +27,13 @@ class MemoryManager @Inject constructor(
         // Handle explicit memory commands
         when {
             input.lowercase().startsWith("remember that") || input.lowercase().startsWith("yaad rakh") -> {
-                val fact = input.substringAfter("that").substringAfter("rakh").trim()
+                val fact = input.lowercase().substringAfter("that").substringAfter("rakh").trim()
                 if (fact.isNotBlank()) {
                     userMemory.remember("fact_${System.currentTimeMillis()}", fact)
                 }
             }
             input.lowercase().startsWith("forget that") || input.lowercase().startsWith("bhool jao") -> {
-                val key = input.substringAfter("that").substringAfter("jao").trim()
+                val key = input.lowercase().substringAfter("that").substringAfter("jao").trim()
                 if (key.isNotBlank()) {
                     userMemory.forget(key)
                 }

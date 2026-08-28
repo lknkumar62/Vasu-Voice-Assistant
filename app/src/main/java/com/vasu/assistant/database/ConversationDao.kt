@@ -28,7 +28,7 @@ interface ConversationDao {
     @Query("SELECT * FROM conversation_messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
     fun getMessages(conversationId: String): Flow<List<ConversationMessageEntity>>
 
-    @Query("SELECT * FROM conversation_messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT :limit")
+    @Query("SELECT * FROM (SELECT * FROM conversation_messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT :limit) ORDER BY timestamp ASC")
     suspend fun getRecentMessages(conversationId: String, limit: Int = 20): List<ConversationMessageEntity>
 
     @Query("DELETE FROM conversation_messages WHERE conversationId = :conversationId")
