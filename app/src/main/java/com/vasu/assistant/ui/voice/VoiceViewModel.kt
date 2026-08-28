@@ -1,4 +1,4 @@
-package com.vasu.assistant.ui.home
+package com.vasu.assistant.ui.voice
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,40 +11,26 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class HomeUiState(
+data class VoiceUiState(
     val isListening: Boolean = false,
     val isSpeaking: Boolean = false,
-    val isThinking: Boolean = false,
-    val lastMessage: String = "Hello! I am VASU. How can I help you?",
-    val currentTranscript: String = "",
+    val transcript: String = "",
+    val lastResponse: String = "",
     val sttState: STTState = STTState.IDLE,
-    val ttsState: TTSState = TTSState.IDLE,
-    val quickActions: List<QuickAction> = listOf(
-        QuickAction("💬", "Chat", "chat"),
-        QuickAction("🎤", "Voice", "voice"),
-        QuickAction("🛡️", "Guardian", "guardian"),
-        QuickAction("⚙️", "Settings", "settings")
-    )
-)
-
-data class QuickAction(
-    val icon: String,
-    val label: String,
-    val action: String
+    val ttsState: TTSState = TTSState.IDLE
 )
 
 @HiltViewModel
-class HomeViewModel @Inject constructor(
+class VoiceViewModel @Inject constructor(
     private val sttManager: STTManager,
     private val ttsManager: TTSManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(VoiceUiState())
+    val uiState: StateFlow<VoiceUiState> = _uiState.asStateFlow()
 
     init {
         // Initialize TTS
@@ -70,18 +56,18 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect partial STT results
+        // Collect partial results
         viewModelScope.launch {
             sttManager.partialResults.collect { transcript ->
-                _uiState.value = _uiState.value.copy(currentTranscript = transcript)
+                _uiState.value = _uiState.value.copy(transcript = transcript)
             }
         }
 
-        // Collect final STT results
+        // Collect final results
         viewModelScope.launch {
             sttManager.results.collect { result ->
                 if (result.isFinal) {
-                    _uiState.value = _uiState.value.copy(currentTranscript = "")
+                    _uiState.value = _uiState.value.copy(transcript = "")
                     processVoiceCommand(result.text)
                 }
             }
@@ -91,7 +77,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             sttManager.errors.collect { error ->
                 _uiState.value = _uiState.value.copy(
-                    lastMessage = "Error: $error",
+                    lastResponse = "Error: $error",
                     isListening = false
                 )
             }
@@ -106,56 +92,22 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun setThinking(thinking: Boolean) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isThinking = thinking,
-                isListening = false
-            )
-        }
-    }
-
-    fun setSpeaking(speaking: Boolean) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isSpeaking = speaking,
-                isThinking = false,
-                isListening = false
-            )
-        }
-    }
-
-    fun updateMessage(message: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(lastMessage = message)
-        }
-    }
-
-    fun speakResponse(text: String) {
-        ttsManager.speakQueued(text)
-    }
-
     fun stopSpeaking() {
         ttsManager.stop()
     }
 
-    /**
-     * Process voice command - Phase 6 will handle AI orchestration
-     */
     private fun processVoiceCommand(command: String) {
         viewModelScope.launch {
-            setThinking(true)
-            updateMessage("Processing: \"$command\"")
+            _uiState.value = _uiState.value.copy(lastResponse = "Processing: \"$command\"")
 
-            // Simulate processing (Phase 6: AI Orchestrator will replace this)
+            // Simulate processing (Phase 6: AI Orchestrator)
             kotlinx.coroutines.delay(1500)
 
-            val response = "I heard: \"$command\"\n\nAI engine will be connected in Phase 6. Stay tuned!"
-            updateMessage(response)
-            setThinking(false)
+            val response = "I heard: \"$command\"\n\nAI engine will be connected in Phase 6."
+            _uiState.value = _uiState.value.copy(lastResponse = response)
 
-            // Speak the response
-            speakResponse(response)
+            // Speak response
+            ttsManager.speakQueued(response)
         }
     }
 

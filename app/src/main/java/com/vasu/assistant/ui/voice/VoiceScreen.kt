@@ -15,20 +15,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.vasu.assistant.core.stt.STTState
+import com.vasu.assistant.core.tts.TTSState
 import com.vasu.assistant.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceScreen(
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    viewModel: VoiceViewModel = hiltViewModel()
 ) {
-    var isListening by remember { mutableStateOf(false) }
-    var lastTranscript by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -49,6 +51,18 @@ fun VoiceScreen(
                         )
                     }
                 },
+                actions = {
+                    // Stop button if speaking
+                    if (uiState.isSpeaking) {
+                        IconButton(onClick = viewModel::stopSpeaking) {
+                            Icon(
+                                imageVector = Icons.Default.Stop,
+                                contentDescription = "Stop Speaking",
+                                tint = VasuError
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = VasuDarkBg
                 )
@@ -65,14 +79,27 @@ fun VoiceScreen(
             verticalArrangement = Arrangement.Center
         ) {
             // Waveform visualization
-            WaveformVisualizer(isListening = isListening)
+            WaveformVisualizer(
+                isListening = uiState.isListening,
+                rmsLevel = 0f // Phase 2: Will add RMS level
+            )
 
             Spacer(modifier = Modifier.height(48.dp))
 
             // Status
             Text(
-                text = if (isListening) "Listening..." else "Tap to start",
-                color = if (isListening) VasuCyan else VasuTextSecondary,
+                text = when {
+                    uiState.isListening -> "Listening..."
+                    uiState.isSpeaking -> "Speaking..."
+                    uiState.sttState == STTState.PROCESSING -> "Processing..."
+                    else -> "Tap to start"
+                },
+                color = when {
+                    uiState.isListening -> VasuCyan
+                    uiState.isSpeaking -> VasuPurple
+                    uiState.sttState == STTState.PROCESSING -> VasuWarning
+                    else -> VasuTextSecondary
+                },
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -87,31 +114,61 @@ fun VoiceScreen(
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text(
-                    text = lastTranscript.ifEmpty { "Your words will appear here..." },
+                Column(
                     modifier = Modifier.padding(20.dp),
-                    color = if (lastTranscript.isNotEmpty()) VasuTextPrimary else VasuTextMuted,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center
-                )
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Partial transcript (real-time)
+                    if (uiState.transcript.isNotEmpty()) {
+                        Text(
+                            text = uiState.transcript,
+                            color = VasuCyan,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        Text(
+                            text = "Your words will appear here...",
+                            color = VasuTextMuted,
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    // Last response
+                    if (uiState.lastResponse.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = VasuDarkCard)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = uiState.lastResponse,
+                            color = VasuTextPrimary,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(48.dp))
 
             // Mic Button
             VoiceMicButton(
-                isListening = isListening,
-                onClick = {
-                    isListening = !isListening
-                    // Phase 2: STT will handle actual recording
-                }
+                isListening = uiState.isListening,
+                isSpeaking = uiState.isSpeaking,
+                onClick = { viewModel.toggleListening() }
             )
         }
     }
 }
 
 @Composable
-fun WaveformVisualizer(isListening: Boolean) {
+fun WaveformVisualizer(
+    isListening: Boolean,
+    rmsLevel: Float = 0f
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
 
     Row(
@@ -138,7 +195,12 @@ fun WaveformVisualizer(isListening: Boolean) {
                     .width(3.dp)
                     .height(height.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (isListening) VasuCyan else VasuTextMuted.copy(alpha = 0.3f))
+                    .background(
+                        when {
+                            isListening -> VasuCyan
+                            else -> VasuTextMuted.copy(alpha = 0.3f)
+                        }
+                    )
             )
         }
     }
@@ -147,12 +209,13 @@ fun WaveformVisualizer(isListening: Boolean) {
 @Composable
 fun VoiceMicButton(
     isListening: Boolean,
+    isSpeaking: Boolean,
     onClick: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isListening) 1.3f else 1f,
+        targetValue = if (isListening || isSpeaking) 1.3f else 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(800),
             repeatMode = RepeatMode.Reverse
@@ -160,21 +223,27 @@ fun VoiceMicButton(
         label = "pulse"
     )
 
+    val buttonColor = when {
+        isListening -> VasuError
+        isSpeaking -> VasuPurple
+        else -> VasuCyan
+    }
+
     Box(contentAlignment = Alignment.Center) {
-        if (isListening) {
+        if (isListening || isSpeaking) {
             Box(
                 modifier = Modifier
                     .size(120.dp)
                     .scale(pulse)
                     .clip(CircleShape)
-                    .background(VasuCyan.copy(alpha = 0.15f))
+                    .background(buttonColor.copy(alpha = 0.15f))
             )
         }
 
         FloatingActionButton(
             onClick = onClick,
             modifier = Modifier.size(88.dp),
-            containerColor = if (isListening) VasuError else VasuCyan,
+            containerColor = buttonColor,
             contentColor = VasuDarkBg,
             shape = CircleShape
         ) {

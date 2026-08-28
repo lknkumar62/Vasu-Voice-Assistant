@@ -2,6 +2,10 @@ package com.vasu.assistant.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vasu.assistant.core.stt.STTManager
+import com.vasu.assistant.core.stt.STTState
+import com.vasu.assistant.core.tts.TTSManager
+import com.vasu.assistant.core.tts.VoiceProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,16 +27,23 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
     val isLoading: Boolean = false,
-    val isListening: Boolean = false
+    val isListening: Boolean = false,
+    val partialTranscript: String = ""
 )
 
 @HiltViewModel
-class ChatViewModel @Inject constructor() : ViewModel() {
+class ChatViewModel @Inject constructor(
+    private val sttManager: STTManager,
+    private val ttsManager: TTSManager
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
+        // Initialize TTS
+        ttsManager.initialize(VoiceProfile.VASU_DEFAULT)
+
         // Welcome message
         addMessage(
             ChatMessage(
@@ -40,6 +51,45 @@ class ChatViewModel @Inject constructor() : ViewModel() {
                 isUser = false
             )
         )
+
+        // Collect STT state
+        viewModelScope.launch {
+            sttManager.state.collect { sttState ->
+                _uiState.value = _uiState.value.copy(
+                    isListening = sttState == STTState.LISTENING
+                )
+            }
+        }
+
+        // Collect partial results
+        viewModelScope.launch {
+            sttManager.partialResults.collect { transcript ->
+                _uiState.value = _uiState.value.copy(partialTranscript = transcript)
+            }
+        }
+
+        // Collect final results
+        viewModelScope.launch {
+            sttManager.results.collect { result ->
+                if (result.isFinal) {
+                    _uiState.value = _uiState.value.copy(partialTranscript = "")
+                    updateInput(result.text)
+                    sendMessage()
+                }
+            }
+        }
+
+        // Collect STT errors
+        viewModelScope.launch {
+            sttManager.errors.collect { error ->
+                addMessage(
+                    ChatMessage(
+                        content = "Voice error: $error",
+                        isUser = false
+                    )
+                )
+            }
+        }
     }
 
     fun updateInput(text: String) {
@@ -56,25 +106,41 @@ class ChatViewModel @Inject constructor() : ViewModel() {
         // Phase 6: AI Orchestrator will handle this
         viewModelScope.launch {
             kotlinx.coroutines.delay(1000)
+            val response = "I received your message: \"$text\"\n\nAI engine will be connected in Phase 6. Stay tuned!"
             addMessage(
                 ChatMessage(
-                    content = "I received your message: \"$text\"\n\nAI engine will be connected in Phase 6. Stay tuned!",
+                    content = response,
                     isUser = false
                 )
             )
             _uiState.value = _uiState.value.copy(isLoading = false)
+
+            // Speak response
+            ttsManager.speakQueued(response)
         }
     }
 
     fun toggleListening() {
-        _uiState.value = _uiState.value.copy(
-            isListening = !_uiState.value.isListening
-        )
+        if (_uiState.value.isListening) {
+            sttManager.stopListening()
+        } else {
+            sttManager.startListening()
+        }
+    }
+
+    fun stopSpeaking() {
+        ttsManager.stop()
     }
 
     private fun addMessage(message: ChatMessage) {
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + message
         )
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        sttManager.stopListening()
+        ttsManager.stop()
     }
 }

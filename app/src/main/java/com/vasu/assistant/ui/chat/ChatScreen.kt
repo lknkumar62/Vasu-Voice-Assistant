@@ -92,6 +92,26 @@ fun ChatScreen(
                 }
             }
 
+            // Partial transcript indicator
+            if (uiState.partialTranscript.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = VasuCyan.copy(alpha = 0.1f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "🎤 ${uiState.partialTranscript}",
+                        modifier = Modifier.padding(12.dp),
+                        color = VasuCyan,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
             // Input Bar
             ChatInputBar(
                 inputText = uiState.inputText,
