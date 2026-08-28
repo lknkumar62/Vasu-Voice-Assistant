@@ -86,7 +86,7 @@ class ScreenInteractionManager(
     fun isAppInForeground(packageName: String): Boolean {
         return try {
             val rootNode = service.rootInActiveWindow
-            val nodeInfo = nodeFinder.findByViewId(root, "android:id/content")
+            val nodeInfo = nodeFinder.findByViewId(rootNode, "android:id/content")
             nodeInfo?.packageName?.toString() == packageName
         } catch (e: Exception) {
             false

@@ -16,13 +16,13 @@ class AccessibilityNodeFinder {
     fun findByText(root: AccessibilityNodeInfo?, text: String, exact: Boolean = false): AccessibilityNodeInfo? {
         if (root == null) return null
 
-        val nodes = if (exact) {
-            root.findAccessibilityNodeInfosByText(text)
-        } else {
-            root.findAccessibilityNodeInfosByText(text)
-        }
+        val nodes = root.findAccessibilityNodeInfosByText(text)
 
-        return nodes?.firstOrNull()
+        return if (exact) {
+            nodes?.firstOrNull { it.text?.toString() == text }
+        } else {
+            nodes?.firstOrNull()
+        }
     }
 
     /**
