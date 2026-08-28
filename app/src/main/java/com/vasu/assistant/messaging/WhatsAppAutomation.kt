@@ -16,7 +16,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class WhatsAppAutomation @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val contactManager: ContactManager
 ) {
     private val packageName = "com.whatsapp"
 
@@ -24,15 +25,22 @@ class WhatsAppAutomation @Inject constructor(
      * Send a WhatsApp message to a contact
      */
     fun sendMessage(contactName: String, message: String): ActionResult {
+        val contact = contactManager.findBestMatch(contactName)
+            ?: return ActionResult.error("whatsapp_send", "Contact not found: $contactName", "Contact not found")
+
         return try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                val url = "https://wa.me/send?phone=&text=${Uri.encode(message)}"
+                val url = if (message.isNotBlank()) {
+                    "https://wa.me/${contact.phoneNumber}?text=${Uri.encode(message)}"
+                } else {
+                    "https://wa.me/${contact.phoneNumber}"
+                }
                 data = Uri.parse(url)
                 setPackage(packageName)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-            ActionResult.success("whatsapp_send", "Opening WhatsApp to send message")
+            ActionResult.success("whatsapp_send", "Opening WhatsApp to send message to ${contact.name}")
         } catch (e: Exception) {
             // Fallback: open WhatsApp
             openWhatsApp()

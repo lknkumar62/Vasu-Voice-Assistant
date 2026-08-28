@@ -3,7 +3,6 @@ package com.vasu.assistant.messaging
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.ContactsContract
 import android.provider.Telephony
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.vasu.assistant.core.automation.ActionResult
@@ -31,7 +30,8 @@ data class Message(
  */
 @Singleton
 class MessagingManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val contactManager: ContactManager
 ) {
     /**
      * Send an SMS message
@@ -138,42 +138,7 @@ class MessagingManager @Inject constructor(
     /**
      * Find contact for messaging
      */
-    private fun findContactForMessaging(name: String): Contact? {
-        val contacts = mutableListOf<Contact>()
-
-        val projection = arrayOf(
-            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
-            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-            ContactsContract.CommonDataKinds.Phone.NUMBER
-        )
-
-        val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
-        val selectionArgs = arrayOf("%$name%")
-
-        context.contentResolver.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            projection,
-            selection,
-            selectionArgs,
-            null
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
-            val nameCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-            val numberCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol)
-                val contactName = cursor.getString(nameCol) ?: ""
-                val number = cursor.getString(numberCol) ?: ""
-
-                if (number.isNotBlank()) {
-                    contacts.add(Contact(id = id, name = contactName, phoneNumber = number))
-                }
-            }
-        }
-
-        return contacts.firstOrNull()
+    private fun findContactForMessaging(name: String): ContactInfo? {
+        return contactManager.findBestMatch(name)
     }
 }
-
-data class Contact(val id: Long, val name: String, val phoneNumber: String)
