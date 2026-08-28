@@ -69,6 +69,9 @@ class WakeWordDetector @Inject constructor(
     private val silenceThreshold = 500 // 500ms of silence
     private val speechThreshold = 500 // Minimum speech duration
 
+    // Cooldown tracking
+    private var lastDetectionTime = 0L
+
     /**
      * Initialize the wake word detector
      */
@@ -127,6 +130,11 @@ class WakeWordDetector @Inject constructor(
         if (isRunning) return
         if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
             initialize()
+        }
+
+        // Bail out if initialization failed (permission denied, model not available, etc.)
+        if (_state.value == WakeWordState.ERROR || _state.value == WakeWordState.MODEL_NOT_AVAILABLE) {
+            return
         }
 
         isRunning = true
@@ -258,6 +266,10 @@ class WakeWordDetector @Inject constructor(
     private fun processBuffer() {
         if (!isModelLoaded || model == null || melSpectrogram == null) return
 
+        // Skip processing during cooldown period
+        val now = System.currentTimeMillis()
+        if (now - lastDetectionTime < config.cooldownMs) return
+
         // Extract mel spectrogram features
         val features = melSpectrogram?.extractForWakeWord(detectionBuffer)
 
@@ -266,14 +278,12 @@ class WakeWordDetector @Inject constructor(
             val detected = model?.detect(features) ?: false
 
             if (detected) {
+                lastDetectionTime = now
                 _state.value = WakeWordState.DETECTED
                 _detections.tryEmit("Hello Vasu")
 
-                // Reset after detection
+                // Reset to listening after detection (non-blocking)
                 _state.value = WakeWordState.LISTENING
-
-                // Cooldown period
-                Thread.sleep(config.cooldownMs)
             }
         }
     }

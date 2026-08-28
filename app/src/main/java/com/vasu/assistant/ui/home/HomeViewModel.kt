@@ -197,6 +197,6 @@ class HomeViewModel @Inject constructor(
         super.onCleared()
         sttManager.stopListening()
         ttsManager.stop()
-        wakeWordDetector.stop()
+        wakeWordDetector.destroy()
     }
 }
