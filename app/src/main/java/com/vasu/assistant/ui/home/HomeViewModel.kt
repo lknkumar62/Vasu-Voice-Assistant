@@ -2,6 +2,7 @@ package com.vasu.assistant.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vasu.assistant.core.ai.AIOrchestrator
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.stt.STTState
 import com.vasu.assistant.core.tts.TTSManager
@@ -44,20 +45,17 @@ data class QuickAction(
 class HomeViewModel @Inject constructor(
     private val sttManager: STTManager,
     private val ttsManager: TTSManager,
-    private val wakeWordDetector: WakeWordDetector
+    private val wakeWordDetector: WakeWordDetector,
+    private val aiOrchestrator: AIOrchestrator
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
-        // Initialize TTS
         ttsManager.initialize(VoiceProfile.VASU_DEFAULT)
-
-        // Initialize wake word detector
         wakeWordDetector.initialize()
 
-        // Collect STT state
         viewModelScope.launch {
             sttManager.state.collect { sttState ->
                 _uiState.value = _uiState.value.copy(
@@ -67,7 +65,6 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect TTS state
         viewModelScope.launch {
             ttsManager.state.collect { ttsState ->
                 _uiState.value = _uiState.value.copy(
@@ -77,7 +74,6 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect wake word state
         viewModelScope.launch {
             wakeWordDetector.state.collect { wakeWordState ->
                 _uiState.value = _uiState.value.copy(
@@ -88,14 +84,12 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect partial STT results
         viewModelScope.launch {
             sttManager.partialResults.collect { transcript ->
                 _uiState.value = _uiState.value.copy(currentTranscript = transcript)
             }
         }
 
-        // Collect final STT results
         viewModelScope.launch {
             sttManager.results.collect { result ->
                 if (result.isFinal) {
@@ -105,7 +99,6 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect STT errors
         viewModelScope.launch {
             sttManager.errors.collect { error ->
                 _uiState.value = _uiState.value.copy(
@@ -115,10 +108,8 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect wake word detections
         viewModelScope.launch {
-            wakeWordDetector.detections.collect { wakePhrase ->
-                // Wake word detected! Start listening for command
+            wakeWordDetector.detections.collect {
                 sttManager.startListening()
             }
         }
@@ -174,21 +165,16 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Process voice command - Phase 6 will handle AI orchestration
+     * Process voice command using AI Orchestrator
      */
     private fun processVoiceCommand(command: String) {
         viewModelScope.launch {
             setThinking(true)
             updateMessage("Processing: \"$command\"")
 
-            // Simulate processing (Phase 6: AI Orchestrator will replace this)
-            kotlinx.coroutines.delay(1500)
-
-            val response = "I heard: \"$command\"\n\nAI engine will be connected in Phase 6. Stay tuned!"
+            val response = aiOrchestrator.processInput(command)
             updateMessage(response)
             setThinking(false)
-
-            // Speak the response
             speakResponse(response)
         }
     }
