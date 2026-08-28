@@ -22,6 +22,11 @@ class MelSpectrogram(
         return 700f * (10f.pow(mel / 2595f) - 1f)
     }
 
+    fun extractForWakeWord(audioData: FloatArray): FloatArray {
+        val spectrogram = computeMelSpectrogram(audioData)
+        return spectrogram.flatMap { it.toList() }.toFloatArray()
+    }
+
     fun computeMelSpectrogram(audioData: FloatArray): Array<FloatArray> {
         val numFrames = (audioData.size - fftSize) / (fftSize / 2) + 1
         val melSpectrogram = Array(numFrames.coerceAtLeast(1)) { FloatArray(numMelBands) }
@@ -72,7 +77,7 @@ class MelSpectrogram(
         }
 
         val binPoints = FloatArray(hzPoints.size) { i ->
-            (hzPoints[i] / (sampleRate / 2.0f) * (numFFTBins - 1)).toInt().coerceIn(0, numFFTBins - 1)
+            (hzPoints[i] / (sampleRate / 2.0f) * (numFFTBins - 1)).toInt().coerceIn(0, numFFTBins - 1).toFloat()
         }
 
         for (m in 0 until numMelBands) {

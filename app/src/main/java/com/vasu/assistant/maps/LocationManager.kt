@@ -44,7 +44,7 @@ class VasuLocationManager @Inject constructor(
             val latch = CountDownLatch(1)
             var result: ActionResult = ActionResult.error("location", "Location request timed out", "Timeout")
             val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L).setMaxUpdates(1).build()
-            fusedClient.requestLocationUpdate(request, object : LocationCallback() {
+            fusedClient.requestLocationUpdates(request, object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
                     val location = locationResult.lastLocation
                     if (location != null) {

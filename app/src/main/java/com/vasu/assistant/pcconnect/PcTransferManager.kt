@@ -47,7 +47,7 @@ class PcTransferManager @Inject constructor(
     fun sendFile(filePath: String, host: String, port: Int = 8765): ActionResult {
         return try {
             val file = File(filePath)
-            if (!file.exists()) return ActionResult.error("send", "File not found: $filePath")
+            if (!file.exists()) return ActionResult.error("send", "File not found: $filePath", "File does not exist at path")
 
             val socket = Socket(host, port)
             val outputStream = socket.getOutputStream()
