@@ -16,6 +16,8 @@ import com.google.android.gms.location.Priority
 import com.vasu.assistant.core.automation.ActionResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,7 +41,8 @@ class VasuLocationManager @Inject constructor(
     fun getCurrentLocation(): ActionResult {
         if (!hasPermission()) return ActionResult.error("location", "Location permission not granted", "No location permission")
         return try {
-            var result: ActionResult = ActionResult.error("location", "Getting location...", "In progress")
+            val latch = CountDownLatch(1)
+            var result: ActionResult = ActionResult.error("location", "Location request timed out", "Timeout")
             val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L).setMaxUpdates(1).build()
             fusedClient.requestLocationUpdate(request, object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
@@ -54,9 +57,10 @@ class VasuLocationManager @Inject constructor(
                     } else {
                         result = ActionResult.error("location", "Could not get location", "Location is null")
                     }
+                    latch.countDown()
                 }
             }, Looper.getMainLooper())
-            Thread.sleep(5000)
+            latch.await(8, TimeUnit.SECONDS)
             result
         } catch (e: Exception) {
             ActionResult.error("location", "Failed to get location", e.message ?: "Unknown")
