@@ -11,6 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.HearingDisabled
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.vasu.assistant.core.wakeword.WakeWordState
 import com.vasu.assistant.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,7 +84,8 @@ fun HomeScreen(
                 VasuAvatarCircle(
                     isListening = uiState.isListening,
                     isSpeaking = uiState.isSpeaking,
-                    isThinking = uiState.isThinking
+                    isThinking = uiState.isThinking,
+                    isWakeWordActive = uiState.isWakeWordActive
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -92,12 +96,16 @@ fun HomeScreen(
                         uiState.isListening -> "Listening..."
                         uiState.isThinking -> "Thinking..."
                         uiState.isSpeaking -> "Speaking..."
+                        uiState.wakeWordState == WakeWordState.LISTENING -> "Wake word active - Say 'Hello Vasu'"
+                        uiState.wakeWordState == WakeWordState.DETECTED -> "Wake word detected!"
                         else -> "Ready"
                     },
                     color = when {
                         uiState.isListening -> VasuCyan
                         uiState.isThinking -> VasuWarning
                         uiState.isSpeaking -> VasuPurple
+                        uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
+                        uiState.wakeWordState == WakeWordState.DETECTED -> VasuGreen
                         else -> VasuTextMuted
                     },
                     fontSize = 16.sp,
@@ -122,6 +130,58 @@ fun HomeScreen(
                         textAlign = TextAlign.Center,
                         lineHeight = 26.sp
                     )
+                }
+
+                // Wake Word Toggle
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.toggleWakeWord() },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.1f) else VasuDarkCard
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (uiState.isWakeWordActive) Icons.Default.Hearing else Icons.Default.HearingDisabled,
+                                contentDescription = "Wake Word",
+                                tint = if (uiState.isWakeWordActive) VasuGreen else VasuTextSecondary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Wake Word",
+                                    color = VasuTextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = if (uiState.isWakeWordActive) '"Hello Vasu" active' else "Tap to enable",
+                                    color = VasuTextMuted,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = uiState.isWakeWordActive,
+                            onCheckedChange = { viewModel.toggleWakeWord() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = VasuDarkBg,
+                                checkedTrackColor = VasuGreen,
+                                uncheckedThumbColor = VasuTextMuted,
+                                uncheckedTrackColor = VasuDarkSurface
+                            )
+                        )
+                    }
                 }
             }
 
@@ -165,13 +225,14 @@ fun HomeScreen(
 fun VasuAvatarCircle(
     isListening: Boolean,
     isSpeaking: Boolean,
-    isThinking: Boolean
+    isThinking: Boolean,
+    isWakeWordActive: Boolean = false
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "avatar")
 
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isListening || isSpeaking) 1.05f else 1f,
+        targetValue = if (isListening || isSpeaking || isWakeWordActive) 1.05f else 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000, easing = EaseInOutSine),
             repeatMode = RepeatMode.Reverse
@@ -184,6 +245,7 @@ fun VasuAvatarCircle(
             isListening -> VasuCyan
             isSpeaking -> VasuPurple
             isThinking -> VasuWarning
+            isWakeWordActive -> VasuGreen
             else -> VasuDarkCard
         },
         animationSpec = tween(500),
@@ -200,7 +262,7 @@ fun VasuAvatarCircle(
                 .size(200.dp)
                 .scale(scale)
                 .shadow(
-                    elevation = if (isListening || isSpeaking) 32.dp else 8.dp,
+                    elevation = if (isListening || isSpeaking || isWakeWordActive) 32.dp else 8.dp,
                     shape = CircleShape,
                     ambientColor = glowColor,
                     spotColor = glowColor
@@ -225,6 +287,7 @@ fun VasuAvatarCircle(
                     isListening -> VasuCyan
                     isSpeaking -> VasuPurple
                     isThinking -> VasuWarning
+                    isWakeWordActive -> VasuGreen
                     else -> VasuTextSecondary
                 }
             )

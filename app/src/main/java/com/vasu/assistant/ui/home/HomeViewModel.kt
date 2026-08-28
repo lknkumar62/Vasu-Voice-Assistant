@@ -7,11 +7,12 @@ import com.vasu.assistant.core.stt.STTState
 import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.tts.TTSState
 import com.vasu.assistant.core.tts.VoiceProfile
+import com.vasu.assistant.core.wakeword.WakeWordDetector
+import com.vasu.assistant.core.wakeword.WakeWordState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -19,10 +20,12 @@ data class HomeUiState(
     val isListening: Boolean = false,
     val isSpeaking: Boolean = false,
     val isThinking: Boolean = false,
+    val isWakeWordActive: Boolean = false,
     val lastMessage: String = "Hello! I am VASU. How can I help you?",
     val currentTranscript: String = "",
     val sttState: STTState = STTState.IDLE,
     val ttsState: TTSState = TTSState.IDLE,
+    val wakeWordState: WakeWordState = WakeWordState.IDLE,
     val quickActions: List<QuickAction> = listOf(
         QuickAction("💬", "Chat", "chat"),
         QuickAction("🎤", "Voice", "voice"),
@@ -40,7 +43,8 @@ data class QuickAction(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val sttManager: STTManager,
-    private val ttsManager: TTSManager
+    private val ttsManager: TTSManager,
+    private val wakeWordDetector: WakeWordDetector
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -49,6 +53,9 @@ class HomeViewModel @Inject constructor(
     init {
         // Initialize TTS
         ttsManager.initialize(VoiceProfile.VASU_DEFAULT)
+
+        // Initialize wake word detector
+        wakeWordDetector.initialize()
 
         // Collect STT state
         viewModelScope.launch {
@@ -66,6 +73,17 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isSpeaking = ttsState == TTSState.SPEAKING,
                     ttsState = ttsState
+                )
+            }
+        }
+
+        // Collect wake word state
+        viewModelScope.launch {
+            wakeWordDetector.state.collect { wakeWordState ->
+                _uiState.value = _uiState.value.copy(
+                    wakeWordState = wakeWordState,
+                    isWakeWordActive = wakeWordState == WakeWordState.LISTENING ||
+                            wakeWordState == WakeWordState.DETECTED
                 )
             }
         }
@@ -96,6 +114,14 @@ class HomeViewModel @Inject constructor(
                 )
             }
         }
+
+        // Collect wake word detections
+        viewModelScope.launch {
+            wakeWordDetector.detections.collect { wakePhrase ->
+                // Wake word detected! Start listening for command
+                sttManager.startListening()
+            }
+        }
     }
 
     fun toggleListening() {
@@ -103,6 +129,14 @@ class HomeViewModel @Inject constructor(
             sttManager.stopListening()
         } else {
             sttManager.startListening()
+        }
+    }
+
+    fun toggleWakeWord() {
+        if (_uiState.value.isWakeWordActive) {
+            wakeWordDetector.stop()
+        } else {
+            wakeWordDetector.start()
         }
     }
 
@@ -163,5 +197,6 @@ class HomeViewModel @Inject constructor(
         super.onCleared()
         sttManager.stopListening()
         ttsManager.stop()
+        wakeWordDetector.stop()
     }
 }
