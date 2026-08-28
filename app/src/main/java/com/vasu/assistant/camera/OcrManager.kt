@@ -22,7 +22,7 @@ class OcrManager @Inject constructor(
         return try {
             val image = InputImage.fromFilePath(context, imageUri)
             val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("ocr", "Processing...", "Timed out")
+            var result: ActionResult = ActionResult.error("ocr", "Processing...", "Timed out")
             recognizer.process(image)
                 .addOnSuccessListener { visionText ->
                     result = ActionResult.success(

@@ -22,7 +22,7 @@ class PhotoCapture @Inject constructor() {
 
         return try {
             val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("photo", "Capture timed out", "Timeout")
+            var result: ActionResult = ActionResult.error("photo", "Capture timed out", "Timeout")
             imageCapture.takePicture(
                 outputOptions,
                 java.util.concurrent.Executors.newSingleThreadExecutor(),

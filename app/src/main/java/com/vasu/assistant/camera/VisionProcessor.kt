@@ -24,7 +24,7 @@ class VisionProcessor @Inject constructor(
         return try {
             val image = InputImage.fromFilePath(context, imageUri)
             val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("vision", "Analysis timed out", "Timeout")
+            var result: ActionResult = ActionResult.error("vision", "Analysis timed out", "Timeout")
             labeler.process(image)
                 .addOnSuccessListener { labels ->
                     val detected = labels.map { label ->
@@ -48,7 +48,7 @@ class VisionProcessor @Inject constructor(
         return try {
             val image = InputImage.fromFilePath(context, imageUri)
             val latch = CountDownLatch(1)
-            @Volatile var result: ActionResult = ActionResult.error("qr", "Scan timed out", "Timeout")
+            var result: ActionResult = ActionResult.error("qr", "Scan timed out", "Timeout")
             barcodeScanner.process(image)
                 .addOnSuccessListener { barcodes ->
                     if (barcodes.isEmpty()) {

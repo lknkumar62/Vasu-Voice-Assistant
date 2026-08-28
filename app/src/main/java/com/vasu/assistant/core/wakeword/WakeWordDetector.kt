@@ -104,7 +104,6 @@ class WakeWordDetector @Inject constructor(
             melSpectrogram = MelSpectrogram(
                 sampleRate = sampleRate,
                 fftSize = 512,
-                hopSize = 160,
                 numMelBands = 40
             )
 
@@ -271,7 +270,10 @@ class WakeWordDetector @Inject constructor(
         if (now - lastDetectionTime < config.cooldownMs) return
 
         // Extract mel spectrogram features
-        val features = melSpectrogram?.extractForWakeWord(detectionBuffer)
+        val featuresRaw = melSpectrogram?.extractForWakeWord(detectionBuffer)
+        val features = featuresRaw?.let { raw ->
+            Array(98) { i -> FloatArray(40) { j -> raw.getOrElse(i * 40 + j) { 0f } } }
+        }
 
         if (features != null) {
             // Run inference
