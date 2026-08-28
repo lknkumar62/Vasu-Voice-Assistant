@@ -1,15 +1,31 @@
 package com.vasu.assistant.core.automation
 
 import com.vasu.assistant.accessibility.AccessibilityActions
+import com.vasu.assistant.accessibility.VasuAccessibilityService
 import com.vasu.assistant.core.ai.ToolRouter
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class TaskExecutor @Inject constructor(
-    private val toolRouter: ToolRouter,
-    private val accessibilityActions: AccessibilityActions
+    private val toolRouter: ToolRouter
 ) {
+    private fun getAccessibilityActions(): AccessibilityActions? {
+        val service = VasuAccessibilityService.instance.value ?: return null
+        return service.getInteractionManager().let {
+            // Access actions through the service
+            null
+        }
+        // Use the service directly
+    }
+
+    private fun withService(block: (VasuAccessibilityService) -> ActionResult): ActionResult {
+        val service = VasuAccessibilityService.instance.value
+            ?: return ActionResult.error("accessibility", "Accessibility service not running", "Service not connected")
+        return block(service)
+    }
+
     suspend fun executeStep(step: MissionStep): ActionResult {
         return when (step.action) {
             "open_app" -> {
@@ -19,36 +35,36 @@ class TaskExecutor @Inject constructor(
             }
             "click" -> {
                 val text = step.parameters["text"] as? String ?: ""
-                accessibilityActions.clickByText(text)
+                withService { it.clickElement(text) }
             }
             "type" -> {
                 val label = step.parameters["label"] as? String ?: ""
                 val text = step.parameters["text"] as? String ?: ""
-                accessibilityActions.typeTextByLabel(label, text)
+                withService { it.typeText(label, text) }
             }
             "read_screen" -> {
-                accessibilityActions.readScreen()
+                withService { it.readScreen() }
             }
             "scroll_down" -> {
-                accessibilityActions.scrollDown()
+                withService { it.scrollDown() }
             }
             "scroll_up" -> {
-                accessibilityActions.scrollUp()
+                withService { it.scrollUp() }
             }
             "back" -> {
-                accessibilityActions.pressBack()
+                withService { it.pressBack() }
             }
             "home" -> {
-                accessibilityActions.pressHome()
+                withService { it.pressHome() }
             }
             "wait" -> {
                 val ms = (step.parameters["duration"] as? Number)?.toLong() ?: 2000L
-                kotlinx.coroutines.delay(ms)
+                delay(ms)
                 ActionResult.success("wait", "Waited ${ms}ms")
             }
             "delay" -> {
                 val ms = (step.parameters["milliseconds"] as? Number)?.toLong() ?: 1000L
-                kotlinx.coroutines.delay(ms)
+                delay(ms)
                 ActionResult.success("delay", "Delayed ${ms}ms")
             }
             else -> {
