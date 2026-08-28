@@ -31,7 +31,11 @@ data class HomeUiState(
         QuickAction("💬", "Chat", "chat"),
         QuickAction("🎤", "Voice", "voice"),
         QuickAction("🛡️", "Guardian", "guardian"),
-        QuickAction("⚙️", "Settings", "settings")
+        QuickAction("⚙️", "Settings", "settings"),
+        QuickAction("🎯", "Missions", "missions"),
+        QuickAction("⚡", "Auto", "automation"),
+        QuickAction("🧠", "Memory", "memory"),
+        QuickAction("🔧", "Tools", "tools")
     )
 )
 
@@ -164,14 +168,10 @@ class HomeViewModel @Inject constructor(
         ttsManager.stop()
     }
 
-    /**
-     * Process voice command using AI Orchestrator
-     */
     private fun processVoiceCommand(command: String) {
         viewModelScope.launch {
             setThinking(true)
             updateMessage("Processing: \"$command\"")
-
             val response = aiOrchestrator.processInput(command)
             updateMessage(response)
             setThinking(false)

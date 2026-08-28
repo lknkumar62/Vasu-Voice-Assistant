@@ -1,0 +1,75 @@
+package com.vasu.assistant.camera
+
+import android.content.Context
+import android.net.Uri
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
+import com.vasu.assistant.core.automation.ActionResult
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class VisionProcessor @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private val labeler = ImageLabeling.getClient(ImageLabelerOptions.Builder().setConfidenceThreshold(0.5f).build())
+    private val barcodeScanner = BarcodeScanning.getClient()
+
+    fun analyzeImage(imageUri: Uri): ActionResult {
+        return try {
+            val image = InputImage.fromFilePath(context, imageUri)
+            var result: ActionResult = ActionResult.error("vision", "Processing...", "Pending")
+            labeler.process(image)
+                .addOnSuccessListener { labels ->
+                    val detected = labels.map { label ->
+                        mapOf("text" to label.text, "confidence" to label.confidence, "index" to label.index)
+                    }
+                    result = ActionResult.success(
+                        "vision",
+                        "Detected ${labels.size} labels",
+                        mapOf("labels" to detected)
+                    )
+                }
+                .addOnFailureListener { e ->
+                    result = ActionResult.error("vision", "Analysis failed", e.message ?: "Unknown")
+                }
+            Thread.sleep(3000)
+            result
+        } catch (e: Exception) {
+            ActionResult.error("vision", "Analysis failed", e.message ?: "Unknown")
+        }
+    }
+
+    fun scanQrCode(imageUri: Uri): ActionResult {
+        return try {
+            val image = InputImage.fromFilePath(context, imageUri)
+            var result: ActionResult = ActionResult.error("qr", "Scanning...", "Pending")
+            barcodeScanner.process(image)
+                .addOnSuccessListener { barcodes ->
+                    if (barcodes.isEmpty()) {
+                        result = ActionResult.error("qr", "No QR/barcode found")
+                    } else {
+                        val found = barcodes.map { barcode ->
+                            mapOf(
+                                "format" to barcode.format,
+                                "value" to (barcode.rawValue ?: "Unknown"),
+                                "type" to (barcode.valueType ?: 0)
+                            )
+                        }
+                        result = ActionResult.success("qr", "Found ${barcodes.size} barcodes", mapOf("barcodes" to found))
+                    }
+                }
+                .addOnFailureListener { e ->
+                    result = ActionResult.error("qr", "Scan failed", e.message ?: "Unknown")
+                }
+            Thread.sleep(3000)
+            result
+        } catch (e: Exception) {
+            ActionResult.error("qr", "QR scan failed", e.message ?: "Unknown")
+        }
+    }
+}

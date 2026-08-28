@@ -34,6 +34,13 @@ fun HomeScreen(
     onNavigateToChat: () -> Unit = {},
     onNavigateToVoice: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToGuardian: () -> Unit = {},
+    onNavigateToMissions: () -> Unit = {},
+    onNavigateToAutomation: () -> Unit = {},
+    onNavigateToMemory: () -> Unit = {},
+    onNavigateToTools: () -> Unit = {},
+    onNavigateToPermissions: () -> Unit = {},
+    onNavigateToPrivacy: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -72,7 +79,6 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // VASU Logo & Status
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -80,7 +86,6 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // VASU Avatar Circle
                 VasuAvatarCircle(
                     isListening = uiState.isListening,
                     isSpeaking = uiState.isSpeaking,
@@ -90,13 +95,12 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Status Text
                 Text(
                     text = when {
                         uiState.isListening -> "Listening..."
                         uiState.isThinking -> "Thinking..."
                         uiState.isSpeaking -> "Speaking..."
-                        uiState.wakeWordState == WakeWordState.LISTENING -> "Wake word active - Say 'Hello Vasu'"
+                        uiState.wakeWordState == WakeWordState.LISTENING -> "Say 'Hello Vasu'"
                         uiState.wakeWordState == WakeWordState.DETECTED -> "Wake word detected!"
                         else -> "Ready"
                     },
@@ -114,12 +118,9 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Last Message
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = VasuDarkCard
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
@@ -132,7 +133,6 @@ fun HomeScreen(
                     )
                 }
 
-                // Wake Word Toggle
                 Spacer(modifier = Modifier.height(16.dp))
                 Card(
                     modifier = Modifier
@@ -144,9 +144,7 @@ fun HomeScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -158,16 +156,10 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Text(
-                                    text = "Wake Word",
-                                    color = VasuTextPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Text("Wake Word", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 Text(
                                     text = if (uiState.isWakeWordActive) '"Hello Vasu" active' else "Tap to enable",
-                                    color = VasuTextMuted,
-                                    fontSize = 12.sp
+                                    color = VasuTextMuted, fontSize = 12.sp
                                 )
                             }
                         }
@@ -185,33 +177,42 @@ fun HomeScreen(
                 }
             }
 
-            // Quick Actions + Mic Button
             Column(
                 modifier = Modifier.padding(bottom = 48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Quick Actions Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 32.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    uiState.quickActions.forEach { action ->
-                        QuickActionButton(
-                            action = action,
-                            onClick = {
+                    // Row 1: Chat, Voice, Guardian, Settings
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        uiState.quickActions.take(4).forEach { action ->
+                            QuickActionButton(action = action, onClick = {
                                 when (action.action) {
                                     "chat" -> onNavigateToChat()
                                     "voice" -> onNavigateToVoice()
+                                    "guardian" -> onNavigateToGuardian()
                                     "settings" -> onNavigateToSettings()
                                 }
-                            }
-                        )
+                            })
+                        }
+                    }
+                    // Row 2: Missions, Automation, Memory, Tools
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        uiState.quickActions.drop(4).forEach { action ->
+                            QuickActionButton(action = action, onClick = {
+                                when (action.action) {
+                                    "missions" -> onNavigateToMissions()
+                                    "automation" -> onNavigateToAutomation()
+                                    "memory" -> onNavigateToMemory()
+                                    "tools" -> onNavigateToTools()
+                                }
+                            })
+                        }
                     }
                 }
 
-                // Main Mic Button
                 MicButton(
                     isListening = uiState.isListening,
                     onClick = { viewModel.toggleListening() }
@@ -229,7 +230,6 @@ fun VasuAvatarCircle(
     isWakeWordActive: Boolean = false
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "avatar")
-
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = if (isListening || isSpeaking || isWakeWordActive) 1.05f else 1f,
@@ -239,7 +239,6 @@ fun VasuAvatarCircle(
         ),
         label = "scale"
     )
-
     val glowColor by animateColorAsState(
         targetValue = when {
             isListening -> VasuCyan
@@ -252,42 +251,20 @@ fun VasuAvatarCircle(
         label = "glow"
     )
 
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(200.dp)
-    ) {
-        // Glow ring
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
         Box(
-            modifier = Modifier
-                .size(200.dp)
-                .scale(scale)
-                .shadow(
-                    elevation = if (isListening || isSpeaking || isWakeWordActive) 32.dp else 8.dp,
-                    shape = CircleShape,
-                    ambientColor = glowColor,
-                    spotColor = glowColor
-                )
-                .clip(CircleShape)
-                .background(VasuDarkSurface)
+            modifier = Modifier.size(200.dp).scale(scale)
+                .shadow(elevation = if (isListening || isSpeaking || isWakeWordActive) 32.dp else 8.dp, shape = CircleShape, ambientColor = glowColor, spotColor = glowColor)
+                .clip(CircleShape).background(VasuDarkSurface)
         )
-
-        // Inner circle
-        Box(
-            modifier = Modifier
-                .size(160.dp)
-                .clip(CircleShape)
-                .background(VasuDarkCard),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.size(160.dp).clip(CircleShape).background(VasuDarkCard), contentAlignment = Alignment.Center) {
             Text(
                 text = "VASU",
                 fontSize = 36.sp,
                 fontWeight = FontWeight.Bold,
                 color = when {
-                    isListening -> VasuCyan
-                    isSpeaking -> VasuPurple
-                    isThinking -> VasuWarning
-                    isWakeWordActive -> VasuGreen
+                    isListening -> VasuCyan; isSpeaking -> VasuPurple
+                    isThinking -> VasuWarning; isWakeWordActive -> VasuGreen
                     else -> VasuTextSecondary
                 }
             )
@@ -296,67 +273,36 @@ fun VasuAvatarCircle(
 }
 
 @Composable
-fun QuickActionButton(
-    action: QuickAction,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
-    ) {
+fun QuickActionButton(action: QuickAction, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onClick() }) {
         Card(
             modifier = Modifier.size(56.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = VasuDarkCard
-            ),
+            colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = action.icon,
-                    fontSize = 24.sp
-                )
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(text = action.icon, fontSize = 24.sp)
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = action.label,
-            color = VasuTextSecondary,
-            fontSize = 12.sp
-        )
+        Text(text = action.label, color = VasuTextSecondary, fontSize = 12.sp)
     }
 }
 
 @Composable
-fun MicButton(
-    isListening: Boolean,
-    onClick: () -> Unit
-) {
+fun MicButton(isListening: Boolean, onClick: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "mic")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = if (isListening) 1.2f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800),
-            repeatMode = RepeatMode.Reverse
-        ),
+        animationSpec = infiniteRepeatable(animation = tween(800), repeatMode = RepeatMode.Reverse),
         label = "pulse"
     )
 
     Box(contentAlignment = Alignment.Center) {
         if (isListening) {
-            Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .scale(pulse)
-                    .clip(CircleShape)
-                    .background(VasuCyan.copy(alpha = 0.2f))
-            )
+            Box(modifier = Modifier.size(88.dp).scale(pulse).clip(CircleShape).background(VasuCyan.copy(alpha = 0.2f)))
         }
-
         FloatingActionButton(
             onClick = onClick,
             modifier = Modifier.size(72.dp),

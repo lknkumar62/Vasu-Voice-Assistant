@@ -1,0 +1,58 @@
+package com.vasu.assistant.notifications
+
+import android.app.Notification
+import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
+@AndroidEntryPoint
+class NotificationListener : NotificationListenerService() {
+
+    @Inject lateinit var notificationParser: NotificationParser
+    @Inject lateinit var actionManager: NotificationActionManager
+
+    private val listeners = mutableListOf<NotificationCallback>()
+
+    interface NotificationCallback {
+        fun onNotificationReceived(notification: ParsedNotification)
+    }
+
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (shouldIgnore(sbn)) return
+        val parsed = notificationParser.parse(sbn)
+        if (parsed != null) {
+            listeners.forEach { it.onNotificationReceived(parsed) }
+        }
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        // Notification dismissed - could track if needed
+    }
+
+    fun addCallback(callback: NotificationCallback) { listeners.add(callback) }
+    fun removeCallback(callback: NotificationCallback) { listeners.remove(callback) }
+
+    fun getActiveNotifications(): List<ParsedNotification> {
+        return try {
+            activeNotifications?.mapNotNull { notificationParser.parse(it) } ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun dismissNotification(key: String): Boolean {
+        return try {
+            cancelNotification(key)
+            true
+        } catch (e: Exception) { false }
+    }
+
+    private fun shouldIgnore(sbn: StatusBarNotification): Boolean {
+        val ignoredPackages = listOf(
+            "com.android.systemui",
+            "com.vasu.assistant"
+        )
+        return sbn.packageName in ignoredPackages
+    }
+}

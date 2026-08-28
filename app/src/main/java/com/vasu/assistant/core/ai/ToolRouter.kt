@@ -8,6 +8,8 @@ import com.vasu.assistant.core.security.PermissionGate
 import com.vasu.assistant.core.security.RiskLevel
 import com.vasu.assistant.core.security.Tool
 import com.vasu.assistant.devices.DeviceControlManager
+import com.vasu.assistant.files.FileManager
+import com.vasu.assistant.camera.VasuCameraManager
 import com.vasu.assistant.messaging.MessagingManager
 import com.vasu.assistant.messaging.WhatsAppAutomation
 import javax.inject.Inject
@@ -26,7 +28,9 @@ class ToolRouter @Inject constructor(
     private val callManager: CallManager,
     private val messagingManager: MessagingManager,
     private val whatsappAutomation: WhatsAppAutomation,
-    private val deviceControl: DeviceControlManager
+    private val deviceControl: DeviceControlManager,
+    private val fileManager: FileManager,
+    private val cameraManager: VasuCameraManager
 ) {
     private val toolRegistry = mutableMapOf<String, ToolDefinition>()
     init { registerDefaultTools() }
@@ -68,6 +72,21 @@ class ToolRouter @Inject constructor(
             "search_web" -> ActionResult.success("search_web", "Search: ${parameters["query"]}")
             "create_alarm" -> ActionResult.success("create_alarm", "Alarm created: ${parameters["time"]}")
             "run_mission" -> ActionResult.success("run_mission", "Mission engine - Phase 13")
+            "browse_files" -> fileManager.browseDirectory(parameters["path"] as? String ?: "")
+            "search_files" -> fileManager.searchFiles(parameters["query"] as? String ?: "")
+            "read_file" -> fileManager.readFileContent(parameters["path"] as? String ?: "")
+            "rename_file" -> fileManager.renameFile(parameters["path"] as? String ?: "", parameters["newName"] as? String ?: "")
+            "copy_file" -> fileManager.copyFile(parameters["source"] as? String ?: "", parameters["dest"] as? String ?: "")
+            "move_file" -> fileManager.moveFile(parameters["source"] as? String ?: "", parameters["dest"] as? String ?: "")
+            "delete_file" -> fileManager.deleteFile(parameters["path"] as? String ?: "")
+            "share_file" -> fileManager.shareFile(parameters["path"] as? String ?: "")
+            "storage_info" -> fileManager.getStorageInfo()
+            "take_photo" -> cameraManager.takePhoto()
+            "start_recording" -> cameraManager.startRecording()
+            "stop_recording" -> cameraManager.stopRecording()
+            "toggle_flash" -> cameraManager.toggleFlash()
+            "ocr_extract" -> ActionResult.success("ocr", "OCR requires image URI context")
+            "scan_qr" -> ActionResult.success("scan_qr", "QR scan requires image URI context")
             else -> ActionResult.error(toolName, "Tool not implemented", "Not yet available")
         }
     }
@@ -99,7 +118,22 @@ class ToolRouter @Inject constructor(
             ToolDefinition("device_info", "Get device info", emptyList(), RiskLevel.LOW),
             ToolDefinition("search_web", "Search web", listOf(ToolParameter("query", "string", "Query")), RiskLevel.LOW),
             ToolDefinition("create_alarm", "Create alarm", listOf(ToolParameter("time", "string", "HH:mm"), ToolParameter("label", "string", "Label")), RiskLevel.LOW),
-            ToolDefinition("run_mission", "Run mission", listOf(ToolParameter("mission_id", "string", "ID")), RiskLevel.HIGH)
+            ToolDefinition("run_mission", "Run mission", listOf(ToolParameter("mission_id", "string", "ID")), RiskLevel.HIGH),
+            ToolDefinition("browse_files", "Browse files in directory", listOf(ToolParameter("path", "string", "Directory path", false)), RiskLevel.LOW),
+            ToolDefinition("search_files", "Search files by name", listOf(ToolParameter("query", "string", "Search query")), RiskLevel.LOW),
+            ToolDefinition("read_file", "Read file content", listOf(ToolParameter("path", "string", "File path")), RiskLevel.LOW),
+            ToolDefinition("rename_file", "Rename a file", listOf(ToolParameter("path", "string", "File path"), ToolParameter("newName", "string", "New name")), RiskLevel.MEDIUM),
+            ToolDefinition("copy_file", "Copy a file", listOf(ToolParameter("source", "string", "Source"), ToolParameter("dest", "string", "Destination dir")), RiskLevel.MEDIUM),
+            ToolDefinition("move_file", "Move a file", listOf(ToolParameter("source", "string", "Source"), ToolParameter("dest", "string", "Destination dir")), RiskLevel.MEDIUM),
+            ToolDefinition("delete_file", "Delete a file", listOf(ToolParameter("path", "string", "File path")), RiskLevel.HIGH),
+            ToolDefinition("share_file", "Share a file", listOf(ToolParameter("path", "string", "File path")), RiskLevel.LOW),
+            ToolDefinition("storage_info", "Get storage info", emptyList(), RiskLevel.LOW),
+            ToolDefinition("take_photo", "Take a photo", emptyList(), RiskLevel.MEDIUM),
+            ToolDefinition("start_recording", "Start video recording", emptyList(), RiskLevel.MEDIUM),
+            ToolDefinition("stop_recording", "Stop video recording", emptyList(), RiskLevel.LOW),
+            ToolDefinition("toggle_flash", "Toggle flashlight/camera flash", emptyList(), RiskLevel.LOW),
+            ToolDefinition("ocr_extract", "Extract text from image", listOf(ToolParameter("image_uri", "string", "Image URI")), RiskLevel.LOW),
+            ToolDefinition("scan_qr", "Scan QR/barcode from image", listOf(ToolParameter("image_uri", "string", "Image URI")), RiskLevel.LOW)
         )
         tools.forEach { toolRegistry[it.name] = it }
     }
