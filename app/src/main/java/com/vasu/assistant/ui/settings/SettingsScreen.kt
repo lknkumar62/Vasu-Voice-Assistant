@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.network.NetworkState
 import com.vasu.assistant.core.settings.VasuSettings
+import com.vasu.assistant.core.tts.VoiceGender
 import com.vasu.assistant.core.wakeword.WakeWordState
 import com.vasu.assistant.ui.theme.*
 import java.text.DateFormat
@@ -310,6 +311,26 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                StatusRow(
+                    icon = if (state.voiceStatus.gender == VoiceGender.FEMALE) Icons.Default.CheckCircle
+                    else Icons.Default.HelpOutline,
+                    label = when (state.voiceStatus.gender) {
+                        VoiceGender.FEMALE -> "Female voice in use"
+                        VoiceGender.UNLABELLED -> "Engine default voice"
+                        VoiceGender.NO_VOICES -> "No voices reported"
+                        VoiceGender.UNKNOWN -> "Voice not selected yet"
+                    },
+                    detail = when (state.voiceStatus.gender) {
+                        VoiceGender.FEMALE -> state.voiceStatus.voiceName
+                        VoiceGender.UNLABELLED ->
+                            "This speech engine does not label voice gender, so VASU cannot pick a female one. Install Google or Samsung TTS for more voices, or raise the pitch above."
+                        VoiceGender.NO_VOICES ->
+                            "The speech engine listed no voices. Install voice data from Install voices."
+                        VoiceGender.UNKNOWN -> "Press Test voice to initialise the engine."
+                    },
+                    color = if (state.voiceStatus.gender == VoiceGender.FEMALE) VasuSuccess else VasuTextSecondary
+                )
             }
 
             SettingsSection(title = "WAKE WORD") {

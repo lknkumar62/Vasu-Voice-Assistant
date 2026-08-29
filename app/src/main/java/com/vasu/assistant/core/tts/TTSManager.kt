@@ -58,6 +58,10 @@ class TTSManager @Inject constructor(
     private val _availableLanguages = MutableStateFlow<List<Locale>>(emptyList())
     val availableLanguages: StateFlow<List<Locale>> = _availableLanguages.asStateFlow()
 
+    // Whether VASU actually got a female voice, or only the engine default
+    private val _voiceStatus = MutableStateFlow(VoiceStatus())
+    val voiceStatus: StateFlow<VoiceStatus> = _voiceStatus.asStateFlow()
+
     /**
      * Initialize TTS engine. Defaults to the profile the user last saved, so a
      * chosen rate/pitch/language survives a process restart.
@@ -208,10 +212,48 @@ class TTSManager @Inject constructor(
         val result = tts.setLanguage(profile.language.toLocale())
         if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
             tts.setLanguage(Locale.US)
+            selectFemaleVoice(tts, Locale.US)
             _events.tryEmit(TTSEvent.Error("${profile.language} voice is not installed - using English"))
             return false
         }
+        selectFemaleVoice(tts, profile.language.toLocale())
         return true
+    }
+
+    /**
+     * VASU speaks as a girl, so prefer a voice the engine labels female.
+     *
+     * Only an explicit "female" marker in the voice name counts. Engines that hide
+     * gender keep their default voice and report UNLABELLED, so Settings can say
+     * "this engine does not label gender" rather than claim a female voice VASU
+     * never got. Local voices win over network ones so she still speaks offline.
+     */
+    private fun selectFemaleVoice(tts: TextToSpeech, target: Locale) {
+        val voices = runCatching { tts.voices }.getOrNull() ?: emptySet()
+        if (voices.isEmpty()) {
+            _voiceStatus.value = VoiceStatus(VoiceGender.NO_VOICES)
+            return
+        }
+
+        val candidates = voices
+            .filter { it.locale.language == target.language }
+            .ifEmpty { voices.filter { it.locale.language == Locale.US.language } }
+
+        val female = candidates
+            .filter { isFemaleVoiceName(it.name) }
+            .sortedWith(compareBy({ it.isNetworkConnectionRequired }, { -it.quality }))
+            .firstOrNull()
+
+        if (female == null) {
+            _voiceStatus.value = VoiceStatus(VoiceGender.UNLABELLED)
+            return
+        }
+
+        _voiceStatus.value = if (tts.setVoice(female) == TextToSpeech.SUCCESS) {
+            VoiceStatus(VoiceGender.FEMALE, female.name)
+        } else {
+            VoiceStatus(VoiceGender.UNLABELLED)
+        }
     }
 
     private fun String.toLocale(): Locale {

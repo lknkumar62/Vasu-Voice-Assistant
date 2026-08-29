@@ -14,6 +14,7 @@ import com.vasu.assistant.core.service.VasuForegroundService
 import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.tts.VoiceProfile
+import com.vasu.assistant.core.tts.VoiceStatus
 import com.vasu.assistant.core.wakeword.WakeWordDetector
 import com.vasu.assistant.core.wakeword.WakeWordState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,6 +44,7 @@ data class SettingsUiState(
     // Voice
     val voiceProfile: VoiceProfile = VoiceProfile.VASU_DEFAULT,
     val installedVoices: List<String> = emptyList(),
+    val voiceStatus: VoiceStatus = VoiceStatus(),
 
     // Wake word
     val wakeWordEnabled: Boolean = false,
@@ -88,6 +90,9 @@ class SettingsViewModel @Inject constructor(
                     installedVoices = locales.map { it.toLanguageTag() }.distinct()
                 )
             }
+        }
+        viewModelScope.launch {
+            ttsManager.voiceStatus.collect { _uiState.value = _uiState.value.copy(voiceStatus = it) }
         }
     }
 

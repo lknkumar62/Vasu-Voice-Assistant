@@ -1,5 +1,7 @@
 package com.vasu.assistant.core.tts
 
+import java.util.Locale
+
 /**
  * Voice profile for TTS customization
  */
@@ -62,6 +64,36 @@ enum class TTSState {
     SPEAKING,
     PAUSED,
     ERROR
+}
+
+/**
+ * How close VASU got to a female voice.
+ *
+ * Android's [android.speech.tts.Voice] carries no gender field, and Google's own
+ * ids ("hi-in-x-hia-local") hide it in a triplet with no published mapping, so
+ * decoding those would be a guess dressed up as a fact. UNLABELLED therefore
+ * means "this engine does not say", not "this voice is male".
+ */
+enum class VoiceGender { UNKNOWN, FEMALE, UNLABELLED, NO_VOICES }
+
+data class VoiceStatus(
+    val gender: VoiceGender = VoiceGender.UNKNOWN,
+    val voiceName: String? = null
+)
+
+private val FEMALE_VOICE_MARKERS = listOf("female", "woman", "girl", "-f-", "_f_")
+
+/**
+ * True only when the engine itself put a female marker in the voice name.
+ *
+ * Samsung ships "hi-IN-female"; some engines use "..._f_...". Google's
+ * "hi-in-x-hia-local" style ids are deliberately not decoded: the triplet has no
+ * published gender mapping, so a match would be a guess. Note "female" contains
+ * "male", so a male check must never run first.
+ */
+internal fun isFemaleVoiceName(name: String): Boolean {
+    val id = name.lowercase(Locale.ROOT)
+    return FEMALE_VOICE_MARKERS.any { id.contains(it) }
 }
 
 /**
