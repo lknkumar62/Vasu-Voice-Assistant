@@ -63,6 +63,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
+    // Keystore-backed EncryptedSharedPreferences for the Gemini API key
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Room with KSP
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

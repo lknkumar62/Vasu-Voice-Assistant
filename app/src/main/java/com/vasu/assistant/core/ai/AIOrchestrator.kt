@@ -27,48 +27,84 @@ class AIOrchestrator @Inject constructor(
         _isProcessing.value = true
 
         return try {
-            // Store user message
             memoryManager.addMessage("user", input)
-
-            // Process memory commands
             memoryManager.processInput(input)
 
-            // Parse intent
             val intent = intentParser.parse(input)
 
-            // Execute tool if applicable
-            val toolResult = if (intent.intent != IntentType.CHAT && intent.intent != IntentType.UNKNOWN) {
-                executeToolForIntent(intent)
-            } else null
-
-            // Generate response
-            val response = if (toolResult != null) {
-                if (toolResult.success) "Done! ${toolResult.message}"
-                else "I couldn't complete that: ${toolResult.message}"
+            // Fast path: the local parser recognises the command outright. This runs
+            // offline, costs nothing, and avoids a round trip for "torch on".
+            val response = if (intent.intent != IntentType.CHAT && intent.intent != IntentType.UNKNOWN) {
+                describe(executeToolForIntent(intent))
             } else {
-                val context = memoryManager.getFullContext()
-                val aiResponse = aiClient.chat(
-                    AIRequest(
-                        prompt = input,
-                        systemPrompt = getSystemPrompt() + if (context.isNotBlank()) "\n\n$context" else ""
-                    )
-                )
-                aiResponse.content
+                askModel(input)
             }
 
-            // Store assistant response
             memoryManager.addMessage("assistant", response)
-
             _lastResponse.value = response
-            _isProcessing.value = false
             response
         } catch (e: Exception) {
             val errorResponse = "Sorry, I encountered an error: ${e.message}"
             _lastResponse.value = errorResponse
-            _isProcessing.value = false
             errorResponse
+        } finally {
+            _isProcessing.value = false
         }
     }
+
+    /**
+     * Sends the turn to Gemini with the tool registry attached. If the model picks
+     * a tool we execute it through ToolRouter, which re-validates the name and
+     * applies the permission gate, so a hallucinated tool fails closed.
+     */
+    private suspend fun askModel(input: String): String {
+        if (!aiClient.isCloudReady) {
+            return "Online AI unavailable — using offline commands. " +
+                "Add a Gemini API key in Settings to enable conversation."
+        }
+
+        val history = memoryManager.getFullContext()
+        val systemPrompt = getSystemPrompt() + if (history.isNotBlank()) "\n\n$history" else ""
+
+        val aiResponse = aiClient.chatWithTools(
+            messages = listOf(ChatMessage("user", input)),
+            tools = toolRouter.getAvailableTools(),
+            systemPrompt = systemPrompt
+        )
+
+        val call = aiResponse.toolCalls.firstOrNull()
+        return when {
+            call != null -> describe(toolRouter.executeTool(call.name, call.parameters))
+            aiResponse.error != null -> explain(aiResponse.error, aiResponse.content)
+            else -> aiResponse.content
+        }
+    }
+
+    /**
+     * Turns a failure into something worth saying out loud. Never reports an
+     * action as done, and points at the fix when the user can act on it.
+     */
+    private fun explain(error: AiErrorKind, message: String): String = when (error) {
+        AiErrorKind.NOT_CONFIGURED ->
+            "Online AI unavailable — using offline commands. Add a Gemini API key in Settings."
+        AiErrorKind.INVALID_KEY ->
+            "My Gemini key was rejected. Please check it in Settings."
+        AiErrorKind.OFFLINE ->
+            "Online AI unavailable — no internet. Offline commands still work."
+        AiErrorKind.TIMEOUT ->
+            "Gemini took too long to answer. Try again?"
+        AiErrorKind.RATE_LIMITED ->
+            "Too many requests right now. Give me a moment."
+        AiErrorKind.QUOTA_EXCEEDED ->
+            "The Gemini quota for this key is used up."
+        AiErrorKind.BLOCKED_BY_SAFETY ->
+            "I can't answer that one."
+        else -> message
+    }
+
+    private fun describe(result: ActionResult): String =
+        if (result.success) result.message else "I couldn't do that: ${result.message}"
+
 
     suspend fun processVoiceInput(transcript: String): String = processInput(transcript)
     fun speakResponse(text: String) { ttsManager.speakQueued(text) }
@@ -100,10 +136,18 @@ class AIOrchestrator @Inject constructor(
     }
 
     private fun getSystemPrompt(): String {
-        return """You are VASU, a helpful AI voice assistant for Android.
-You speak in Hindi, English, or Hinglish based on what the user uses.
-Be helpful, concise, and friendly.
-You can control the phone, send messages, make calls, and more.
-Remember user preferences and personalize responses."""
+        return """You are VASU, a warm and friendly Android voice assistant.
+
+Language: reply in whatever the user speaks — Hindi, English, or Hinglish. Match their
+mix rather than correcting it. Prefer natural spoken phrasing over formal writing.
+
+Style: you are being read aloud, so keep replies to one or two short sentences. Sound
+soft and conversational, not robotic. Skip bullet points, markdown, and emoji.
+
+Tools: when the user asks you to do something on the phone, call the matching tool
+instead of describing the steps. Never say an action is done unless a tool result
+confirms it. If no tool fits, just answer conversationally.
+
+Remember the user's stated preferences and use them."""
     }
 }

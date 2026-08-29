@@ -7,180 +7,160 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * AI Provider types
+ * AI providers VASU can actually reach.
+ *
+ * OPENAI, CLAUDE and GROQ used to be listed here but every one of them returned a
+ * hardcoded "will be connected in production" string. They were removed rather
+ * than left in the picker, because offering a provider that cannot answer is
+ * indistinguishable from a broken app.
  */
 enum class AIProvider(val displayName: String) {
-    OPENAI("OpenAI"),
-    CLAUDE("Claude"),
-    GROQ("Groq"),
-    LOCAL("Local/Offline")
+    GEMINI("Google Gemini"),
+    LOCAL("Offline commands")
 }
 
-/**
- * AI request
- */
 data class AIRequest(
     val prompt: String,
     val systemPrompt: String = "",
     val maxTokens: Int = 1024,
     val temperature: Float = 0.7f,
-    val provider: AIProvider = AIProvider.OPENAI
+    val provider: AIProvider = AIProvider.GEMINI
 )
 
-/**
- * AI response
- */
 data class AIResponse(
     val content: String,
     val toolCalls: List<ToolCall> = emptyList(),
     val provider: AIProvider,
     val tokensUsed: Int = 0,
-    val latencyMs: Long = 0
-)
+    val latencyMs: Long = 0,
+    /** Null on success. Set so callers can tell "offline" from "bad key". */
+    val error: AiErrorKind? = null
+) {
+    val isSuccess: Boolean get() = error == null
+}
 
 data class ToolCall(
     val name: String,
     val parameters: Map<String, Any>
 )
 
-/**
- * AI State
- */
 enum class AIState {
     IDLE, THINKING, TOOL_EXECUTING, ERROR
 }
 
-/**
- * AIClient - Provider-agnostic AI client.
- *
- * Supports multiple AI providers through a unified interface.
- * Routes requests to the configured provider and handles responses.
- */
 @Singleton
-class AIClient @Inject constructor() {
-
+class AIClient @Inject constructor(
+    private val gemini: GeminiProvider,
+    private val keyStore: SecureKeyStore
+) {
     private val _state = MutableStateFlow(AIState.IDLE)
     val state: StateFlow<AIState> = _state.asStateFlow()
 
-    private val _currentProvider = MutableStateFlow(AIProvider.OPENAI)
+    private val _currentProvider = MutableStateFlow(AIProvider.GEMINI)
     val currentProvider: StateFlow<AIProvider> = _currentProvider.asStateFlow()
 
-    private val _apiKey = MutableStateFlow<String?>(null)
-    val apiKey: StateFlow<String?> = _apiKey.asStateFlow()
+    private val _lastError = MutableStateFlow<AiErrorKind?>(null)
+    val lastError: StateFlow<AiErrorKind?> = _lastError.asStateFlow()
 
-    /**
-     * Set AI provider
-     */
-    fun setProvider(provider: AIProvider) {
-        _currentProvider.value = provider
-    }
+    /** True only when a key is stored and the user has switched Gemini on. */
+    val isCloudReady: Boolean
+        get() = keyStore.geminiEnabled && keyStore.hasGeminiKey()
 
-    /**
-     * Set API key
-     */
-    fun setApiKey(key: String) {
-        _apiKey.value = key
-    }
+    fun setProvider(provider: AIProvider) { _currentProvider.value = provider }
 
-    /**
-     * Send a chat completion request
-     */
+    fun saveApiKey(key: String): Boolean = keyStore.setGeminiKey(key)
+
+    fun removeApiKey(): Boolean = keyStore.clearGeminiKey()
+
+    suspend fun testConnection(): AiResult = gemini.testConnection()
+
     suspend fun chat(request: AIRequest): AIResponse {
         _state.value = AIState.THINKING
         val startTime = System.currentTimeMillis()
 
-        return try {
-            val response = when (request.provider) {
-                AIProvider.OPENAI -> callOpenAI(request)
-                AIProvider.CLAUDE -> callClaude(request)
-                AIProvider.GROQ -> callGroq(request)
-                AIProvider.LOCAL -> callLocal(request)
-            }
-
-            _state.value = AIState.IDLE
-            response.copy(latencyMs = System.currentTimeMillis() - startTime)
-        } catch (e: Exception) {
-            _state.value = AIState.ERROR
-            AIResponse(
-                content = "Error: ${e.message}",
-                provider = request.provider,
-                latencyMs = System.currentTimeMillis() - startTime
+        val result = when (request.provider) {
+            AIProvider.GEMINI -> gemini.generate(
+                prompt = request.prompt,
+                systemPrompt = request.systemPrompt,
+                temperature = request.temperature,
+                maxTokens = request.maxTokens
+            )
+            AIProvider.LOCAL -> AiResult.Failure(
+                AiErrorKind.NOT_CONFIGURED,
+                "Online AI unavailable — using offline commands."
             )
         }
+
+        return result.toResponse(request.provider, System.currentTimeMillis() - startTime)
     }
 
     /**
-     * Send a message and get response with tool calls
+     * Asks the model to pick a tool. The model can only name a tool from [tools];
+     * the returned call is still validated and permission-gated by ToolRouter
+     * before anything runs, so a hallucinated name fails closed.
      */
     suspend fun chatWithTools(
         messages: List<ChatMessage>,
         tools: List<ToolDefinition>,
+        systemPrompt: String = "",
         provider: AIProvider = _currentProvider.value
     ): AIResponse {
         _state.value = AIState.THINKING
+        val startTime = System.currentTimeMillis()
 
-        val request = AIRequest(
-            prompt = messages.lastOrNull()?.content ?: "",
-            systemPrompt = buildSystemPrompt(tools),
-            provider = provider
-        )
-
-        return chat(request)
-    }
-
-    private fun buildSystemPrompt(tools: List<ToolDefinition>): String {
-        val toolDescriptions = tools.joinToString("\n") { tool ->
-            "- ${tool.name}: ${tool.description} (Risk: ${tool.riskLevel})"
+        if (provider == AIProvider.LOCAL) {
+            return AiResult.Failure(
+                AiErrorKind.NOT_CONFIGURED,
+                "Online AI unavailable — using offline commands."
+            ).toResponse(provider, System.currentTimeMillis() - startTime)
         }
 
-        return """You are VASU, an AI voice assistant for Android.
-You have access to the following tools:
-$toolDescriptions
+        val prompt = messages.lastOrNull { it.role == "user" }?.content.orEmpty()
+        val history = messages.dropLast(1)
 
-When the user asks you to do something, respond with the appropriate tool call.
-Always respond in the same language the user speaks (Hindi, English, or Hinglish).
-Be helpful, concise, and friendly."""
-    }
-
-    // Provider implementations (simplified - real implementations would use HTTP)
-
-    private suspend fun callOpenAI(request: AIRequest): AIResponse {
-        // Phase 6: Simplified mock - will connect to real API
-        return AIResponse(
-            content = "[OpenAI] I received: \"${request.prompt}\"\n\nAI provider will be connected in production. For now, this is a simulated response from VASU.",
-            provider = AIProvider.OPENAI,
-            tokensUsed = 50
+        val result = gemini.generate(
+            prompt = prompt,
+            systemPrompt = systemPrompt.ifBlank { defaultSystemPrompt() },
+            history = history,
+            tools = tools
         )
+
+        return result.toResponse(provider, System.currentTimeMillis() - startTime)
     }
 
-    private suspend fun callClaude(request: AIRequest): AIResponse {
-        return AIResponse(
-            content = "[Claude] I received: \"${request.prompt}\"\n\nClaude provider will be connected in production.",
-            provider = AIProvider.CLAUDE,
-            tokensUsed = 50
-        )
+    private fun AiResult.toResponse(provider: AIProvider, latency: Long): AIResponse = when (this) {
+        is AiResult.Text -> {
+            _state.value = AIState.IDLE
+            _lastError.value = null
+            AIResponse(content, provider = provider, tokensUsed = tokensUsed, latencyMs = latency)
+        }
+        is AiResult.FunctionCall -> {
+            _state.value = AIState.TOOL_EXECUTING
+            _lastError.value = null
+            AIResponse(
+                content = "",
+                toolCalls = listOf(ToolCall(name, args)),
+                provider = provider,
+                tokensUsed = tokensUsed,
+                latencyMs = latency
+            )
+        }
+        is AiResult.Failure -> {
+            _state.value = AIState.ERROR
+            _lastError.value = kind
+            AIResponse(content = message, provider = provider, latencyMs = latency, error = kind)
+        }
     }
 
-    private suspend fun callGroq(request: AIRequest): AIResponse {
-        return AIResponse(
-            content = "[Groq] I received: \"${request.prompt}\"\n\nGroq provider will be connected in production.",
-            provider = AIProvider.GROQ,
-            tokensUsed = 50
-        )
-    }
-
-    private suspend fun callLocal(request: AIRequest): AIResponse {
-        return AIResponse(
-            content = "[Local] I received: \"${request.prompt}\"\n\nOffline command engine will be implemented in Phase 17.",
-            provider = AIProvider.LOCAL,
-            tokensUsed = 0
-        )
-    }
+    private fun defaultSystemPrompt(): String = """
+        You are VASU, a warm and friendly Android voice assistant.
+        Reply in the same language the user speaks: Hindi, English, or Hinglish.
+        Keep spoken replies short and natural, one or two sentences.
+        Use a tool when the user asks you to do something on the phone.
+        Never claim an action succeeded unless a tool result says so.
+    """.trimIndent()
 }
 
-/**
- * Chat message for AI context
- */
 data class ChatMessage(
     val role: String, // "user", "assistant", "system"
     val content: String
