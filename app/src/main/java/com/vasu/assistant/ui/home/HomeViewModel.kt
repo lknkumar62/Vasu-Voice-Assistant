@@ -106,7 +106,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             sttManager.errors.collect { error ->
                 _uiState.value = _uiState.value.copy(
-                    lastMessage = "Error: $error",
+                    lastMessage = error.message,
                     isListening = false
                 )
             }

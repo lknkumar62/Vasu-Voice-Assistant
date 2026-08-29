@@ -78,7 +78,7 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             sttManager.errors.collect { error ->
-                addMessage(ChatMessage(content = "Voice error: $error", isUser = false))
+                addMessage(ChatMessage(content = error.message, isUser = false))
             }
         }
     }

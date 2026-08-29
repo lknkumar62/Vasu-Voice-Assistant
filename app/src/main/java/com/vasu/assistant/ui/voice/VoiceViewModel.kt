@@ -77,7 +77,7 @@ class VoiceViewModel @Inject constructor(
         viewModelScope.launch {
             sttManager.errors.collect { error ->
                 _uiState.value = _uiState.value.copy(
-                    lastResponse = "Error: $error",
+                    lastResponse = error.message,
                     isListening = false
                 )
             }
