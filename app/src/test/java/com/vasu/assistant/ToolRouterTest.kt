@@ -1,36 +1,83 @@
 package com.vasu.assistant
 
-import org.junit.Assert.*
+import com.vasu.assistant.core.ai.ToolDefinition
+import com.vasu.assistant.core.ai.ToolParameter
+import com.vasu.assistant.core.ai.toGeminiSchemaType
+import com.vasu.assistant.core.security.RiskLevel
+import com.vasu.assistant.core.security.UserRole
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * The previous version of this test built a local list of tool-name strings and
+ * asserted `list.size >= 35` plus `assertNotNull` on string literals. It touched no
+ * production code and could not fail. These exercise the real types instead.
+ */
 class ToolRouterTest {
 
     @Test
-    fun `tool registry should have all core tools`() {
-        val toolNames = listOf(
-            "open_app", "click", "type_text", "read_screen", "scroll_down", "scroll_up",
-            "press_back", "press_home", "make_call", "send_message", "whatsapp",
-            "turn_on_torch", "set_volume", "volume_up", "volume_down",
-            "media_play_pause", "media_next", "media_previous", "bluetooth_toggle",
-            "battery_info", "device_info", "search_web", "create_alarm", "run_mission",
-            "browse_files", "search_files", "read_file", "rename_file", "copy_file",
-            "move_file", "delete_file", "share_file", "storage_info",
-            "take_photo", "start_recording", "stop_recording", "toggle_flash",
-            "ocr_extract", "scan_qr"
+    fun `tool definition derives required role from risk level`() {
+        val tool = ToolDefinition(
+            name = "delete_file",
+            description = "Delete a file",
+            parameters = listOf(ToolParameter("path", "string", "Absolute path")),
+            riskLevel = RiskLevel.HIGH
         )
-        // Verify all expected tool names exist
-        assertTrue("Should have at least 35 tools registered", toolNames.size >= 35)
-        toolNames.forEach { name ->
-            assertNotNull("Tool '$name' should not be null", name)
-        }
+
+        assertEquals(UserRole.BOSS, tool.requiredRole)
     }
 
     @Test
-    fun `tool parameters should have required fields`() {
-        data class TestParam(val name: String, val type: String, val required: Boolean)
-        val param = TestParam("package", "string", true)
-        assertEquals("package", param.name)
-        assertEquals("string", param.type)
-        assertTrue(param.required)
+    fun `risk levels escalate the privilege they demand`() {
+        assertTrue(
+            "MEDIUM must demand more than LOW",
+            RiskLevel.MEDIUM.requiredRole.priority > RiskLevel.LOW.requiredRole.priority
+        )
+        assertTrue(
+            "HIGH must demand more than MEDIUM",
+            RiskLevel.HIGH.requiredRole.priority > RiskLevel.MEDIUM.requiredRole.priority
+        )
+        assertTrue(
+            "CRITICAL must demand at least as much as HIGH",
+            RiskLevel.CRITICAL.requiredRole.priority >= RiskLevel.HIGH.requiredRole.priority
+        )
+    }
+
+    @Test
+    fun `guest cannot satisfy a high risk tool`() {
+        // delete_file and friends must fail closed for an unverified speaker.
+        assertTrue(UserRole.GUEST.priority < RiskLevel.HIGH.requiredRole.priority)
+        assertTrue(UserRole.UNKNOWN.priority < RiskLevel.LOW.requiredRole.priority)
+        assertTrue(UserRole.BLOCKED.priority < RiskLevel.LOW.requiredRole.priority)
+    }
+
+    @Test
+    fun `optional parameters are not marked required`() {
+        val optional = ToolParameter("label", "string", "Field label", required = false)
+        val mandatory = ToolParameter("text", "string", "Text to type")
+
+        assertTrue(mandatory.required)
+        assertFalse(optional.required)
+    }
+
+    @Test
+    fun `parameter types map onto gemini schema types`() {
+        assertEquals("STRING", toGeminiSchemaType("string"))
+        assertEquals("INTEGER", toGeminiSchemaType("int"))
+        assertEquals("INTEGER", toGeminiSchemaType("Integer"))
+        assertEquals("NUMBER", toGeminiSchemaType("float"))
+        assertEquals("BOOLEAN", toGeminiSchemaType("boolean"))
+        assertEquals("ARRAY", toGeminiSchemaType("list"))
+        assertEquals("OBJECT", toGeminiSchemaType("map"))
+    }
+
+    @Test
+    fun `unknown parameter types fall back to string rather than breaking the request`() {
+        // Gemini rejects an unrecognised schema type outright, which would fail the
+        // whole turn, so an unmapped type must degrade to STRING.
+        assertEquals("STRING", toGeminiSchemaType("uri"))
+        assertEquals("STRING", toGeminiSchemaType(""))
     }
 }
