@@ -50,6 +50,10 @@ class WakeWordDetector @Inject constructor(
     private val _detections = MutableSharedFlow<String>(replay = 1)
     val detections: SharedFlow<String> = _detections.asSharedFlow()
 
+    /** Why the wake word is not running, in words the UI can show verbatim. */
+    private val _unavailableReason = MutableStateFlow<String?>(null)
+    val unavailableReason: StateFlow<String?> = _unavailableReason.asStateFlow()
+
     // Config
     private var config = WakeWordConfig()
 
@@ -86,12 +90,17 @@ class WakeWordDetector @Inject constructor(
                 Manifest.permission.RECORD_AUDIO
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            _unavailableReason.value =
+                "Microphone permission is not granted, so VASU cannot listen for \"Hello Vasu\"."
             _state.value = WakeWordState.ERROR
             return
         }
 
         // Initialize audio record
         try {
+            // initialize() can be called again on every enable/disable cycle, and
+            // the previous recorder was never released, leaking a mic handle.
+            audioRecord?.release()
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
                 sampleRate,
@@ -108,16 +117,23 @@ class WakeWordDetector @Inject constructor(
             )
 
             // Load TFLite model
+            model?.close()
             model = WakeWordModel(context)
-            isModelLoaded = model?.load() ?: false
+            val modelStatus = model?.load() ?: ModelStatus.LOAD_FAILED
+            isModelLoaded = modelStatus == ModelStatus.READY
 
             if (!isModelLoaded) {
+                _unavailableReason.value = modelStatus.detail
                 _state.value = WakeWordState.MODEL_NOT_AVAILABLE
                 return
             }
 
+            _unavailableReason.value = null
             _state.value = WakeWordState.IDLE
         } catch (e: Exception) {
+            // The exception used to be discarded, leaving "ERROR" with no cause.
+            _unavailableReason.value =
+                "The microphone could not be opened: ${e.message ?: e.javaClass.simpleName}"
             _state.value = WakeWordState.ERROR
         }
     }

@@ -49,6 +49,7 @@ data class SettingsUiState(
     // Wake word
     val wakeWordEnabled: Boolean = false,
     val wakeWordState: WakeWordState = WakeWordState.IDLE,
+    val wakeWordReason: String? = null,
 
     val voiceGuardEnabled: Boolean = false
 ) {
@@ -80,6 +81,11 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             wakeWordDetector.state.collect { _uiState.value = _uiState.value.copy(wakeWordState = it) }
+        }
+        viewModelScope.launch {
+            wakeWordDetector.unavailableReason.collect {
+                _uiState.value = _uiState.value.copy(wakeWordReason = it)
+            }
         }
         viewModelScope.launch {
             settings.voiceProfile.collect { _uiState.value = _uiState.value.copy(voiceProfile = it) }

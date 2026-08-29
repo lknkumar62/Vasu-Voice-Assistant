@@ -2,6 +2,8 @@ package com.vasu.assistant
 
 import com.vasu.assistant.core.ai.AiErrorKind
 import com.vasu.assistant.core.stt.SttErrorKind
+import com.vasu.assistant.core.wakeword.ModelStatus
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -75,5 +77,37 @@ class ErrorTaxonomyTest {
     fun `safety blocks are not retried`() {
         // Resending an identical blocked prompt gets an identical block.
         assertFalse(AiErrorKind.BLOCKED_BY_SAFETY.isTransient)
+    }
+
+    /**
+     * The wake word model used to fail as a bare `false`, so the app could only say
+     * "unavailable". Each failure needs its own explanation because the fixes
+     * differ: bundle the asset, replace a corrupt file, or match the input shape.
+     */
+    @Test
+    fun `every wake word failure explains itself distinctly`() {
+        val failures = ModelStatus.values().filter { it != ModelStatus.READY }
+        val details = failures.map { it.detail }
+
+        failures.forEach {
+            assertTrue("$it must carry an explanation", it.detail.isNotBlank())
+        }
+        assertEquals(
+            "each wake word failure must read differently",
+            details.size,
+            details.distinct().size
+        )
+    }
+
+    @Test
+    fun `only READY reports the wake word model as usable`() {
+        assertNotEquals(ModelStatus.ASSET_MISSING, ModelStatus.LOAD_FAILED)
+        ModelStatus.values().filter { it != ModelStatus.READY }.forEach {
+            assertFalse(
+                "$it must not read as a working wake word",
+                it.detail.contains("loaded", ignoreCase = true) &&
+                    !it.detail.contains("not", ignoreCase = true)
+            )
+        }
     }
 }

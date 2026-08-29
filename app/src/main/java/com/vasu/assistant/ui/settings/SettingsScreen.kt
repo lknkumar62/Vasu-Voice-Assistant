@@ -354,13 +354,7 @@ fun SettingsScreen(
                         WakeWordState.MODEL_NOT_AVAILABLE -> "Unavailable"
                         WakeWordState.ERROR -> "Error"
                     },
-                    detail = when (state.wakeWordState) {
-                        WakeWordState.MODEL_NOT_AVAILABLE ->
-                            "The on-device detection model is not installed, so \"Hello Vasu\" cannot be detected. Use the voice button instead."
-                        WakeWordState.ERROR ->
-                            "The microphone could not be opened. Check the permission below."
-                        else -> null
-                    },
+                    detail = state.wakeWordReason,
                     color = when (state.wakeWordState) {
                         WakeWordState.LISTENING, WakeWordState.DETECTED -> VasuSuccess
                         WakeWordState.MODEL_NOT_AVAILABLE, WakeWordState.ERROR -> VasuError

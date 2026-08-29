@@ -74,10 +74,8 @@ class VasuForegroundService : Service() {
         wakeWordListener.initialize()
 
         when (wakeWordListener.state.value) {
-            WakeWordState.MODEL_NOT_AVAILABLE ->
-                notify("Wake word unavailable - detection model is not installed")
-            WakeWordState.ERROR ->
-                notify("Wake word unavailable - microphone could not be opened")
+            WakeWordState.MODEL_NOT_AVAILABLE, WakeWordState.ERROR ->
+                notify(wakeWordListener.unavailableReason.value ?: "Wake word unavailable")
             else -> {
                 wakeWordListener.start()
                 observeDetector()
@@ -92,8 +90,8 @@ class VasuForegroundService : Service() {
                     when (state) {
                         WakeWordState.LISTENING -> "Listening for \"Hello Vasu\""
                         WakeWordState.DETECTED -> "Heard you - opening VASU"
-                        WakeWordState.MODEL_NOT_AVAILABLE -> "Wake word unavailable - detection model is not installed"
-                        WakeWordState.ERROR -> "Wake word stopped - microphone error"
+                        WakeWordState.MODEL_NOT_AVAILABLE, WakeWordState.ERROR ->
+                            wakeWordListener.unavailableReason.value ?: "Wake word unavailable"
                         WakeWordState.IDLE -> "VASU is active"
                     }
                 )
