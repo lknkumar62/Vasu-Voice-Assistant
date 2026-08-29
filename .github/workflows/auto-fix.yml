@@ -1,8 +1,29 @@
 name: Auto Bug Fix
 
+# Runs only on demand, never automatically on push.
+#
+# Rationale: this workflow previously ran on every push to main, committed
+# whatever the agent produced with `git add -A`, and pushed straight to main
+# with no build or test in between. Commit 5268f0b reached main that way and
+# was never built by CI, because pushes made with GITHUB_TOKEN do not trigger
+# other workflows. Fixes now land on a branch and must survive a build before
+# a human merges them.
+
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      instruction:
+        description: 'What the fixer agent should look at'
+        required: false
+        default: 'Check the latest git diff for bugs, errors, or issues. If you find any, fix them directly in the files. If no bugs found, do nothing.'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-fix
+  cancel-in-progress: false
 
 jobs:
   fix-bugs:
@@ -21,16 +42,71 @@ jobs:
       - name: Install OpenCode
         run: npm install -g opencode-ai
 
+      - name: Verify fixer credentials are configured
+        env:
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+        run: |
+          if [ -z "$OPENCODE_ZEN_API_KEY" ]; then
+            echo "::error::Repository secret OPENCODE_ZEN_API_KEY is not set."
+            echo "Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
       - name: Run Fixer Agent
         env:
-          OPENCODE_ZEN_API_KEY: sk-B7oDdo8oiIeg8JRrlfWJfOxBVYn0ZbQlxKQjns9ayA3ImO7Zdi8EF4FnRBXMqn9z
-        run: |
-          opencode run --agent fixer "Check the latest git diff for bugs, errors, or issues. If you find any, fix them directly in the files. If no bugs found, do nothing."
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+          INSTRUCTION: ${{ inputs.instruction }}
+        run: opencode run --agent fixer "$INSTRUCTION"
 
-      - name: Commit and push fixes
+      - name: Detect changes
+        id: changes
         run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Fixer made no changes."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff --stat
+          fi
+
+      # Everything below only runs if the agent actually changed something,
+      # and the build must pass before those changes are allowed to leave CI.
+      - name: Set up JDK 17
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        if: steps.changes.outputs.changed == 'true'
+        uses: android-actions/setup-android@v3
+
+      - name: Verify the fix compiles
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify unit tests still pass
+        if: steps.changes.outputs.changed == 'true'
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Open pull request with verified fix
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto-fix/${GITHUB_RUN_ID}"
           git config user.name "VASU Auto-Fixer"
           git config user.email "autofix@vasu.ai"
+          git checkout -b "$BRANCH"
           git add -A
-          git diff --cached --quiet || git commit -m "Auto-fix: bugs fixed automatically"
-          git push
+          git commit -m "Auto-fix: build-verified fixes from fixer agent"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "Auto-fix: build-verified fixes" \
+            --body "Automated fixes from the fixer agent. Debug build and unit tests passed in run \`${GITHUB_RUN_ID}\`. Review the diff before merging." \
+            --base "${GITHUB_REF_NAME}" \
+            --head "$BRANCH"
