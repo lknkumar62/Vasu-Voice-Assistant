@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions -->
+    <!-- Voice / core -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -17,26 +17,75 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- File permissions -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- Telephony and messaging: required by the make_call and send_message tools.
+         Without CALL_PHONE the dialer can only be pre-filled, not dialled. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- Needed to resolve a spoken name ("Rahul ko message bhejo") to a number. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Alarms and scheduled automation. SCHEDULE_EXACT_ALARM is required from
+         API 31; without it AlarmManager.setExact* throws SecurityException. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Storage. The legacy pair is capped: READ_EXTERNAL_STORAGE is superseded by
+         the READ_MEDIA_* permissions on API 33+, and WRITE_EXTERNAL_STORAGE has had
+         no effect since API 29 (scoped storage). Uncapped they mislead the
+         permissions UI into requesting grants the system silently ignores. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-    <!-- Camera/Location -->
+    <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Notification listener -->
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
 
+    <!-- Package visibility (API 30+). Without this, getLaunchIntentForPackage and
+         queryIntentActivities return null for other apps, which silently breaks the
+         open_app tool and every WhatsApp lookup. QUERY_ALL_PACKAGES is what lets an
+         assistant open an arbitrary app by name; note that Google Play restricts it
+         to launcher/assistant-class apps and requires a policy declaration. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+    </queries>
+
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <application
         android:name=".VasuApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="VASU"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -55,10 +104,23 @@
             </intent-filter>
         </activity>
 
-        <!-- Accessibility Service -->
+        <!-- Foreground service. This declaration was missing entirely, so every
+             VasuForegroundService.start() call threw and wake word / background
+             listening could never run. foregroundServiceType must match the
+             FOREGROUND_SERVICE_TYPE_MICROPHONE passed to startForeground(). -->
+        <service
+            android:name=".core.service.VasuForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- Accessibility Service. Must be exported: the system binds this from
+             another process, so exported="false" prevented it from working.
+             BIND_ACCESSIBILITY_SERVICE is a signature permission, so only the
+             system can bind it. -->
         <service
             android:name=".accessibility.VasuAccessibilityService"
-            android:exported="false"
+            android:exported="true"
+            android:label="VASU Screen Control"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -72,6 +134,7 @@
         <service
             android:name=".notifications.NotificationListener"
             android:exported="true"
+            android:label="VASU Notifications"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

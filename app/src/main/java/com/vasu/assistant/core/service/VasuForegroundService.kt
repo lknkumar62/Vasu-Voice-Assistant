@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.vasu.assistant.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -30,9 +31,7 @@ class VasuForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> {
-                startForeground(notificationId, buildNotification("VASU is listening..."), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-            }
+            ACTION_START -> goForeground("VASU is listening...")
             ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -42,11 +41,20 @@ class VasuForegroundService : Service() {
                 val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                 nm.notify(notificationId, buildNotification(text))
             }
-            else -> {
-                startForeground(notificationId, buildNotification("VASU is active"), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-            }
+            else -> goForeground("VASU is active")
         }
         return START_STICKY
+    }
+
+    // Service.startForeground(int, Notification, int) is API 29+, but minSdk is 26.
+    // ServiceCompat drops the type argument on older releases instead of throwing.
+    private fun goForeground(status: String) {
+        ServiceCompat.startForeground(
+            this,
+            notificationId,
+            buildNotification(status),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        )
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
