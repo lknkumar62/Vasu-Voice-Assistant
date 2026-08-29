@@ -6,7 +6,6 @@ import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.stt.STTState
 import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.tts.TTSState
-import com.vasu.assistant.core.tts.VoiceProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,7 +33,7 @@ class VoiceViewModel @Inject constructor(
 
     init {
         // Initialize TTS
-        ttsManager.initialize(VoiceProfile.VASU_DEFAULT)
+        ttsManager.initialize()
 
         // Collect STT state
         viewModelScope.launch {

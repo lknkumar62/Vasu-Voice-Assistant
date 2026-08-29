@@ -7,7 +7,6 @@ import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.stt.STTState
 import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.tts.TTSState
-import com.vasu.assistant.core.tts.VoiceProfile
 import com.vasu.assistant.core.wakeword.WakeWordDetector
 import com.vasu.assistant.core.wakeword.WakeWordState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,7 +56,7 @@ class HomeViewModel @Inject constructor(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
-        ttsManager.initialize(VoiceProfile.VASU_DEFAULT)
+        ttsManager.initialize()
         wakeWordDetector.initialize()
 
         viewModelScope.launch {

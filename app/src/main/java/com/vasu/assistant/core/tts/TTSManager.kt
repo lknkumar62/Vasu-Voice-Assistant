@@ -3,6 +3,7 @@ package com.vasu.assistant.core.tts
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import com.vasu.assistant.core.settings.VasuSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,8 @@ import javax.inject.Singleton
 @Singleton
 class TTSManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val speechQueue: SpeechQueue
+    private val speechQueue: SpeechQueue,
+    private val settings: VasuSettings
 ) {
     private var textToSpeech: TextToSpeech? = null
     private var isInitialized = false
@@ -38,7 +40,7 @@ class TTSManager @Inject constructor(
     val state: StateFlow<TTSState> = _state.asStateFlow()
 
     // Current voice profile
-    private val _currentProfile = MutableStateFlow(VoiceProfile.VASU_DEFAULT)
+    private val _currentProfile = MutableStateFlow(settings.voiceProfile.value)
     val currentProfile: StateFlow<VoiceProfile> = _currentProfile.asStateFlow()
 
     // TTS Events
@@ -57,9 +59,10 @@ class TTSManager @Inject constructor(
     val availableLanguages: StateFlow<List<Locale>> = _availableLanguages.asStateFlow()
 
     /**
-     * Initialize TTS engine
+     * Initialize TTS engine. Defaults to the profile the user last saved, so a
+     * chosen rate/pitch/language survives a process restart.
      */
-    fun initialize(profile: VoiceProfile = VoiceProfile.VASU_DEFAULT) {
+    fun initialize(profile: VoiceProfile = settings.voiceProfile.value) {
         if (isInitialized) return
 
         _state.value = TTSState.INITIALIZING
@@ -117,7 +120,7 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Speak text immediately (interrupts current)
+     * Speak text immediately, abandoning anything already queued.
      */
     fun speak(text: String) {
         if (!isInitialized) {
@@ -126,20 +129,8 @@ class TTSManager @Inject constructor(
             return
         }
 
-        // Stop current speech
-        stop()
-
-        // Speak the text
-        val params = android.os.Bundle().apply {
-            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, _currentProfile.value.volume)
-        }
-
-        textToSpeech?.speak(
-            text,
-            TextToSpeech.QUEUE_FLUSH,
-            params,
-            text // utteranceId = text for tracking
-        )
+        speechQueue.clear()
+        utter(text)
     }
 
     /**
@@ -156,9 +147,26 @@ class TTSManager @Inject constructor(
             // Currently speaking, add to queue
             speechQueue.enqueue(text)
         } else {
-            // Not speaking, speak immediately
-            speak(text)
+            utter(text)
         }
+    }
+
+    /**
+     * Hands one utterance to the engine. Deliberately does not touch the queue:
+     * draining the queue used to go through speak(), which cleared it, so only the
+     * first queued line was ever spoken and the rest vanished.
+     */
+    private fun utter(text: String) {
+        val params = android.os.Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, _currentProfile.value.volume)
+        }
+
+        textToSpeech?.speak(
+            text,
+            TextToSpeech.QUEUE_FLUSH,
+            params,
+            text // utteranceId = text for tracking
+        )
     }
 
     /**
@@ -184,25 +192,34 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Apply voice profile
+     * Apply voice profile. Returns false when the requested language is not
+     * installed, so the caller can tell the user instead of silently speaking
+     * Hindi text with an English voice.
      */
-    fun applyProfile(profile: VoiceProfile) {
+    fun applyProfile(profile: VoiceProfile): Boolean {
         _currentProfile.value = profile
 
-        textToSpeech?.let { tts ->
-            tts.setPitch(profile.pitch)
-            tts.setSpeechRate(profile.speechRate)
+        val tts = textToSpeech ?: return false
+        tts.setPitch(profile.pitch.coerceIn(VasuSettings.PITCH_RANGE))
+        tts.setSpeechRate(profile.speechRate.coerceIn(VasuSettings.RATE_RANGE))
 
-            // Try to set language
-            val locale = if (profile.isHindi) Locale("hi", "IN") else Locale.US
-            val result = tts.setLanguage(locale)
+        // The profile carries an explicit language tag; the old code only looked at
+        // isHindi, so choosing en-IN silently fell back to en-US.
+        val result = tts.setLanguage(profile.language.toLocale())
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            tts.setLanguage(Locale.US)
+            _events.tryEmit(TTSEvent.Error("${profile.language} voice is not installed - using English"))
+            return false
+        }
+        return true
+    }
 
-            if (result == TextToSpeech.LANG_MISSING_DATA ||
-                result == TextToSpeech.LANG_NOT_SUPPORTED
-            ) {
-                // Fallback to English
-                tts.setLanguage(Locale.US)
-            }
+    private fun String.toLocale(): Locale {
+        val parts = split('-', '_')
+        return when {
+            parts.size >= 2 -> Locale(parts[0], parts[1])
+            parts.size == 1 && parts[0].isNotBlank() -> Locale(parts[0])
+            else -> Locale.US
         }
     }
 
@@ -250,7 +267,7 @@ class TTSManager @Inject constructor(
     private fun processNextInQueue() {
         val nextItem = speechQueue.dequeue()
         if (nextItem != null) {
-            speak(nextItem.text)
+            utter(nextItem.text)
         }
     }
 

@@ -1,39 +1,35 @@
 package com.vasu.assistant.core.offline
 
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import com.vasu.assistant.core.automation.ActionResult
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.vasu.assistant.core.network.NetworkMonitor
+import com.vasu.assistant.core.network.NetworkState
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class OfflineManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    private val networkMonitor: NetworkMonitor
 ) {
     enum class ConnectionState { ONLINE, OFFLINE, DEGRADED }
 
-    private var state: ConnectionState = ConnectionState.OFFLINE
     private var listeners = mutableListOf<ConnectionListener>()
 
     interface ConnectionListener {
         fun onConnectionChanged(state: ConnectionState)
     }
 
-    fun checkConnection(): ConnectionState {
-        state = if (isOnline()) ConnectionState.ONLINE else ConnectionState.OFFLINE
-        return state
-    }
+    // Connectivity detection used to be reimplemented here with its own
+    // ConnectivityManager query, so the two could disagree. NetworkMonitor is the
+    // single source of truth; this only translates its state.
+    fun checkConnection(): ConnectionState = getState()
 
-    fun isOnline(): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-    }
+    fun isOnline(): Boolean = networkMonitor.isOnline()
 
-    fun getState(): ConnectionState = state
+    fun getState(): ConnectionState = when (networkMonitor.state.value) {
+        NetworkState.ONLINE -> ConnectionState.ONLINE
+        NetworkState.DEGRADED -> ConnectionState.DEGRADED
+        NetworkState.OFFLINE -> ConnectionState.OFFLINE
+    }
 
     fun addListener(listener: ConnectionListener) { listeners.add(listener) }
     fun removeListener(listener: ConnectionListener) { listeners.remove(listener) }
@@ -67,7 +63,7 @@ class OfflineManager @Inject constructor(
     }
 
     fun getStatus(): ActionResult {
-        checkConnection()
+        val state = getState()
         return ActionResult.success("connection", state.name, mapOf(
             "state" to state.name,
             "isOnline" to isOnline()

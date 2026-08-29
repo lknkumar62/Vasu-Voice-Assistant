@@ -6,7 +6,6 @@ import com.vasu.assistant.core.ai.AIOrchestrator
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.stt.STTState
 import com.vasu.assistant.core.tts.TTSManager
-import com.vasu.assistant.core.tts.VoiceProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,7 +42,7 @@ class ChatViewModel @Inject constructor(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
-        ttsManager.initialize(VoiceProfile.VASU_DEFAULT)
+        ttsManager.initialize()
 
         addMessage(
             ChatMessage(

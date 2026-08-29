@@ -13,7 +13,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Network state
+ * Network state.
+ *
+ * DEGRADED means a network is attached but has not been validated - a captive
+ * portal, or Wi-Fi with no working uplink. Requests will fail, so it is worth
+ * distinguishing from OFFLINE when explaining a failure to the user.
  */
 enum class NetworkState {
     ONLINE, OFFLINE, DEGRADED
@@ -36,7 +40,7 @@ class NetworkMonitor @Inject constructor(
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            _state.value = NetworkState.ONLINE
+            _state.value = classify(connectivityManager.getNetworkCapabilities(network))
         }
 
         override fun onLost(network: Network) {
@@ -44,13 +48,24 @@ class NetworkMonitor @Inject constructor(
         }
 
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-            val isMetered = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED).not()
-            _state.value = if (isMetered) NetworkState.DEGRADED else NetworkState.ONLINE
+            _state.value = classify(capabilities)
         }
     }
 
     init {
         startMonitoring()
+    }
+
+    /**
+     * A metered connection is still a working connection. Treating "metered" as
+     * DEGRADED meant ordinary mobile data reported as not-online, which made the
+     * app claim to be offline on cellular.
+     */
+    private fun classify(capabilities: NetworkCapabilities?): NetworkState = when {
+        capabilities == null -> NetworkState.OFFLINE
+        !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> NetworkState.OFFLINE
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> NetworkState.ONLINE
+        else -> NetworkState.DEGRADED
     }
 
     private fun startMonitoring() {
@@ -61,9 +76,9 @@ class NetworkMonitor @Inject constructor(
         connectivityManager.registerNetworkCallback(request, networkCallback)
 
         // Check initial state
-        val activeNetwork = connectivityManager.activeNetwork
-        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
-        _state.value = if (capabilities != null) NetworkState.ONLINE else NetworkState.OFFLINE
+        _state.value = classify(
+            connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+        )
     }
 
     fun isOnline(): Boolean = _state.value == NetworkState.ONLINE
