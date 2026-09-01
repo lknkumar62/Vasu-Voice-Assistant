@@ -105,7 +105,7 @@ fun PermissionsScreen(
 
                     val progress = if (uiState.totalCount > 0) uiState.grantedCount.toFloat() / uiState.totalCount else 0f
                     LinearProgressIndicator(
-                        progress = { progress },
+                        progress = progress,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
