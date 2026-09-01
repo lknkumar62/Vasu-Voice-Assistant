@@ -41,7 +41,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace || {
+            echo "::error::Gradle assembleDebug failed. Printing detailed compileDebugKotlin logs..."
+            ./gradlew compileDebugKotlin --no-daemon --stacktrace --info
+            exit 1
+          }
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
