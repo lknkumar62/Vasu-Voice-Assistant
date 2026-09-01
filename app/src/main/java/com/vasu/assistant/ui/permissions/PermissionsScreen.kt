@@ -73,7 +73,7 @@ fun PermissionsScreen(
         PermissionItem("Bluetooth", Manifest.permission.BLUETOOTH, "Connect to Bluetooth devices", Icons.Default.BluetoothAudio),
         PermissionItem("Bluetooth Connect", Manifest.permission.BLUETOOTH_CONNECT, "Connect to paired devices", Icons.Default.Bluetooth),
         PermissionItem("Schedule Alarms", Manifest.permission.SCHEDULE_EXACT_ALARM, "Set exact alarm times", Icons.Default.Alarm),
-        PermissionItem("System Alert Window", Manifest.permission.SYSTEM_ALERT_WINDOW, "Display overlay windows", Icons.Default.LayersOutlined),
+        PermissionItem("System Alert Window", Manifest.permission.SYSTEM_ALERT_WINDOW, "Display overlay windows", Icons.Default.Layers),
         PermissionItem("Query Packages", Manifest.permission.QUERY_ALL_PACKAGES, "Find and launch apps", Icons.Default.Apps),
     )
 
