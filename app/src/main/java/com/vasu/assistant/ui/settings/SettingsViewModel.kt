@@ -6,7 +6,9 @@ import android.provider.Settings as AndroidSettings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vasu.assistant.core.ai.AIClient
+import com.vasu.assistant.core.ai.AiProviderConfig
 import com.vasu.assistant.core.ai.AiResult
+import com.vasu.assistant.core.ai.ModelCatalog
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.network.NetworkMonitor
 import com.vasu.assistant.core.network.NetworkState
@@ -34,6 +36,18 @@ data class SettingsUiState(
     val hasKey: Boolean = false,
     val maskedKey: String? = null,
     val model: String = SecureKeyStore.DEFAULT_MODEL,
+    /**
+     * What the key can actually use. Falls back to the configured chain until the
+     * catalogue has been read, so the picker never invents a model.
+     */
+    val availableModels: List<String> =
+        AiProviderConfig.GEMINI.candidatesFor(SecureKeyStore.DEFAULT_MODEL),
+    val modelsDiscovered: Boolean = false,
+    val modelsRefreshing: Boolean = false,
+    val modelMessage: String = "",
+    /** Set when a fallback answered instead of [model], so the swap is visible. */
+    val activeModel: String? = null,
+    val allowModelFallback: Boolean = AiProviderConfig.GEMINI.allowFallback,
     val keyStoreAvailable: Boolean = true,
     val connectionTest: ConnectionTest = ConnectionTest.NOT_TESTED,
     val connectionMessage: String = "",
@@ -103,11 +117,20 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun refresh() {
+        val discovered = keyStore.discoveredModels
         _uiState.value = _uiState.value.copy(
             geminiEnabled = keyStore.geminiEnabled,
             hasKey = keyStore.hasGeminiKey(),
             maskedKey = keyStore.maskedGeminiKey(),
             model = keyStore.geminiModel,
+            availableModels = if (discovered.isEmpty()) {
+                AiProviderConfig.GEMINI.candidatesFor(keyStore.geminiModel)
+            } else {
+                discovered.sorted()
+            },
+            modelsDiscovered = discovered.isNotEmpty(),
+            activeModel = keyStore.activeModel,
+            allowModelFallback = keyStore.allowModelFallback,
             keyStoreAvailable = keyStore.isAvailable,
             lastSuccessfulConnection = keyStore.lastSuccessfulConnection,
             lastError = keyStore.lastError,
@@ -134,6 +157,9 @@ class SettingsViewModel @Inject constructor(
             return
         }
         val saved = aiClient.saveApiKey(key)
+        // Which models are available is a property of the key, so a cached
+        // catalogue from the previous one would filter the new key's chain wrongly.
+        forgetModelCatalog()
         _uiState.value = _uiState.value.copy(
             connectionTest = ConnectionTest.NOT_TESTED,
             connectionMessage = if (saved) "Key saved. Test the connection to confirm it works."
@@ -144,6 +170,7 @@ class SettingsViewModel @Inject constructor(
 
     fun removeKey() {
         aiClient.removeApiKey()
+        forgetModelCatalog()
         _uiState.value = _uiState.value.copy(
             connectionTest = ConnectionTest.NOT_TESTED,
             connectionMessage = "Key removed."
@@ -151,14 +178,52 @@ class SettingsViewModel @Inject constructor(
         refresh()
     }
 
+    private fun forgetModelCatalog() {
+        keyStore.discoveredModels = emptySet()
+        keyStore.activeModel = null
+        _uiState.value = _uiState.value.copy(modelMessage = "")
+    }
+
     fun setModel(model: String) {
         keyStore.geminiModel = model
         // A model change invalidates the previous result: the old model may work
         // for this key while the new one is not enabled for it.
+        keyStore.activeModel = null
         _uiState.value = _uiState.value.copy(
             connectionTest = ConnectionTest.NOT_TESTED,
             connectionMessage = ""
         )
+        refresh()
+    }
+
+    /**
+     * Reads the provider's model list for this key. Without it the picker can only
+     * offer guesses, which is how a model the key cannot use came to be the default.
+     */
+    fun refreshModels() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                modelsRefreshing = true,
+                modelMessage = "Asking Google which models this key can use..."
+            )
+            val message = when (val catalog = aiClient.refreshModels()) {
+                is ModelCatalog.Available -> {
+                    val chat = catalog.chatModelIds
+                    if (chat.isEmpty()) "This key has no chat-capable models."
+                    else "${chat.size} models available for this key."
+                }
+                is ModelCatalog.Unavailable -> catalog.message
+            }
+            _uiState.value = _uiState.value.copy(
+                modelsRefreshing = false,
+                modelMessage = message
+            )
+            refresh()
+        }
+    }
+
+    fun setAllowModelFallback(enabled: Boolean) {
+        keyStore.allowModelFallback = enabled
         refresh()
     }
 

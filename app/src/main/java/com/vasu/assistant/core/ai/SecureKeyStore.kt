@@ -71,6 +71,30 @@ class SecureKeyStore @Inject constructor(
         get() = prefs?.getString(KEY_GEMINI_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
         set(value) { prefs?.edit()?.putString(KEY_GEMINI_MODEL, value)?.apply() }
 
+    /**
+     * Whether the provider may substitute a configured fallback model when the
+     * chosen one is unavailable. Off means a wrong choice fails loudly, which some
+     * users want: a silent switch changes cost and quality without saying so.
+     */
+    var allowModelFallback: Boolean
+        get() = prefs?.getBoolean(KEY_ALLOW_FALLBACK, AiProviderConfig.GEMINI.allowFallback)
+            ?: AiProviderConfig.GEMINI.allowFallback
+        set(value) { prefs?.edit()?.putBoolean(KEY_ALLOW_FALLBACK, value)?.apply() }
+
+    /**
+     * Chat models this key was last seen to support, read from the provider's own
+     * catalogue. Cached so the picker offers what the key can actually use, and
+     * cleared whenever reality disagrees with it.
+     */
+    var discoveredModels: Set<String>
+        get() = prefs?.getStringSet(KEY_DISCOVERED_MODELS, emptySet())?.toSet() ?: emptySet()
+        set(value) { prefs?.edit()?.putStringSet(KEY_DISCOVERED_MODELS, value)?.apply() }
+
+    /** The model that last answered, which may be a fallback rather than the choice. */
+    var activeModel: String?
+        get() = prefs?.getString(KEY_ACTIVE_MODEL, null)
+        set(value) { prefs?.edit()?.putString(KEY_ACTIVE_MODEL, value)?.apply() }
+
     var geminiEnabled: Boolean
         get() = prefs?.getBoolean(KEY_GEMINI_ENABLED, false) ?: false
         set(value) { prefs?.edit()?.putBoolean(KEY_GEMINI_ENABLED, value)?.apply() }
@@ -92,14 +116,19 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_GEMINI_ENABLED = "gemini_enabled"
         private const val KEY_LAST_SUCCESS = "gemini_last_success"
         private const val KEY_LAST_ERROR = "gemini_last_error"
+        private const val KEY_ALLOW_FALLBACK = "gemini_allow_fallback"
+        private const val KEY_DISCOVERED_MODELS = "gemini_discovered_models"
+        private const val KEY_ACTIVE_MODEL = "gemini_active_model"
 
-        const val DEFAULT_MODEL = "gemini-2.0-flash"
-
-        val AVAILABLE_MODELS = listOf(
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite",
-            "gemini-2.5-flash",
-            "gemini-2.5-pro"
-        )
+        /**
+         * The model asked for until the user picks another. AiProviderConfig owns
+         * the value; a second copy here is how "gemini-2.0-flash" ended up
+         * hardcoded in two files that could disagree.
+         *
+         * There is deliberately no hardcoded list of available models. Which models
+         * a key can use is a property of the key, so it is read from the provider
+         * and cached in [discoveredModels] instead of guessed at.
+         */
+        val DEFAULT_MODEL: String = AiProviderConfig.GEMINI.primaryModel
     }
 }

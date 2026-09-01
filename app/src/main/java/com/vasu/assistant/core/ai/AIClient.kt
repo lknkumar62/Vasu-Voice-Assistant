@@ -74,6 +74,9 @@ class AIClient @Inject constructor(
 
     suspend fun testConnection(): AiResult = gemini.testConnection()
 
+    /** Reads which models the stored key may use, so the picker offers real choices. */
+    suspend fun refreshModels(): ModelCatalog = gemini.refreshModels()
+
     suspend fun chat(request: AIRequest): AIResponse {
         _state.value = AIState.THINKING
         val startTime = System.currentTimeMillis()

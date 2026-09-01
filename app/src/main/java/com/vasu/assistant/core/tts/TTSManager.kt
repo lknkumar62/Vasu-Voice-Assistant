@@ -159,17 +159,23 @@ class TTSManager @Inject constructor(
      * Hands one utterance to the engine. Deliberately does not touch the queue:
      * draining the queue used to go through speak(), which cleared it, so only the
      * first queued line was ever spoken and the rest vanished.
+     *
+     * Every speech path funnels through here, so markdown is stripped once at the
+     * bottom rather than at each caller.
      */
     private fun utter(text: String) {
+        val spoken = toSpeakableText(text)
+        if (spoken.isBlank()) return
+
         val params = android.os.Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, _currentProfile.value.volume)
         }
 
         textToSpeech?.speak(
-            text,
+            spoken,
             TextToSpeech.QUEUE_FLUSH,
             params,
-            text // utteranceId = text for tracking
+            spoken // utteranceId = spoken text for tracking
         )
     }
 

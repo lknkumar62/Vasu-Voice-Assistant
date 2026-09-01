@@ -1,5 +1,6 @@
 package com.vasu.assistant.core.ai
 
+import android.util.Log
 import com.vasu.assistant.core.automation.ActionResult
 import com.vasu.assistant.core.memory.MemoryManager
 import com.vasu.assistant.core.tts.TTSManager
@@ -44,7 +45,11 @@ class AIOrchestrator @Inject constructor(
             _lastResponse.value = response
             response
         } catch (e: Exception) {
-            val errorResponse = "Sorry, I encountered an error: ${e.message}"
+            // The exception text is for the log, not for her mouth. It is usually a
+            // class name or a stack frame, and hearing it read out tells the user
+            // nothing they can act on.
+            Log.e(TAG, "Turn failed", e)
+            val errorResponse = "Sorry jaan, kuch galat ho gaya. Ek baar phir bolo na?"
             _lastResponse.value = errorResponse
             errorResponse
         } finally {
@@ -85,12 +90,19 @@ class AIOrchestrator @Inject constructor(
      * never reports an action as done, and points at the fix when the user can act
      * on it. The wording is deliberately honest: "Online AI unavailable" is the one
      * phrase that must survive, because pretending otherwise hides a broken setup.
+     *
+     * Nothing here forwards the provider's own message. Those name HTTP codes and
+     * model ids, which belong in the log and in Settings, not in her voice.
      */
     private fun explain(error: AiErrorKind, message: String): String = when (error) {
         AiErrorKind.NOT_CONFIGURED ->
             "Suno, online AI unavailable hai — abhi sirf offline commands chalenge. Settings mein Gemini key daal do na."
         AiErrorKind.INVALID_KEY ->
             "Meri Gemini key reject ho gayi. Ek baar Settings mein check kar lo?"
+        AiErrorKind.PERMISSION_DENIED ->
+            "Is key ko Gemini ka access nahi mila. Settings mein ek baar dekh lo na."
+        AiErrorKind.MODEL_NOT_FOUND ->
+            "Jo AI model set hai wo is key ke saath nahi chalta. Settings mein doosra model chun lo na."
         AiErrorKind.OFFLINE ->
             "Online AI unavailable — internet nahi hai. Offline commands abhi bhi chalenge."
         AiErrorKind.TIMEOUT ->
@@ -101,7 +113,12 @@ class AIOrchestrator @Inject constructor(
             "Is key ka Gemini quota khatam ho gaya hai."
         AiErrorKind.BLOCKED_BY_SAFETY ->
             "Sorry jaan, is baare mein main jawab nahi de sakti."
-        else -> message
+        AiErrorKind.MALFORMED_RESPONSE ->
+            "Gemini ka jawab poora nahi aaya. Ek baar phir puchho?"
+        AiErrorKind.SERVER_ERROR, AiErrorKind.UNKNOWN -> {
+            Log.w(TAG, "AI failure ($error): $message")
+            "Abhi jawab nahi aa paya. Thodi der mein try karte hain?"
+        }
     }
 
     private fun describe(result: ActionResult): String =
@@ -171,5 +188,9 @@ Boundaries: you stay affectionate but never sexual or explicit, and you never pr
 be a real human being if he asks you directly what you are.
 
 Remember what he tells you about himself and use it."""
+    }
+
+    companion object {
+        private const val TAG = "AIOrchestrator"
     }
 }

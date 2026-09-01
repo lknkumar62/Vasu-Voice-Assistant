@@ -159,8 +159,24 @@ fun SettingsScreen(
                 }
 
                 SettingsCard {
-                    Text("Model", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Model",
+                            color = VasuTextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = viewModel::refreshModels,
+                            enabled = state.hasKey && !state.modelsRefreshing
+                        ) {
+                            Text(
+                                if (state.modelsRefreshing) "Checking..." else "Refresh list",
+                                color = VasuCyan
+                            )
+                        }
+                    }
                     Box {
                         OutlinedButton(onClick = { modelMenuOpen = true }) {
                             Text(state.model, color = VasuTextPrimary)
@@ -170,7 +186,7 @@ fun SettingsScreen(
                             expanded = modelMenuOpen,
                             onDismissRequest = { modelMenuOpen = false }
                         ) {
-                            SecureKeyStore.AVAILABLE_MODELS.forEach { model ->
+                            state.availableModels.forEach { model ->
                                 DropdownMenuItem(
                                     text = { Text(model) },
                                     onClick = {
@@ -181,6 +197,35 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        state.modelMessage.ifBlank {
+                            if (state.modelsDiscovered) {
+                                "${state.availableModels.size} models this key can use, read from Google."
+                            } else {
+                                "Not checked against your key yet - these are the configured defaults."
+                            }
+                        },
+                        color = VasuTextMuted,
+                        fontSize = 12.sp
+                    )
+                }
+
+                SettingsToggleItem(
+                    icon = Icons.Default.SwapHoriz,
+                    title = "Allow model fallback",
+                    subtitle = "If your model is unavailable, try the next configured one instead of failing.",
+                    enabled = state.allowModelFallback,
+                    onToggle = viewModel::setAllowModelFallback
+                )
+
+                state.activeModel?.takeIf { it != state.model }?.let {
+                    StatusRow(
+                        icon = Icons.Default.SwapHoriz,
+                        label = "Answering with $it",
+                        detail = "${state.model} was unavailable, so a configured fallback is in use.",
+                        color = VasuWarning
+                    )
                 }
 
                 StatusRow(
