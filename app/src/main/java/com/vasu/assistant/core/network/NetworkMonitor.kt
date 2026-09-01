@@ -10,27 +10,39 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+enum class NetworkState {
+    ONLINE,
+    DEGRADED,
+    OFFLINE
+}
+
 @Singleton
 class NetworkMonitor @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-    private val _isOnline = MutableStateFlow(checkConnectivity())
+    private val _state = MutableStateFlow(checkConnectivityState())
+    val state: StateFlow<NetworkState> = _state.asStateFlow()
+
+    private val _isOnline = MutableStateFlow(_state.value == NetworkState.ONLINE)
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
-    private fun checkConnectivity(): Boolean {
-        val network = connectivityManager.activeNetwork ?: return false
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    private fun checkConnectivityState(): NetworkState {
+        val network = connectivityManager.activeNetwork ?: return NetworkState.OFFLINE
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return NetworkState.OFFLINE
+        val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        val validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         return when {
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
-            else -> false
+            hasInternet && validated -> NetworkState.ONLINE
+            hasInternet -> NetworkState.DEGRADED
+            else -> NetworkState.OFFLINE
         }
     }
 
     fun updateConnectivity() {
-        _isOnline.value = checkConnectivity()
+        val newState = checkConnectivityState()
+        _state.value = newState
+        _isOnline.value = newState == NetworkState.ONLINE
     }
 }
