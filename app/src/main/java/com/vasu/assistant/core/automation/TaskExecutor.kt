@@ -4,12 +4,15 @@ import com.vasu.assistant.accessibility.VasuAccessibilityService
 import com.vasu.assistant.core.ai.ToolRouter
 import kotlinx.coroutines.delay
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Singleton
 class TaskExecutor @Inject constructor(
-    private val toolRouter: ToolRouter
+    private val toolRouterProvider: Provider<ToolRouter>
 ) {
+    private val toolRouter: ToolRouter
+        get() = toolRouterProvider.get()
     private fun withService(block: (VasuAccessibilityService) -> ActionResult): ActionResult {
         val service = VasuAccessibilityService.instance.value
             ?: return ActionResult.error("accessibility", "Accessibility service not running", "Service not connected")

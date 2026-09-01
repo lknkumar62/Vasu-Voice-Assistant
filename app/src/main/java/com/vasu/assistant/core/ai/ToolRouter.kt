@@ -32,8 +32,11 @@ class ToolRouter @Inject constructor(
     private val fileManager: FileManager,
     private val cameraManager: VasuCameraManager,
     private val browserManager: com.vasu.assistant.core.browser.BrowserManager,
-    private val missionEngine: com.vasu.assistant.core.automation.MissionEngine
+    private val missionEngineProvider: javax.inject.Provider<com.vasu.assistant.core.automation.MissionEngine>
 ) {
+    private val missionEngine: com.vasu.assistant.core.automation.MissionEngine
+        get() = missionEngineProvider.get()
+
     private val toolRegistry = mutableMapOf<String, ToolDefinition>()
     init { registerDefaultTools() }
 
