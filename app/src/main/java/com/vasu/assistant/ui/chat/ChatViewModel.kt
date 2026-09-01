@@ -35,14 +35,20 @@ data class ChatUiState(
 class ChatViewModel @Inject constructor(
     private val sttManager: STTManager,
     private val ttsManager: TTSManager,
-    private val aiOrchestrator: AIOrchestrator
+    private val aiOrchestrator: AIOrchestrator,
+    private val conversationDao: com.vasu.assistant.database.ConversationDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    private val currentConversationId = System.currentTimeMillis().toString()
+
     init {
         ttsManager.initialize()
+
+        // Load chat history
+        loadConversationHistory()
 
         addMessage(
             ChatMessage(
@@ -117,6 +123,38 @@ class ChatViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + message
         )
+        // Save to database
+        viewModelScope.launch {
+            conversationDao.insertMessage(
+                com.vasu.assistant.database.ConversationMessageEntity(
+                    conversationId = currentConversationId,
+                    role = if (message.isUser) "user" else "assistant",
+                    content = message.content,
+                    toolName = message.toolName,
+                    toolResult = message.toolResult,
+                    timestamp = message.timestamp
+                )
+            )
+        }
+    }
+
+    private fun loadConversationHistory() {
+        viewModelScope.launch {
+            val messages = conversationDao.getRecentMessages(currentConversationId, limit = 50)
+            val chatMessages = messages.map { entity ->
+                ChatMessage(
+                    id = entity.id.toString(),
+                    content = entity.content,
+                    isUser = entity.role == "user",
+                    timestamp = entity.timestamp,
+                    toolName = entity.toolName,
+                    toolResult = entity.toolResult
+                )
+            }
+            if (chatMessages.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(messages = chatMessages)
+            }
+        }
     }
 
     override fun onCleared() {

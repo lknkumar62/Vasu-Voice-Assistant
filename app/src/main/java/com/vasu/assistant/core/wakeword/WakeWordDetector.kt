@@ -285,24 +285,29 @@ class WakeWordDetector @Inject constructor(
         val now = System.currentTimeMillis()
         if (now - lastDetectionTime < config.cooldownMs) return
 
-        // Extract mel spectrogram features
-        val featuresRaw = melSpectrogram?.extractForWakeWord(detectionBuffer)
-        val features = featuresRaw?.let { raw ->
-            Array(98) { i -> FloatArray(40) { j -> raw.getOrElse(i * 40 + j) { 0f } } }
-        }
-
-        if (features != null) {
-            // Run inference
-            val detected = model?.detect(features) ?: false
-
-            if (detected) {
-                lastDetectionTime = now
-                _state.value = WakeWordState.DETECTED
-                _detections.tryEmit("Hello Vasu")
-
-                // Reset to listening after detection (non-blocking)
-                _state.value = WakeWordState.LISTENING
+        try {
+            // Extract mel spectrogram features
+            val featuresRaw = melSpectrogram?.extractForWakeWord(detectionBuffer)
+            val features = featuresRaw?.let { raw ->
+                Array(98) { i -> FloatArray(40) { j -> raw.getOrElse(i * 40 + j) { 0f } } }
             }
+
+            if (features != null) {
+                // Run inference
+                val detected = model?.detect(features) ?: false
+
+                if (detected) {
+                    lastDetectionTime = now
+                    _state.value = WakeWordState.DETECTED
+                    _detections.tryEmit("Hello Vasu")
+
+                    // Reset to listening after detection
+                    _state.value = WakeWordState.LISTENING
+                }
+            }
+        } catch (e: Exception) {
+            _unavailableReason.value = "Wake word detection error: ${e.message}"
+            _state.value = WakeWordState.ERROR
         }
     }
 }
