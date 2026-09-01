@@ -5,8 +5,6 @@ import android.content.Context
 import android.location.Geocoder
 import android.location.Location
 import android.os.Looper
-import androidx.core.content.ContextCompat
-import androidx.core.content.PackageManagerCompat
 import com.google.android.gms.location.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow

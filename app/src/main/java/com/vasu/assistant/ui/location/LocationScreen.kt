@@ -65,7 +65,7 @@ fun LocationScreen(
                 .padding(paddingValues)
         ) {
             // Current Location Card
-            if (uiState.currentLocation != null) {
+            if (!uiState.isLoading && uiState.error == null) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -93,7 +93,7 @@ fun LocationScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    uiState.currentLocation?.address ?: "Loading...",
+                                    uiState.currentLocation,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = VasuTextMuted,
                                     maxLines = 2
@@ -104,7 +104,7 @@ fun LocationScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            "Lat: ${String.format("%.4f", uiState.currentLocation?.latitude)} | Lon: ${String.format("%.4f", uiState.currentLocation?.longitude)}",
+                            "Lat: ${String.format("%.4f", uiState.latitude)} | Lon: ${String.format("%.4f", uiState.longitude)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = VasuCyan
                         )
@@ -113,9 +113,8 @@ fun LocationScreen(
 
                         Button(
                             onClick = {
-                                val location = uiState.currentLocation ?: return@Button
-                                val uri = "geo:${location.latitude},${location.longitude}?z=18"
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
+                                val uri = "geo:${uiState.latitude},${uiState.longitude}?z=18"
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri)))
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = VasuCyan),
