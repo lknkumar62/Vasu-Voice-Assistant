@@ -1,33 +1,25 @@
 package com.vasu.assistant.ui.tools
 
 import androidx.lifecycle.ViewModel
-import com.vasu.assistant.core.ai.ToolRouter
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 
-data class ToolsUiState(
-    val tools: List<Map<String, Any>> = emptyList()
-)
-
 @HiltViewModel
-class ToolsViewModel @Inject constructor(
-    private val toolRouter: ToolRouter
-) : ViewModel() {
-
-    private val _uiState = MutableStateFlow(ToolsUiState())
-    val uiState: StateFlow<ToolsUiState> = _uiState
-
-    init {
-        _uiState.value = ToolsUiState(
-            tools = toolRouter.getAvailableTools().map { tool ->
-                mapOf(
-                    "name" to tool.name,
-                    "description" to tool.description,
-                    "riskLevel" to tool.riskLevel.name
-                )
-            }
-        )
-    }
+class ToolsViewModel @Inject constructor() : ViewModel() {
+    val tools = listOf(
+        ToolItem("Call", "Make phone calls", "call"),
+        ToolItem("Message", "Send SMS and WhatsApp", "message"),
+        ToolItem("Device Control", "Control torch, volume, media", "device"),
+        ToolItem("Location", "Find location and maps", "location"),
+        ToolItem("Files", "Browse and manage files", "files"),
+        ToolItem("Camera", "Take photos and videos", "camera"),
+        ToolItem("Settings", "Configure app settings", "settings"),
+        ToolItem("Missions", "Create automated missions", "missions")
+    )
 }
+
+data class ToolItem(
+    val name: String,
+    val description: String,
+    val id: String
+)
