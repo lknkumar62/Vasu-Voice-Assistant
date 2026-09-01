@@ -19,7 +19,8 @@ import javax.inject.Singleton
  * TTSManager - Text-to-Speech engine wrapper.
  *
  * Features:
- * - Hindi + English support
+ * - Custom local VASU voice engine integration
+ * - Hindi + English + Hinglish support
  * - Voice profiles (pitch, rate, volume)
  * - Speech queue management
  * - Streaming text support
@@ -30,7 +31,8 @@ import javax.inject.Singleton
 class TTSManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val speechQueue: SpeechQueue,
-    private val settings: VasuSettings
+    private val settings: VasuSettings,
+    private val customVoiceEngine: CustomVoiceEngine
 ) {
     private var textToSpeech: TextToSpeech? = null
     private var isInitialized = false
@@ -62,11 +64,16 @@ class TTSManager @Inject constructor(
     private val _voiceStatus = MutableStateFlow(VoiceStatus())
     val voiceStatus: StateFlow<VoiceStatus> = _voiceStatus.asStateFlow()
 
+    // Custom local voice model status
+    val customVoiceStatus: StateFlow<VoiceModelStatus> = customVoiceEngine.status
+
     /**
      * Initialize TTS engine. Defaults to the profile the user last saved, so a
      * chosen rate/pitch/language survives a process restart.
      */
     fun initialize(profile: VoiceProfile = settings.voiceProfile.value) {
+        customVoiceEngine.detectCustomVoiceAssets()
+
         if (isInitialized) return
 
         _state.value = TTSState.INITIALIZING
@@ -127,13 +134,26 @@ class TTSManager @Inject constructor(
      * Speak text immediately, abandoning anything already queued.
      */
     fun speak(text: String) {
+        speechQueue.clear()
+
+        // 1. Try local custom voice sample first if available
+        if (customVoiceEngine.hasCustomSampleFor(text)) {
+            _isSpeaking.value = true
+            _state.value = TTSState.SPEAKING
+            val played = customVoiceEngine.playCustomSample(text) {
+                _isSpeaking.value = false
+                _state.value = TTSState.READY
+                processNextInQueue()
+            }
+            if (played) return
+        }
+
         if (!isInitialized) {
             initialize()
             speechQueue.enqueue(text, priority = true)
             return
         }
 
-        speechQueue.clear()
         utter(text)
     }
 
@@ -141,6 +161,11 @@ class TTSManager @Inject constructor(
      * Add text to queue (plays after current)
      */
     fun speakQueued(text: String) {
+        if (customVoiceEngine.hasCustomSampleFor(text) && !_isSpeaking.value) {
+            speak(text)
+            return
+        }
+
         if (!isInitialized) {
             initialize()
             speechQueue.enqueue(text)
@@ -148,7 +173,6 @@ class TTSManager @Inject constructor(
         }
 
         if (_isSpeaking.value) {
-            // Currently speaking, add to queue
             speechQueue.enqueue(text)
         } else {
             utter(text)
@@ -156,12 +180,7 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Hands one utterance to the engine. Deliberately does not touch the queue:
-     * draining the queue used to go through speak(), which cleared it, so only the
-     * first queued line was ever spoken and the rest vanished.
-     *
-     * Every speech path funnels through here, so markdown is stripped once at the
-     * bottom rather than at each caller.
+     * Hands one utterance to the engine.
      */
     private fun utter(text: String) {
         val spoken = toSpeakableText(text)
@@ -175,7 +194,7 @@ class TTSManager @Inject constructor(
             spoken,
             TextToSpeech.QUEUE_FLUSH,
             params,
-            spoken // utteranceId = spoken text for tracking
+            spoken
         )
     }
 
@@ -183,6 +202,7 @@ class TTSManager @Inject constructor(
      * Stop current speech
      */
     fun stop() {
+        customVoiceEngine.stop()
         textToSpeech?.stop()
         _isSpeaking.value = false
         speechQueue.clear()
@@ -192,19 +212,16 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Pause speech (API 21+)
+     * Pause speech
      */
     fun pause() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-            textToSpeech?.stop() // Android TTS doesn't have native pause
-            _state.value = TTSState.PAUSED
-        }
+        textToSpeech?.stop()
+        customVoiceEngine.stop()
+        _state.value = TTSState.PAUSED
     }
 
     /**
-     * Apply voice profile. Returns false when the requested language is not
-     * installed, so the caller can tell the user instead of silently speaking
-     * Hindi text with an English voice.
+     * Apply voice profile.
      */
     fun applyProfile(profile: VoiceProfile): Boolean {
         _currentProfile.value = profile
@@ -213,8 +230,6 @@ class TTSManager @Inject constructor(
         tts.setPitch(profile.pitch.coerceIn(VasuSettings.PITCH_RANGE))
         tts.setSpeechRate(profile.speechRate.coerceIn(VasuSettings.RATE_RANGE))
 
-        // The profile carries an explicit language tag; the old code only looked at
-        // isHindi, so choosing en-IN silently fell back to en-US.
         val result = tts.setLanguage(profile.language.toLocale())
         if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
             tts.setLanguage(Locale.US)
@@ -226,14 +241,6 @@ class TTSManager @Inject constructor(
         return true
     }
 
-    /**
-     * VASU speaks as a girl, so prefer a voice the engine labels female.
-     *
-     * Only an explicit "female" marker in the voice name counts. Engines that hide
-     * gender keep their default voice and report UNLABELLED, so Settings can say
-     * "this engine does not label gender" rather than claim a female voice VASU
-     * never got. Local voices win over network ones so she still speaks offline.
-     */
     private fun selectFemaleVoice(tts: TextToSpeech, target: Locale) {
         val voices = runCatching { tts.voices }.getOrNull() ?: emptySet()
         if (voices.isEmpty()) {
@@ -271,9 +278,6 @@ class TTSManager @Inject constructor(
         }
     }
 
-    /**
-     * Change language
-     */
     fun setLanguage(locale: Locale) {
         textToSpeech?.let { tts ->
             val result = tts.setLanguage(locale)
@@ -285,23 +289,10 @@ class TTSManager @Inject constructor(
         }
     }
 
-    /**
-     * Check if TTS is speaking
-     */
-    fun isSpeaking(): Boolean = _isSpeaking.value
+    fun isSpeaking(): Boolean = _isSpeaking.value || customVoiceEngine.isPlaying()
 
-    /**
-     * Get current text being spoken
-     */
-    fun getCurrentText(): String? {
-        // TTS API doesn't expose current text directly
-        return null
-    }
-
-    /**
-     * Cleanup resources
-     */
     fun shutdown() {
+        customVoiceEngine.stop()
         textToSpeech?.stop()
         textToSpeech?.shutdown()
         textToSpeech = null
@@ -309,8 +300,6 @@ class TTSManager @Inject constructor(
         _state.value = TTSState.IDLE
         _isSpeaking.value = false
     }
-
-    // Private methods
 
     private fun processNextInQueue() {
         val nextItem = speechQueue.dequeue()
@@ -323,21 +312,18 @@ class TTSManager @Inject constructor(
         textToSpeech?.let { tts ->
             val languages = mutableListOf<Locale>()
 
-            // Check Hindi
             val hindiResult = tts.isLanguageAvailable(Locale("hi", "IN"))
             if (hindiResult >= TextToSpeech.LANG_AVAILABLE) {
                 languages.add(Locale("hi", "IN"))
             }
 
-            // Check English
             val englishResult = tts.isLanguageAvailable(Locale.US)
             if (englishResult >= TextToSpeech.LANG_AVAILABLE) {
                 languages.add(Locale.US)
             }
 
-            // Check Hinglish (just Hindi locale)
             if (languages.contains(Locale("hi", "IN"))) {
-                languages.add(Locale("hi", "IN")) // Hinglish uses Hindi locale
+                languages.add(Locale("hi", "IN"))
             }
 
             _availableLanguages.value = languages

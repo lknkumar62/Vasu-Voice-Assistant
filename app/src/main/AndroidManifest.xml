@@ -106,19 +106,32 @@
             </intent-filter>
         </activity>
 
-        <!-- Foreground service. This declaration was missing entirely, so every
-             VasuForegroundService.start() call threw and wake word / background
-             listening could never run. foregroundServiceType must match the
-             FOREGROUND_SERVICE_TYPE_MICROPHONE passed to startForeground(). -->
+        <!-- Assistant Overlay Activity (Digital Assistant / Wake Word Pop-up) -->
+        <activity
+            android:name=".ui.overlay.AssistantOverlayActivity"
+            android:exported="true"
+            android:theme="@style/Theme.VasuVoiceAssistant.Overlay"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.VOICE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Foreground service for continuous wake-word listening -->
         <service
             android:name=".core.service.VasuForegroundService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
-        <!-- Accessibility Service. Must be exported: the system binds this from
-             another process, so exported="false" prevented it from working.
-             BIND_ACCESSIBILITY_SERVICE is a signature permission, so only the
-             system can bind it. -->
+        <!-- Accessibility Service -->
         <service
             android:name=".accessibility.VasuAccessibilityService"
             android:exported="true"

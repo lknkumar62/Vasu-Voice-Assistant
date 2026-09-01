@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import com.vasu.assistant.MainActivity
 import com.vasu.assistant.core.wakeword.WakeWordDetector
 import com.vasu.assistant.core.wakeword.WakeWordState
+import com.vasu.assistant.ui.overlay.AssistantOverlayActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,15 +58,8 @@ class VasuForegroundService : Service() {
         return START_STICKY
     }
 
-    /**
-     * The notification used to say "VASU is listening..." unconditionally while the
-     * injected detector was never actually started, so the app claimed a working
-     * wake word it did not have. The status now reflects the detector's real state.
-     */
     private fun beginListening() {
         if (!hasMicPermission()) {
-            // From Android 14 a microphone-typed foreground service throws unless
-            // RECORD_AUDIO is already granted, so this must not be attempted.
             goForeground("Microphone permission needed - open VASU to grant it", withMic = false)
             return
         }
@@ -89,12 +83,21 @@ class VasuForegroundService : Service() {
                 notify(
                     when (state) {
                         WakeWordState.LISTENING -> "Listening for \"Hello Vasu\""
-                        WakeWordState.DETECTED -> "Heard you - opening VASU"
+                        WakeWordState.DETECTED -> {
+                            AssistantOverlayActivity.launch(this@VasuForegroundService)
+                            "Heard you - opening VASU"
+                        }
                         WakeWordState.MODEL_NOT_AVAILABLE, WakeWordState.ERROR ->
                             wakeWordListener.unavailableReason.value ?: "Wake word unavailable"
                         WakeWordState.IDLE -> "VASU is active"
                     }
                 )
+            }
+        }
+
+        scope.launch {
+            wakeWordListener.detections.collect {
+                AssistantOverlayActivity.launch(this@VasuForegroundService)
             }
         }
     }
@@ -103,8 +106,6 @@ class VasuForegroundService : Service() {
         this, Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
 
-    // Service.startForeground(int, Notification, int) is API 29+, but minSdk is 26.
-    // ServiceCompat drops the type argument on older releases instead of throwing.
     private fun goForeground(status: String, withMic: Boolean) {
         ServiceCompat.startForeground(
             this,

@@ -59,6 +59,7 @@ data class SettingsUiState(
     val voiceProfile: VoiceProfile = VoiceProfile.VASU_DEFAULT,
     val installedVoices: List<String> = emptyList(),
     val voiceStatus: VoiceStatus = VoiceStatus(),
+    val customVoiceStatus: com.vasu.assistant.core.tts.VoiceModelStatus = com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS,
 
     // Wake word
     val wakeWordEnabled: Boolean = false,
@@ -113,6 +114,9 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             ttsManager.voiceStatus.collect { _uiState.value = _uiState.value.copy(voiceStatus = it) }
+        }
+        viewModelScope.launch {
+            ttsManager.customVoiceStatus.collect { _uiState.value = _uiState.value.copy(customVoiceStatus = it) }
         }
     }
 

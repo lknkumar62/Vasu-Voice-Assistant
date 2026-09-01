@@ -376,6 +376,31 @@ fun SettingsScreen(
                     },
                     color = if (state.voiceStatus.gender == VoiceGender.FEMALE) VasuSuccess else VasuTextSecondary
                 )
+
+                StatusRow(
+                    icon = when (state.customVoiceStatus) {
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL,
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> Icons.Default.CheckCircle
+                        else -> Icons.Default.Info
+                    },
+                    label = when (state.customVoiceStatus) {
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL -> "Custom Voice Model Active"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> "Custom Voice Samples Loaded"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS -> "Local Voice Asset Folder"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ERROR -> "Custom Voice Error"
+                    },
+                    detail = when (state.customVoiceStatus) {
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL -> "Local neural voice model loaded from app/src/main/assets/vasu_voice/"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> "Custom audio samples loaded from app/src/main/assets/vasu_voice/"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS -> "Place your voice clips or neural model in app/src/main/assets/vasu_voice/ to use custom voice."
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ERROR -> "Failed loading custom voice assets."
+                    },
+                    color = when (state.customVoiceStatus) {
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL,
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> VasuSuccess
+                        else -> VasuCyan
+                    }
+                )
             }
 
             SettingsSection(title = "WAKE WORD") {

@@ -30,7 +30,9 @@ class ToolRouter @Inject constructor(
     private val whatsappAutomation: WhatsAppAutomation,
     private val deviceControl: DeviceControlManager,
     private val fileManager: FileManager,
-    private val cameraManager: VasuCameraManager
+    private val cameraManager: VasuCameraManager,
+    private val browserManager: com.vasu.assistant.core.browser.BrowserManager,
+    private val missionEngine: com.vasu.assistant.core.automation.MissionEngine
 ) {
     private val toolRegistry = mutableMapOf<String, ToolDefinition>()
     init { registerDefaultTools() }
@@ -69,9 +71,17 @@ class ToolRouter @Inject constructor(
             "bluetooth_toggle" -> deviceControl.getBluetooth().toggle()
             "battery_info" -> { val info = deviceControl.getBatteryInfo(); ActionResult.success("battery", "Battery: ${info["level"]}%, Charging: ${info["isCharging"]}") }
             "device_info" -> { val info = deviceControl.getDeviceInfo(); ActionResult.success("device", "${info["brand"]} ${info["model"]}, Android ${info["android_version"]}") }
-            "search_web" -> ActionResult.success("search_web", "Search: ${parameters["query"]}")
-            "create_alarm" -> ActionResult.success("create_alarm", "Alarm created: ${parameters["time"]}")
-            "run_mission" -> ActionResult.success("run_mission", "Mission engine - Phase 13")
+            "search_web" -> { val query = parameters["query"] as? String ?: ""; browserManager.search(query); ActionResult.success("search_web", "Searching for $query") }
+            "open_url" -> { val url = parameters["url"] as? String ?: ""; browserManager.openUrl(url); ActionResult.success("open_url", "Opened $url") }
+            "open_youtube" -> { val query = parameters["query"] as? String ?: ""; browserManager.openYouTube(query); ActionResult.success("open_youtube", "Opened YouTube for $query") }
+            "open_maps" -> { val query = parameters["query"] as? String ?: ""; browserManager.openMaps(query); ActionResult.success("open_maps", "Opened Maps for $query") }
+            "create_alarm" -> ActionResult.success("create_alarm", "Alarm created for ${parameters["time"] ?: "scheduled time"}")
+            "run_mission" -> {
+                val missionId = parameters["mission_id"] as? String ?: ""
+                val success = missionEngine.executeMission(missionId)
+                if (success) ActionResult.success("run_mission", "Mission completed successfully")
+                else ActionResult.error("run_mission", "Mission execution failed", "Failed step")
+            }
             "browse_files" -> fileManager.browseDirectory(parameters["path"] as? String ?: "")
             "search_files" -> fileManager.searchFiles(parameters["query"] as? String ?: "")
             "read_file" -> fileManager.readFileContent(parameters["path"] as? String ?: "")
