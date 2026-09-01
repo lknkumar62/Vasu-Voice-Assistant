@@ -69,6 +69,15 @@ class CustomVoiceEngine @Inject constructor(
                 sampleFiles.forEach { file ->
                     val key = file.substringBeforeLast(".").lowercase().replace("_", " ").trim()
                     customSampleMap[key] = "vasu_voice/$file"
+                    when (key) {
+                        "greeting", "vasu reply", "hello vasu" -> {
+                            customSampleMap.putIfAbsent("hello", "vasu_voice/$file")
+                            customSampleMap.putIfAbsent("hello vasu", "vasu_voice/$file")
+                            customSampleMap.putIfAbsent("hi vasu", "vasu_voice/$file")
+                            customSampleMap.putIfAbsent("greeting", "vasu_voice/$file")
+                            customSampleMap.putIfAbsent("vasu reply", "vasu_voice/$file")
+                        }
+                    }
                 }
                 _status.value = VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES
                 Log.i(TAG, "Loaded ${customSampleMap.size} custom voice audio samples.")
