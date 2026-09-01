@@ -112,7 +112,7 @@ class VasuForegroundService : Service() {
             notificationId,
             buildNotification(status),
             if (withMic) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            else ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE
+            else 0
         )
     }
 

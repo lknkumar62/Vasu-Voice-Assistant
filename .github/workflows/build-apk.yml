@@ -42,9 +42,11 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace || {
-            echo "::error::Gradle assembleDebug failed. Printing detailed compileDebugKotlin logs..."
-            ./gradlew compileDebugKotlin --no-daemon --stacktrace --info
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log || {
+            echo "### ❌ Build Failed" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E "e: |FAILED|Compilation error|error:" build.log | head -n 40 >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
             exit 1
           }
 
