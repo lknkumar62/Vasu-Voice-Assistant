@@ -17,10 +17,12 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- Telephony and messaging: required by the make_call and send_message tools.
+    <!-- Telephony and messaging: required by the make_call, get_call_history, send_message tools.
          Without CALL_PHONE the dialer can only be pre-filled, not dialled. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <!-- Needed to resolve a spoken name ("Rahul ko message bhejo") to a number. -->

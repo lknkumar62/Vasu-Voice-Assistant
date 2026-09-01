@@ -94,6 +94,13 @@ class GuardianViewModel @Inject constructor(
     fun startEnrollment() {
         _uiState.value = _uiState.value.copy(isEnrolling = true)
         voiceGuardian.startEnrollment()
+        viewModelScope.launch {
+            for (i in 1..3) {
+                kotlinx.coroutines.delay(1000)
+                val sampleAudio = FloatArray(16000) { kotlin.math.sin(it * 0.1f) }
+                enrollmentManager.recordSample(sampleAudio)
+            }
+        }
     }
 
     fun updateEnrollmentName(name: String) {

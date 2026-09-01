@@ -12,7 +12,9 @@ class BrowserManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     fun openUrl(url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
         context.startActivity(intent)
     }
 
@@ -36,6 +38,7 @@ class BrowserManager @Inject constructor(
             data = Uri.parse("mailto:$recipient")
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, body)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
     }

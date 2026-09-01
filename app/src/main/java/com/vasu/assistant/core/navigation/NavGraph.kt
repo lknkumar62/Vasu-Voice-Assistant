@@ -6,9 +6,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.vasu.assistant.ui.automation.AutomationScreen
+import com.vasu.assistant.ui.browser.BrowserScreen
 import com.vasu.assistant.ui.chat.ChatScreen
 import com.vasu.assistant.ui.guardian.GuardianScreen
 import com.vasu.assistant.ui.home.HomeScreen
+import com.vasu.assistant.ui.location.LocationScreen
 import com.vasu.assistant.ui.memory.MemoryScreen
 import com.vasu.assistant.ui.missions.MissionsScreen
 import com.vasu.assistant.ui.permissions.PermissionsScreen
@@ -57,7 +59,7 @@ fun VasuNavGraph(
         }
 
         composable(Screen.Missions.route) {
-            MissionsScreen()
+            MissionsScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         composable(Screen.Automation.route) {
@@ -69,15 +71,38 @@ fun VasuNavGraph(
         }
 
         composable(Screen.Tools.route) {
-            ToolsScreen()
+            ToolsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onToolSelect = { toolId ->
+                    when (toolId) {
+                        "settings" -> navController.navigate(Screen.Settings.route)
+                        "missions" -> navController.navigate(Screen.Missions.route)
+                        "location" -> navController.navigate(Screen.Location.route)
+                        "browser" -> navController.navigate(Screen.Browser.route)
+                        "permissions" -> navController.navigate(Screen.Permissions.route)
+                        "privacy" -> navController.navigate(Screen.Privacy.route)
+                        "guardian" -> navController.navigate(Screen.Guardian.route)
+                        "memory" -> navController.navigate(Screen.Memory.route)
+                        else -> {}
+                    }
+                }
+            )
         }
 
         composable(Screen.Permissions.route) {
-            PermissionsScreen()
+            PermissionsScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         composable(Screen.Privacy.route) {
-            PrivacyScreen()
+            PrivacyScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Location.route) {
+            LocationScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Browser.route) {
+            BrowserScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }

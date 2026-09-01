@@ -5,20 +5,27 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 data class Mission(
-    val id: String,
+    val id: String = UUID.randomUUID().toString(),
     val name: String,
-    val steps: List<MissionStep>,
-    val status: MissionStatus = MissionStatus.CREATED
+    val steps: List<MissionStep> = emptyList(),
+    val status: MissionStatus = MissionStatus.CREATED,
+    val currentStep: Int = 0
 )
 
 data class MissionStep(
-    val id: String,
     val action: String,
-    val params: Map<String, String> = emptyMap()
+    val parameters: Map<String, Any> = emptyMap(),
+    val id: String = UUID.randomUUID().toString(),
+    val params: Map<String, String> = emptyMap(),
+    val timeout: Long = 10000L,
+    val retryCount: Int = 2,
+    val requireConfirmation: Boolean = false,
+    val description: String = ""
 )
 
 enum class MissionStatus {
@@ -27,41 +34,54 @@ enum class MissionStatus {
 
 @Singleton
 class MissionEngine @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val taskExecutor: TaskExecutor
 ) {
     private val _missions = MutableStateFlow<List<Mission>>(emptyList())
     val missions: StateFlow<List<Mission>> = _missions.asStateFlow()
 
     fun createMission(name: String, steps: List<MissionStep>): Mission {
         val mission = Mission(
-            id = System.currentTimeMillis().toString(),
+            id = UUID.randomUUID().toString(),
             name = name,
             steps = steps
         )
+        _missions.value = _missions.value + mission
         return mission
     }
 
     suspend fun executeMission(mission: Mission): Boolean {
-        val updatedMission = mission.copy(status = MissionStatus.RUNNING)
-        _missions.value = _missions.value.map { if (it.id == mission.id) updatedMission else it }
+        var current = mission.copy(status = MissionStatus.RUNNING)
+        updateMission(current)
 
         return try {
-            for (step in mission.steps) {
-                executeStep(step)
+            for ((index, step) in current.steps.withIndex()) {
+                current = current.copy(currentStep = index)
+                updateMission(current)
+                val result = taskExecutor.executeStep(step)
+                if (!result.success) {
+                    current = current.copy(status = MissionStatus.FAILED)
+                    updateMission(current)
+                    return false
+                }
             }
-            val completedMission = mission.copy(status = MissionStatus.COMPLETED)
-            _missions.value = _missions.value.map { if (it.id == mission.id) completedMission else it }
+            current = current.copy(status = MissionStatus.COMPLETED)
+            updateMission(current)
             true
         } catch (e: Exception) {
-            val failedMission = mission.copy(status = MissionStatus.FAILED)
-            _missions.value = _missions.value.map { if (it.id == mission.id) failedMission else it }
+            current = current.copy(status = MissionStatus.FAILED)
+            updateMission(current)
             false
         }
     }
 
-    private suspend fun executeStep(step: MissionStep) {
-        // Execute individual mission steps
-        // This is a placeholder for actual step execution logic
+    suspend fun executeMission(missionId: String): Boolean {
+        val mission = getMission(missionId) ?: return false
+        return executeMission(mission)
+    }
+
+    private fun updateMission(mission: Mission) {
+        _missions.value = _missions.value.map { if (it.id == mission.id) mission else it }
     }
 
     fun getMission(id: String): Mission? = _missions.value.find { it.id == id }

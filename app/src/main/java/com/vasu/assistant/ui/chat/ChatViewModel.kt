@@ -50,13 +50,6 @@ class ChatViewModel @Inject constructor(
         // Load chat history
         loadConversationHistory()
 
-        addMessage(
-            ChatMessage(
-                content = "Hello! I am VASU, your voice assistant. How can I help you today?",
-                isUser = false
-            )
-        )
-
         viewModelScope.launch {
             sttManager.state.collect { sttState ->
                 _uiState.value = _uiState.value.copy(
@@ -140,19 +133,28 @@ class ChatViewModel @Inject constructor(
 
     private fun loadConversationHistory() {
         viewModelScope.launch {
-            val messages = conversationDao.getRecentMessages(currentConversationId, limit = 50)
-            val chatMessages = messages.map { entity ->
-                ChatMessage(
-                    id = entity.id.toString(),
-                    content = entity.content,
-                    isUser = entity.role == "user",
-                    timestamp = entity.timestamp,
-                    toolName = entity.toolName,
-                    toolResult = entity.toolResult
-                )
-            }
-            if (chatMessages.isNotEmpty()) {
+            val messages = conversationDao.getGlobalRecentMessages(limit = 50).reversed()
+            if (messages.isNotEmpty()) {
+                val chatMessages = messages.map { entity ->
+                    ChatMessage(
+                        id = entity.id.toString(),
+                        content = entity.content,
+                        isUser = entity.role == "user",
+                        timestamp = entity.timestamp,
+                        toolName = entity.toolName,
+                        toolResult = entity.toolResult
+                    )
+                }
                 _uiState.value = _uiState.value.copy(messages = chatMessages)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    messages = listOf(
+                        ChatMessage(
+                            content = "Hello! I am VASU, your voice assistant. How can I help you today?",
+                            isUser = false
+                        )
+                    )
+                )
             }
         }
     }

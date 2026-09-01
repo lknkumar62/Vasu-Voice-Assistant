@@ -17,19 +17,20 @@ class TaskExecutor @Inject constructor(
     }
 
     suspend fun executeStep(step: MissionStep): ActionResult {
+        val params = if (step.parameters.isNotEmpty()) step.parameters else step.params
         return when (step.action) {
             "open_app" -> {
-                val pkg = step.parameters["package"] as? String ?: ""
+                val pkg = params["package"] as? String ?: params["package_name"] as? String ?: ""
                 val result = toolRouter.executeTool("open_app", mapOf("package" to pkg))
                 if (result.success) result else ActionResult.error("open_app", "Open app failed: $pkg", result.error ?: result.message)
             }
             "click" -> {
-                val text = step.parameters["text"] as? String ?: ""
+                val text = params["text"] as? String ?: ""
                 withService { it.clickElement(text) }
             }
             "type" -> {
-                val label = step.parameters["label"] as? String ?: ""
-                val text = step.parameters["text"] as? String ?: ""
+                val label = params["label"] as? String ?: ""
+                val text = params["text"] as? String ?: ""
                 withService { it.typeText(label, text) }
             }
             "read_screen" -> {
@@ -48,19 +49,19 @@ class TaskExecutor @Inject constructor(
                 withService { it.pressHome() }
             }
             "wait" -> {
-                val ms = (step.parameters["duration"] as? Number)?.toLong() ?: 2000L
+                val ms = (params["duration"] as? Number)?.toLong() ?: (params["delay"] as? Number)?.toLong() ?: 2000L
                 delay(ms)
                 ActionResult.success("wait", "Waited ${ms}ms")
             }
             "delay" -> {
-                val ms = (step.parameters["milliseconds"] as? Number)?.toLong() ?: 1000L
+                val ms = (params["milliseconds"] as? Number)?.toLong() ?: (params["duration"] as? Number)?.toLong() ?: 1000L
                 delay(ms)
                 ActionResult.success("delay", "Delayed ${ms}ms")
             }
             else -> {
-                val params = step.parameters.toMutableMap()
-                params["action"] = step.action
-                toolRouter.executeTool(step.action, params)
+                val toolParams = params.toMutableMap()
+                toolParams["action"] = step.action
+                toolRouter.executeTool(step.action, toolParams)
             }
         }
     }

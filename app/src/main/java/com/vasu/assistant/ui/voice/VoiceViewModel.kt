@@ -2,6 +2,7 @@ package com.vasu.assistant.ui.voice
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vasu.assistant.core.ai.AIOrchestrator
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.stt.STTState
 import com.vasu.assistant.core.tts.TTSManager
@@ -25,7 +26,8 @@ data class VoiceUiState(
 @HiltViewModel
 class VoiceViewModel @Inject constructor(
     private val sttManager: STTManager,
-    private val ttsManager: TTSManager
+    private val ttsManager: TTSManager,
+    private val aiOrchestrator: AIOrchestrator
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VoiceUiState())
@@ -96,13 +98,13 @@ class VoiceViewModel @Inject constructor(
     }
 
     private fun processVoiceCommand(command: String) {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) return
+
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(lastResponse = "Processing: \"$command\"")
+            _uiState.value = _uiState.value.copy(lastResponse = "Thinking...")
 
-            // Simulate processing (Phase 6: AI Orchestrator)
-            kotlinx.coroutines.delay(1500)
-
-            val response = "I heard: \"$command\"\n\nAI engine will be connected in Phase 6."
+            val response = aiOrchestrator.processInput(trimmed)
             _uiState.value = _uiState.value.copy(lastResponse = response)
 
             // Speak response

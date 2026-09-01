@@ -43,17 +43,19 @@ class MacroEngine @Inject constructor(
         return ActionResult.success("macro", "Macro ${if (updated.enabled) "enabled" else "disabled"}: ${updated.name}")
     }
 
-    fun runMacro(macroId: String): ActionResult {
+    suspend fun runMacro(macroId: String): ActionResult {
         val macro = macros[macroId] ?: return ActionResult.error("macro", "Macro not found", "No macro: $macroId")
         if (!macro.enabled) return ActionResult.error("macro", "Macro is disabled: ${macro.name}", "Macro disabled")
 
         return try {
             val mission = missionEngine.createMission("Macro: ${macro.name}", macro.actions)
-            val result = kotlinx.coroutines.runBlocking { missionEngine.executeMission(mission.id) }
-            if (result.success) {
+            val success = missionEngine.executeMission(mission)
+            if (success) {
                 macros[macroId] = macro.copy(lastRun = System.currentTimeMillis(), runCount = macro.runCount + 1)
+                ActionResult.success("macro", "Macro executed successfully: ${macro.name}")
+            } else {
+                ActionResult.error("macro", "Macro execution failed: ${macro.name}", "Execution failed")
             }
-            result
         } catch (e: Exception) {
             ActionResult.error("macro", "Macro execution failed", e.message ?: "Unknown")
         }

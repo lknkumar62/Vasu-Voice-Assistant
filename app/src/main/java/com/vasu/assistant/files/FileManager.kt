@@ -144,7 +144,10 @@ class FileManager @Inject constructor(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(Intent.createChooser(intent, "Share via"))
+            val chooser = Intent.createChooser(intent, "Share via").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
             ActionResult.success("share", "Sharing ${file.name}")
         } catch (e: Exception) {
             ActionResult.error("share", "Share failed", e.message ?: "Unknown")
