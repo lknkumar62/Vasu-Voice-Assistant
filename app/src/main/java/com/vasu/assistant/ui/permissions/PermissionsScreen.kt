@@ -180,15 +180,15 @@ fun PermissionRowCard(
             Icon(
                 imageVector = when (item.id) {
                     "mic" -> Icons.Default.Mic
-                    "overlay" -> Icons.Default.Layers
-                    "accessibility" -> Icons.Default.SettingsAccessibility
+                    "overlay" -> Icons.Default.Settings
+                    "accessibility" -> Icons.Default.Build
                     "notif_listener", "post_notif" -> Icons.Default.Notifications
                     "call" -> Icons.Default.Phone
-                    "contacts" -> Icons.Default.Contacts
-                    "sms" -> Icons.Default.Message
-                    "cam" -> Icons.Default.CameraAlt
+                    "contacts" -> Icons.Default.Person
+                    "sms" -> Icons.Default.Send
+                    "cam" -> Icons.Default.Search
                     "loc" -> Icons.Default.LocationOn
-                    "battery" -> Icons.Default.BatteryChargingFull
+                    "battery" -> Icons.Default.Speed
                     else -> Icons.Default.Security
                 },
                 contentDescription = item.title,

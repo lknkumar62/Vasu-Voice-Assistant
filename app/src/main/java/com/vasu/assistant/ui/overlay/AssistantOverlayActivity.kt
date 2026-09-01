@@ -226,7 +226,7 @@ fun AssistantOverlayContent(
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                imageVector = if (showTextInput) Icons.Default.Mic else Icons.Default.Keyboard,
+                                imageVector = if (showTextInput) Icons.Default.Mic else Icons.Default.Edit,
                                 contentDescription = "Toggle Input",
                                 tint = VasuTextSecondary,
                                 modifier = Modifier.size(20.dp)
@@ -439,9 +439,9 @@ fun AssistantVisualizer(
         ) {
             Icon(
                 imageVector = when (state) {
-                    AssistantState.LISTENING -> Icons.Default.GraphicEq
-                    AssistantState.THINKING -> Icons.Default.Autorenew
-                    AssistantState.RESPONDING -> Icons.Default.VolumeUp
+                    AssistantState.LISTENING -> Icons.Default.Mic
+                    AssistantState.THINKING -> Icons.Default.Refresh
+                    AssistantState.RESPONDING -> Icons.Default.PlayArrow
                     AssistantState.IDLE -> Icons.Default.Mic
                 },
                 contentDescription = "Voice State",
