@@ -3,9 +3,9 @@ package com.vasu.assistant.core.commands
 import android.content.Context
 import com.vasu.assistant.calls.CallManager
 import com.vasu.assistant.camera.CameraManager
-import com.vasu.assistant.core.device.DeviceControlManager
-import com.vasu.assistant.core.messaging.MessagingManager
-import com.vasu.assistant.core.file.FileManager
+import com.vasu.assistant.devices.DeviceControlManager
+import com.vasu.assistant.files.FileManager
+import com.vasu.assistant.messaging.MessagingManager
 import com.vasu.assistant.maps.VasuLocationManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
