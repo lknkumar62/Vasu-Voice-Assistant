@@ -130,7 +130,7 @@ fun AssistantOverlayContent(
 ) {
     val sttState by sttManager.state.collectAsState()
     val ttsState by ttsManager.state.collectAsState()
-    val partialText by sttManager.partialResults.collectAsState()
+    val partialText by sttManager.partialResults.collectAsState(initial = "")
     val lastResponse by aiOrchestrator.lastResponse.collectAsState()
     val isAiProcessing by aiOrchestrator.isProcessing.collectAsState()
 
