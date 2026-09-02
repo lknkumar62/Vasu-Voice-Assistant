@@ -98,9 +98,10 @@ class VoiceGuardian @Inject constructor(
     /**
      * Check if a command is allowed for current speaker
      */
-    fun checkCommandPermission(command: String, riskLevel: RiskLevel): Boolean {
+    fun checkCommandPermission(command: String = "", riskLevel: RiskLevel): Boolean {
         if (!roleManager.guardianEnabled.value) return true
 
+        Log.d(TAG, "Checking permission for command '$command' at risk level $riskLevel")
         val result = permissionGate.checkPermission(riskLevel)
         return result is PermissionResult.Granted
     }

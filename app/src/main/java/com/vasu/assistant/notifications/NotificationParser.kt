@@ -46,6 +46,7 @@ class NotificationParser @Inject constructor() {
             val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
             val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
             val category = notification.category ?: "unknown"
+            @Suppress("DEPRECATION")
             val priority = notification.priority
 
             val actionItems = notification.actions?.mapIndexed { index, action ->

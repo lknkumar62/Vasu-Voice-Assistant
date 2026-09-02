@@ -100,7 +100,7 @@ class RoleManager @Inject constructor(
      * Remove an enrolled voice
      */
     fun removeVoice(id: String): Boolean {
-        val voice = _enrolledVoices.value.find { it.id == id } ?: return false
+        if (_enrolledVoices.value.none { it.id == id }) return false
         _enrolledVoices.value = _enrolledVoices.value.filter { it.id != id }
         saveEnrolledVoices()
         return true

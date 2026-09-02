@@ -58,7 +58,7 @@ class VisionProcessor @Inject constructor(
                             mapOf(
                                 "format" to barcode.format,
                                 "value" to (barcode.rawValue ?: "Unknown"),
-                                "type" to (barcode.valueType ?: 0)
+                                "type" to barcode.valueType
                             )
                         }
                         result = ActionResult.success("qr", "Found ${barcodes.size} barcodes", mapOf("barcodes" to found))

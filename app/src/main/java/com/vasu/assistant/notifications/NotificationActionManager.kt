@@ -31,7 +31,7 @@ class NotificationActionManager @Inject constructor(
         return try {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.cancel(notificationId)
-            ActionResult.success("dismiss", "Notification dismissed")
+            ActionResult.success("dismiss", if (packageName.isNotBlank()) "Notification from $packageName dismissed" else "Notification dismissed")
         } catch (e: Exception) {
             ActionResult.error("dismiss", "Failed to dismiss", e.message ?: "Unknown")
         }
