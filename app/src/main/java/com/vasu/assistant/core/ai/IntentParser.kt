@@ -66,7 +66,7 @@ class IntentParser @Inject constructor() {
 
     private val intentPatterns = mapOf(
         IntentType.OPEN_APP to listOf("open", "launch", "start", "kholo", "chalaao", "खोलो", "चलाओ", "शुरू करो", "ओपन"),
-        IntentType.CLOSE_APP to listOf("close", "stop", "band", "karo", "बंद करो", "रोको", "हटाओ"),
+        IntentType.CLOSE_APP to listOf("close", "stop", "band karo", "band", "बंद करो", "रोको", "हटाओ"),
         IntentType.CLICK to listOf("click", "tap", "press", "dabao", "maaro", "दबाओ", "क्लिक"),
         IntentType.TYPE_TEXT to listOf("type", "enter", "likho", "daalo", "लिखो", "टाइप करो", "डालो"),
         IntentType.SCROLL to listOf("scroll", "swipe", "upar", "niche", "ऊपर करो", "नीचे करो", "स्क्रॉल"),
