@@ -266,12 +266,12 @@ class SettingsViewModel @Inject constructor(
         ttsManager.applyProfile(updated)
     }
 
-    /** Speaks a Hinglish line so the user hears the actual configured voice. */
+    /** Speaks a natural Hindi phrase so the user hears the actual configured voice. */
     fun testVoice() {
         ttsManager.applyProfile(settings.voiceProfile.value)
         ttsManager.speak(
-            if (settings.voiceProfile.value.isHindi) "Ji, main VASU hoon. Bataiye kya karna hai."
-            else "Hi, I am VASU. Tell me what you need."
+            if (settings.voiceProfile.value.isHindi) "नमस्ते, मैं वासु हूँ। बताइए मैं आपकी क्या मदद करूँ?"
+            else "Hello, I am VASU. How can I help you today?"
         )
     }
 

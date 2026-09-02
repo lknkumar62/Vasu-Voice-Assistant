@@ -102,7 +102,7 @@ class VoiceViewModel @Inject constructor(
         if (trimmed.isEmpty()) return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(lastResponse = "Thinking...")
+            _uiState.value = _uiState.value.copy(lastResponse = "सोच रही हूँ...")
 
             val response = aiOrchestrator.processInput(trimmed)
             _uiState.value = _uiState.value.copy(lastResponse = response)

@@ -3,29 +3,30 @@ package com.vasu.assistant.core.tts
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import com.vasu.assistant.core.settings.VasuSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * TTSManager - Text-to-Speech engine wrapper.
+ * TTSManager - Text-to-Speech engine wrapper implementing [HindiSpeechService].
  *
  * Features:
- * - Custom local VASU voice engine integration
- * - Hindi + English + Hinglish support
- * - Voice profiles (pitch, rate, volume)
- * - Speech queue management
- * - Streaming text support
- * - Interruption handling
- * - Utterance callbacks
+ * - Clean HindiSpeechService implementation for natural Hindi Devanagari speech.
+ * - Custom local VASU voice engine integration.
+ * - Prioritizes Hindi (hi-IN) and offline Hindi-capable voices.
+ * - Voice profiles (pitch, rate, volume) with persisted settings.
+ * - Speech queue management and non-overlapping sequential playback.
+ * - Utterance callbacks and non-blocking asynchronous lifecycle.
+ * - Graceful fallback to default/English voice without crashing if Hindi voice missing.
  */
 @Singleton
 class TTSManager @Inject constructor(
@@ -33,13 +34,16 @@ class TTSManager @Inject constructor(
     private val speechQueue: SpeechQueue,
     private val settings: VasuSettings,
     private val customVoiceEngine: CustomVoiceEngine
-) {
+) : HindiSpeechService {
+
     private var textToSpeech: TextToSpeech? = null
     private var isInitialized = false
+    private var isPaused = false
+    private var lastSpokenText: String = ""
 
     // State
     private val _state = MutableStateFlow(TTSState.IDLE)
-    val state: StateFlow<TTSState> = _state.asStateFlow()
+    override val state: StateFlow<TTSState> = _state.asStateFlow()
 
     // Current voice profile
     private val _currentProfile = MutableStateFlow(settings.voiceProfile.value)
@@ -51,7 +55,7 @@ class TTSManager @Inject constructor(
 
     // Speaking state
     private val _isSpeaking = MutableStateFlow(false)
-    val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
+    override val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
     // Queue size
     val queueSize: StateFlow<Int> = speechQueue.queueSize
@@ -60,21 +64,32 @@ class TTSManager @Inject constructor(
     private val _availableLanguages = MutableStateFlow<List<Locale>>(emptyList())
     val availableLanguages: StateFlow<List<Locale>> = _availableLanguages.asStateFlow()
 
-    // Whether VASU actually got a female voice, or only the engine default
+    // Available voices list
+    private val _availableVoices = MutableStateFlow<List<String>>(emptyList())
+    override val availableVoices: StateFlow<List<String>> = _availableVoices.asStateFlow()
+
+    // Whether VASU got a female voice, or engine default
     private val _voiceStatus = MutableStateFlow(VoiceStatus())
     val voiceStatus: StateFlow<VoiceStatus> = _voiceStatus.asStateFlow()
 
     // Custom local voice model status
     val customVoiceStatus: StateFlow<VoiceModelStatus> = customVoiceEngine.status
 
+    private var onStartCallback: (() -> Unit)? = null
+    private var onDoneCallback: (() -> Unit)? = null
+    private var onErrorCallback: ((String) -> Unit)? = null
+
     /**
-     * Initialize TTS engine. Defaults to the profile the user last saved, so a
-     * chosen rate/pitch/language survives a process restart.
+     * Initialize TTS engine asynchronously.
      */
-    fun initialize(profile: VoiceProfile = settings.voiceProfile.value) {
+    override fun initialize(profile: VoiceProfile, onReady: ((Boolean) -> Unit)?) {
         customVoiceEngine.detectCustomVoiceAssets()
 
-        if (isInitialized) return
+        if (isInitialized && textToSpeech != null) {
+            applyProfile(profile)
+            onReady?.invoke(true)
+            return
+        }
 
         _state.value = TTSState.INITIALIZING
 
@@ -83,14 +98,19 @@ class TTSManager @Inject constructor(
                 isInitialized = true
                 _state.value = TTSState.READY
 
-                // Apply voice profile
-                applyProfile(profile)
+                // Apply voice profile (defaulting to Hindi hi-IN)
+                val applied = applyProfile(profile)
 
                 // Detect available languages
                 detectLanguages()
+
+                onReady?.invoke(applied)
             } else {
                 _state.value = TTSState.ERROR
-                _events.tryEmit(TTSEvent.Error("TTS initialization failed"))
+                val err = "Local TextToSpeech initialization failed (code $status)"
+                Log.e(TAG, err)
+                _events.tryEmit(TTSEvent.Error(err))
+                onReady?.invoke(false)
             }
         }
 
@@ -101,6 +121,7 @@ class TTSManager @Inject constructor(
                 _state.value = TTSState.SPEAKING
                 val text = utteranceId ?: ""
                 _events.tryEmit(TTSEvent.SpeakingStarted(text))
+                onStartCallback?.invoke()
             }
 
             override fun onDone(utteranceId: String?) {
@@ -108,6 +129,7 @@ class TTSManager @Inject constructor(
                 _state.value = TTSState.READY
                 val text = utteranceId ?: ""
                 _events.tryEmit(TTSEvent.SpeakingCompleted(text))
+                onDoneCallback?.invoke()
 
                 // Process next in queue
                 processNextInQueue()
@@ -117,40 +139,79 @@ class TTSManager @Inject constructor(
             override fun onError(utteranceId: String?) {
                 _isSpeaking.value = false
                 _state.value = TTSState.ERROR
-                _events.tryEmit(TTSEvent.Error("TTS utterance error"))
+                val err = "TTS utterance error"
+                _events.tryEmit(TTSEvent.Error(err))
+                onErrorCallback?.invoke(err)
                 processNextInQueue()
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
                 _isSpeaking.value = false
                 _state.value = TTSState.ERROR
-                _events.tryEmit(TTSEvent.Error("TTS error code: $errorCode"))
+                val err = "TTS error code: $errorCode"
+                _events.tryEmit(TTSEvent.Error(err))
+                onErrorCallback?.invoke(err)
                 processNextInQueue()
             }
         })
     }
 
     /**
+     * Backward-compatible overload for initialize().
+     */
+    fun initialize() {
+        initialize(settings.voiceProfile.value, null)
+    }
+
+    override fun isAvailable(): Boolean = isInitialized && textToSpeech != null
+
+    override fun isOfflineVoiceAvailable(): Boolean {
+        val tts = textToSpeech ?: return false
+        val voices = runCatching { tts.voices }.getOrNull() ?: return false
+        return voices.any { voice ->
+            voice.locale.language == "hi" && !voice.isNetworkConnectionRequired
+        }
+    }
+
+    /**
      * Speak text immediately, abandoning anything already queued.
      */
-    fun speak(text: String) {
+    override fun speak(
+        text: String,
+        onStart: (() -> Unit)?,
+        onDone: (() -> Unit)?,
+        onError: ((String) -> Unit)?
+    ) {
         speechQueue.clear()
+        this.onStartCallback = onStart
+        this.onDoneCallback = onDone
+        this.onErrorCallback = onError
+        this.lastSpokenText = text
+        this.isPaused = false
 
         // 1. Try local custom voice sample first if available
         if (customVoiceEngine.hasCustomSampleFor(text)) {
             _isSpeaking.value = true
             _state.value = TTSState.SPEAKING
+            onStart?.invoke()
             val played = customVoiceEngine.playCustomSample(text) {
                 _isSpeaking.value = false
                 _state.value = TTSState.READY
+                onDone?.invoke()
                 processNextInQueue()
             }
             if (played) return
         }
 
         if (!isInitialized) {
-            initialize()
-            speechQueue.enqueue(text, priority = true)
+            initialize(settings.voiceProfile.value) { success ->
+                if (success) {
+                    speechQueue.enqueue(text, priority = true)
+                    processNextInQueue()
+                } else {
+                    onError?.invoke("Local TTS unavailable on device")
+                }
+            }
             return
         }
 
@@ -158,7 +219,14 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Add text to queue (plays after current)
+     * Speak text immediately (convenience overload).
+     */
+    fun speak(text: String) {
+        speak(text, null, null, null)
+    }
+
+    /**
+     * Add text to queue (plays sequentially without overlap).
      */
     fun speakQueued(text: String) {
         if (customVoiceEngine.hasCustomSampleFor(text) && !_isSpeaking.value) {
@@ -167,8 +235,12 @@ class TTSManager @Inject constructor(
         }
 
         if (!isInitialized) {
-            initialize()
-            speechQueue.enqueue(text)
+            initialize(settings.voiceProfile.value) {
+                speechQueue.enqueue(text)
+                if (!_isSpeaking.value) {
+                    processNextInQueue()
+                }
+            }
             return
         }
 
@@ -180,31 +252,54 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Hands one utterance to the engine.
+     * Hands one utterance to the engine after normalising for natural speech.
      */
     private fun utter(text: String) {
         val spoken = toSpeakableText(text)
-        if (spoken.isBlank()) return
+        if (spoken.isBlank()) {
+            onDoneCallback?.invoke()
+            return
+        }
+
+        val tts = textToSpeech ?: run {
+            onErrorCallback?.invoke("TextToSpeech not ready")
+            return
+        }
 
         val params = android.os.Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, _currentProfile.value.volume)
         }
 
-        textToSpeech?.speak(
+        // Stop prior speech before starting to guarantee no overlap
+        tts.stop()
+
+        val utteranceId = spoken
+        val result = tts.speak(
             spoken,
             TextToSpeech.QUEUE_FLUSH,
             params,
-            spoken
+            utteranceId
         )
+
+        if (result != TextToSpeech.SUCCESS) {
+            Log.w(TAG, "TTS speak failed with code: $result")
+            _state.value = TTSState.ERROR
+            onErrorCallback?.invoke("TTS speak error code $result")
+        }
     }
 
     /**
-     * Stop current speech
+     * Stop current speech and clear speech queue.
      */
-    fun stop() {
+    override fun stop() {
         customVoiceEngine.stop()
-        textToSpeech?.stop()
+        try {
+            textToSpeech?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping TTS", e)
+        }
         _isSpeaking.value = false
+        isPaused = false
         speechQueue.clear()
         if (isInitialized) {
             _state.value = TTSState.READY
@@ -212,58 +307,98 @@ class TTSManager @Inject constructor(
     }
 
     /**
-     * Pause speech
+     * Pause speech.
      */
-    fun pause() {
-        textToSpeech?.stop()
+    override fun pause() {
         customVoiceEngine.stop()
+        try {
+            textToSpeech?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error pausing TTS", e)
+        }
+        _isSpeaking.value = false
+        isPaused = true
         _state.value = TTSState.PAUSED
     }
 
     /**
-     * Apply voice profile.
+     * Resume speech if paused.
      */
-    fun applyProfile(profile: VoiceProfile): Boolean {
+    override fun resume() {
+        if (isPaused && lastSpokenText.isNotBlank()) {
+            isPaused = false
+            speak(lastSpokenText, onStartCallback, onDoneCallback, onErrorCallback)
+        }
+    }
+
+    /**
+     * Release TTS resources.
+     */
+    override fun release() {
+        shutdown()
+    }
+
+    /**
+     * Apply voice profile (configuring locale, pitch, rate, offline Hindi voice).
+     */
+    override fun applyProfile(profile: VoiceProfile): Boolean {
         _currentProfile.value = profile
 
         val tts = textToSpeech ?: return false
         tts.setPitch(profile.pitch.coerceIn(VasuSettings.PITCH_RANGE))
         tts.setSpeechRate(profile.speechRate.coerceIn(VasuSettings.RATE_RANGE))
 
-        val result = tts.setLanguage(profile.language.toLocale())
+        val targetLocale = profile.language.toLocale()
+        val result = tts.setLanguage(targetLocale)
+
         if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            Log.w(TAG, "${profile.language} voice is not installed, falling back to US English")
             tts.setLanguage(Locale.US)
-            selectFemaleVoice(tts, Locale.US)
-            _events.tryEmit(TTSEvent.Error("${profile.language} voice is not installed - using English"))
+            selectBestVoice(tts, Locale.US)
+            _events.tryEmit(TTSEvent.Error("${profile.language} voice is not installed - using English fallback"))
             return false
         }
-        selectFemaleVoice(tts, profile.language.toLocale())
+
+        selectBestVoice(tts, targetLocale)
         return true
     }
 
-    private fun selectFemaleVoice(tts: TextToSpeech, target: Locale) {
+    private fun selectBestVoice(tts: TextToSpeech, target: Locale) {
         val voices = runCatching { tts.voices }.getOrNull() ?: emptySet()
         if (voices.isEmpty()) {
             _voiceStatus.value = VoiceStatus(VoiceGender.NO_VOICES)
             return
         }
 
+        _availableVoices.value = voices.map { it.name }
+
         val candidates = voices
             .filter { it.locale.language == target.language }
             .ifEmpty { voices.filter { it.locale.language == Locale.US.language } }
 
-        val female = candidates
-            .filter { isFemaleVoiceName(it.name) }
-            .sortedWith(compareBy({ it.isNetworkConnectionRequired }, { -it.quality }))
+        // Select offline female first, then offline voice, then female, then first available
+        val bestVoice = candidates
+            .sortedWith(
+                compareBy(
+                    { it.isNetworkConnectionRequired },
+                    { !isFemaleVoiceName(it.name) },
+                    { -it.quality }
+                )
+            )
             .firstOrNull()
 
-        if (female == null) {
+        if (bestVoice == null) {
             _voiceStatus.value = VoiceStatus(VoiceGender.UNLABELLED)
             return
         }
 
-        _voiceStatus.value = if (tts.setVoice(female) == TextToSpeech.SUCCESS) {
-            VoiceStatus(VoiceGender.FEMALE, female.name)
+        val success = tts.setVoice(bestVoice) == TextToSpeech.SUCCESS
+        val isFemale = isFemaleVoiceName(bestVoice.name)
+
+        _voiceStatus.value = if (success && isFemale) {
+            VoiceStatus(VoiceGender.FEMALE, bestVoice.name)
+        } else if (success) {
+            VoiceStatus(VoiceGender.UNLABELLED, bestVoice.name)
         } else {
             VoiceStatus(VoiceGender.UNLABELLED)
         }
@@ -274,7 +409,7 @@ class TTSManager @Inject constructor(
         return when {
             parts.size >= 2 -> Locale(parts[0], parts[1])
             parts.size == 1 && parts[0].isNotBlank() -> Locale(parts[0])
-            else -> Locale.US
+            else -> Locale("hi", "IN")
         }
     }
 
@@ -285,6 +420,8 @@ class TTSManager @Inject constructor(
                 result == TextToSpeech.LANG_NOT_SUPPORTED
             ) {
                 _events.tryEmit(TTSEvent.Error("Language not supported: ${locale.displayLanguage}"))
+            } else {
+                selectBestVoice(tts, locale)
             }
         }
     }
@@ -293,8 +430,12 @@ class TTSManager @Inject constructor(
 
     fun shutdown() {
         customVoiceEngine.stop()
-        textToSpeech?.stop()
-        textToSpeech?.shutdown()
+        try {
+            textToSpeech?.stop()
+            textToSpeech?.shutdown()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error shutting down TTS", e)
+        }
         textToSpeech = null
         isInitialized = false
         _state.value = TTSState.IDLE
@@ -322,11 +463,11 @@ class TTSManager @Inject constructor(
                 languages.add(Locale.US)
             }
 
-            if (languages.contains(Locale("hi", "IN"))) {
-                languages.add(Locale("hi", "IN"))
-            }
-
             _availableLanguages.value = languages
         }
+    }
+
+    companion object {
+        private const val TAG = "TTSManager"
     }
 }

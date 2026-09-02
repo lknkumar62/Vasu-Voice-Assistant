@@ -89,10 +89,10 @@ fun VoiceScreen(
             // Status
             Text(
                 text = when {
-                    uiState.isListening -> "Listening..."
-                    uiState.isSpeaking -> "Speaking..."
-                    uiState.sttState == STTState.PROCESSING -> "Processing..."
-                    else -> "Tap to start"
+                    uiState.isListening -> "सुन रही हूँ..."
+                    uiState.isSpeaking -> "बोल रही हूँ..."
+                    uiState.sttState == STTState.PROCESSING -> "सोच रही हूँ..."
+                    else -> "बोलने के लिए माइक दबाएं"
                 },
                 color = when {
                     uiState.isListening -> VasuCyan
@@ -129,7 +129,7 @@ fun VoiceScreen(
                         )
                     } else {
                         Text(
-                            text = "Your words will appear here...",
+                            text = "आपकी आवाज़ यहाँ दिखाई देगी...",
                             color = VasuTextMuted,
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center

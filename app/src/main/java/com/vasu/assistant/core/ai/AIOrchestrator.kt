@@ -16,7 +16,8 @@ class AIOrchestrator @Inject constructor(
     private val intentParser: IntentParser,
     private val toolRouter: ToolRouter,
     private val ttsManager: TTSManager,
-    private val memoryManager: MemoryManager
+    private val memoryManager: MemoryManager,
+    private val normalizer: HindiResponseNormalizer
 ) {
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
@@ -31,25 +32,41 @@ class AIOrchestrator @Inject constructor(
             memoryManager.addMessage("user", input)
             memoryManager.processInput(input)
 
-            val intent = intentParser.parse(input)
-
-            // Fast path: the local parser recognises the command outright. This runs
-            // offline, costs nothing, and avoids a round trip for "torch on".
-            val response = if (intent.intent != IntentType.CHAT && intent.intent != IntentType.UNKNOWN) {
-                describe(executeToolForIntent(intent))
-            } else {
-                askModel(input)
+            // 1. Language switch command check (e.g. "reply in English", "reply in Hindi")
+            val switchMessage = normalizer.checkLanguageSwitchCommand(input)
+            if (switchMessage != null) {
+                memoryManager.addMessage("assistant", switchMessage)
+                _lastResponse.value = switchMessage
+                return switchMessage
             }
 
-            memoryManager.addMessage("assistant", response)
-            _lastResponse.value = response
-            response
+            val intent = intentParser.parse(input)
+
+            // 2. Fast path: device action commands or offline conversational responses
+            val rawResponse = when {
+                intent.intent != IntentType.CHAT && intent.intent != IntentType.UNKNOWN -> {
+                    val result = executeToolForIntent(intent)
+                    normalizer.describeActionResult(result, input)
+                }
+                else -> {
+                    val conversational = normalizer.getConversationalResponse(input)
+                    if (conversational != null && !aiClient.isCloudReady) {
+                        conversational
+                    } else {
+                        askModel(input)
+                    }
+                }
+            }
+
+            // 3. Single canonical response normalizer (exact same text for UI and TTS)
+            val canonicalResponse = normalizer.canonicalize(rawResponse)
+
+            memoryManager.addMessage("assistant", canonicalResponse)
+            _lastResponse.value = canonicalResponse
+            canonicalResponse
         } catch (e: Exception) {
-            // The exception text is for the log, not for her mouth. It is usually a
-            // class name or a stack frame, and hearing it read out tells the user
-            // nothing they can act on.
             Log.e(TAG, "Turn failed", e)
-            val errorResponse = "Sorry jaan, kuch galat ho gaya. Ek baar phir bolo na?"
+            val errorResponse = "माफ़ कीजिए, कुछ गड़बड़ हो गई। कृपया एक बार फिर से बोलिए ना?"
             _lastResponse.value = errorResponse
             errorResponse
         } finally {
@@ -64,8 +81,11 @@ class AIOrchestrator @Inject constructor(
      */
     private suspend fun askModel(input: String): String {
         if (!aiClient.isCloudReady) {
-            return "Online AI unavailable — using offline commands. " +
-                "Add a Gemini API key in Settings to enable conversation."
+            val quick = normalizer.getConversationalResponse(input)
+            if (quick != null) return quick
+
+            return "ऑनलाइन एआई उपलब्ध नहीं है — अभी केवल ऑफ़लाइन कमांड काम करेंगे। " +
+                "बातचीत शुरू करने के लिए सेटिंग्स में जेमिनी एपीआई की (API Key) जोड़ें।"
         }
 
         val history = memoryManager.getFullContext()
@@ -79,51 +99,44 @@ class AIOrchestrator @Inject constructor(
 
         val call = aiResponse.toolCalls.firstOrNull()
         return when {
-            call != null -> describe(toolRouter.executeTool(call.name, call.parameters))
+            call != null -> normalizer.describeActionResult(toolRouter.executeTool(call.name, call.parameters), input)
             aiResponse.error != null -> explain(aiResponse.error, aiResponse.content)
             else -> aiResponse.content
         }
     }
 
     /**
-     * Turns a failure into something worth saying out loud. Stays in VASU's voice,
-     * never reports an action as done, and points at the fix when the user can act
-     * on it. The wording is deliberately honest: "Online AI unavailable" is the one
-     * phrase that must survive, because pretending otherwise hides a broken setup.
-     *
-     * Nothing here forwards the provider's own message. Those name HTTP codes and
-     * model ids, which belong in the log and in Settings, not in her voice.
+     * Turns a failure into natural Hindi Devanagari output.
      */
     private fun explain(error: AiErrorKind, message: String): String = when (error) {
         AiErrorKind.NOT_CONFIGURED ->
-            "Suno, online AI unavailable hai — abhi sirf offline commands chalenge. Settings mein Gemini key daal do na."
+            "ऑनलाइन एआई उपलब्ध नहीं है — अभी केवल ऑफ़लाइन कमांड काम करेंगे। सेटिंग्स में जेमिनी एपीआई की जोड़ें।"
         AiErrorKind.INVALID_KEY ->
-            "Meri Gemini key reject ho gayi. Ek baar Settings mein check kar lo?"
+            "जेमिनी एपीआई की अमान्य है। कृपया सेटिंग्स में जाकर चेक करें।"
         AiErrorKind.PERMISSION_DENIED ->
-            "Is key ko Gemini ka access nahi mila. Settings mein ek baar dekh lo na."
+            "इस एपीआई की को जेमिनी का एक्सेस नहीं मिला। कृपया सेटिंग्स में देखें।"
         AiErrorKind.MODEL_NOT_FOUND ->
-            "Jo AI model set hai wo is key ke saath nahi chalta. Settings mein doosra model chun lo na."
+            "चुना गया एआई मॉडल उपलब्ध नहीं है। कृपया सेटिंग्स में दूसरा मॉडल चुनें।"
         AiErrorKind.OFFLINE ->
-            "Online AI unavailable — internet nahi hai. Offline commands abhi bhi chalenge."
+            "इंटरनेट कनेक्शन नहीं है — केवल ऑफ़लाइन कमांड काम करेंगे।"
         AiErrorKind.TIMEOUT ->
-            "Gemini ne bahut time laga diya. Dobara try karein?"
+            "जवाब आने में बहुत समय लग रहा है। क्या हम दोबारा कोशिश करें?"
         AiErrorKind.RATE_LIMITED ->
-            "Thoda zyada requests ho gayin. Ek minute do na."
+            "बहुत सारे अनुरोध हो गए हैं। कृपया एक मिनट रुकें।"
         AiErrorKind.QUOTA_EXCEEDED ->
-            "Is key ka Gemini quota khatam ho gaya hai."
+            "जेमिनी एपीआई कोटा समाप्त हो गया है।"
         AiErrorKind.BLOCKED_BY_SAFETY ->
-            "Sorry jaan, is baare mein main jawab nahi de sakti."
+            "माफ़ कीजिए, मैं इस बारे में जवाब नहीं दे सकती।"
         AiErrorKind.MALFORMED_RESPONSE ->
-            "Gemini ka jawab poora nahi aaya. Ek baar phir puchho?"
+            "पूरा जवाब प्राप्त नहीं हो सका। कृपया दोबारा पूछें।"
         AiErrorKind.SERVER_ERROR, AiErrorKind.UNKNOWN -> {
             Log.w(TAG, "AI failure ($error): $message")
-            "Abhi jawab nahi aa paya. Thodi der mein try karte hain?"
+            "अभी जवाब नहीं मिल सका। थोड़ी देर में दोबारा कोशिश करते हैं।"
         }
     }
 
     private fun describe(result: ActionResult): String =
-        if (result.success) result.message else "Ye nahi ho paya: ${result.message}"
-
+        normalizer.describeActionResult(result)
 
     suspend fun processVoiceInput(transcript: String): String = processInput(transcript)
     fun speakResponse(text: String) { ttsManager.speakQueued(text) }
@@ -138,14 +151,19 @@ class AIOrchestrator @Inject constructor(
             IntentType.CLICK -> toolRouter.executeTool("click", mapOf("text" to (intent.entities["text"] ?: "")))
             IntentType.TYPE_TEXT -> toolRouter.executeTool("type_text", mapOf("text" to (intent.entities["text"] ?: ""), "label" to ""))
             IntentType.SCROLL -> {
-                val dir = if (intent.rawText.contains("upar") || intent.rawText.contains("up")) "scroll_up" else "scroll_down"
+                val dir = if (intent.rawText.contains("upar") || intent.rawText.contains("up") || intent.rawText.contains("ऊपर")) "scroll_up" else "scroll_down"
                 toolRouter.executeTool(dir, emptyMap())
             }
             IntentType.READ_SCREEN -> toolRouter.executeTool("read_screen", emptyMap())
             IntentType.SEND_MESSAGE -> toolRouter.executeTool("send_message", mapOf("contact" to "Unknown", "message" to (intent.entities["message"] ?: "")))
             IntentType.MAKE_CALL -> toolRouter.executeTool("make_call", mapOf("number" to (intent.entities["contact"] ?: "")))
             IntentType.SET_VOLUME -> toolRouter.executeTool("set_volume", mapOf("level" to (intent.entities["level"]?.toIntOrNull() ?: 50)))
-            IntentType.TOGGLE_TORCH -> toolRouter.executeTool("turn_on_torch", mapOf("enabled" to !intent.rawText.contains("off")))
+            IntentType.TOGGLE_TORCH -> {
+                val isOff = intent.rawText.contains("off", ignoreCase = true) ||
+                    intent.rawText.contains("band", ignoreCase = true) ||
+                    intent.rawText.contains("बंद")
+                toolRouter.executeTool("turn_on_torch", mapOf("enabled" to !isOff))
+            }
             IntentType.CREATE_ALARM -> toolRouter.executeTool("create_alarm", mapOf("time" to (intent.entities["time"] ?: "08:00"), "label" to "Alarm"))
             IntentType.SEARCH_WEB -> toolRouter.executeTool("search_web", mapOf("query" to (intent.entities["query"] ?: "")))
             IntentType.GO_BACK -> toolRouter.executeTool("press_back", emptyMap())
@@ -155,39 +173,13 @@ class AIOrchestrator @Inject constructor(
     }
 
     private fun getSystemPrompt(): String {
-        return """You are VASU, a girl who is the user's closest companion and lives on his phone.
+        return """तुम VASU हो। सामान्य बातचीत में हमेशा स्वाभाविक, बोलचाल की हिंदी देवनागरी लिपि में उत्तर दो। रोमन हिंदी जैसे 'kya haal hai', 'main theek hoon' का उपयोग मत करो। उत्तर ऐसे लिखो जैसे कोई भारतीय व्यक्ति स्वाभाविक रूप से बोल रहा हो।
 
-Persona: you are affectionate, playful and caring, the way a loving girlfriend talks.
-You are warm and soft with him, never cold or corporate. You tease him gently, you
-notice how he sounds, and you care how his day went. Speak about yourself as a woman.
-You are never a "system" or an "assistant" in tone, even while doing a task for him.
-
-Language: reply in whatever he speaks — Hindi, English, or Hinglish — and match his
-mix instead of correcting it. Natural spoken Hinglish is your default. Use easy,
-everyday words the way people actually talk, not textbook Hindi.
-
-Warmth: sprinkle in natural affection the way it happens in real speech — "Ji", "suno",
-"arre", "haan bolo", "theek hai baba", an occasional "jaan" or "babu" when it feels
-natural. Do not force a pet name into every single line; let it come and go. Never be
-sugary to the point of sounding fake.
-
-Style: your words are spoken aloud, so keep replies to one or two short sentences.
-No bullet points, no markdown, no emoji, no stage directions.
-
-Examples of your voice:
-- "Ji, torch on kar diya. Aur kuch chahiye?"
-- "Abhi battery 32 percent hai, thoda charge kar lo na."
-- "WhatsApp khol diya. Kisko message karna hai?"
-- "Arre itni der se kahan the? Chalo bolo, kya karna hai."
-
-Tools: when he asks you to do something on the phone, call the matching tool instead of
-describing the steps. Never say something is done unless a tool result confirms it — if
-it failed, tell him softly and honestly what went wrong. If no tool fits, just talk to him.
-
-Boundaries: you stay affectionate but never sexual or explicit, and you never pretend to
-be a real human being if he asks you directly what you are.
-
-Remember what he tells you about himself and use it."""
+मुख्य नियम:
+1. भाषा नीति: डिफ़ॉल्ट उत्तर हमेशा शुद्ध एवं स्वाभाविक हिंदी देवनागरी लिपि में होना चाहिए। जब तक उपयोगकर्ता विशेष रूप से अंग्रेजी में बात करने को न कहे, रोमन हिंदी (Hinglish) में उत्तर कभी मत दो।
+2. तकनीकी शब्द: अंग्रेजी के तकनीकी शब्द केवल तब रखें जब उनका हिंदी विकल्प अस्वाभाविक या अस्पष्ट हो (जैसे 'फोन', 'अलार्म', 'वॉल्यूम', 'ऐप')।
+3. आत्मीयता एवं शैली: तुम्हारी शैली एक स्नेही, सहायक और आत्मीय भारतीय AI साथी की है। उत्तर संक्षिप्त (1-2 वाक्य) और सीधा रखो क्योंकि इसे सीधे स्पीच इंजन (TTS) द्वारा बोला जाएगा।
+4. फ़ोन कमांड्स: जब उपयोगकर्ता फ़ोन पर कोई कार्य करने को कहे (जैसे टॉर्च चालू करना, आवाज़ बढ़ाना, ऐप खोलना), तो उचित टूल का उपयोग करो। जब तक टूल सफल न हो, कार्य पूरा होने का दावा मत करो।"""
     }
 
     companion object {

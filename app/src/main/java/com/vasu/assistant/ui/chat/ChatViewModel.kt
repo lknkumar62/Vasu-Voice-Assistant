@@ -150,7 +150,7 @@ class ChatViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     messages = listOf(
                         ChatMessage(
-                            content = "Hello! I am VASU, your voice assistant. How can I help you today?",
+                            content = "नमस्ते! मैं वासु हूँ, आपकी वॉइस असिस्टेंट। आज मैं आपकी क्या मदद करूँ?",
                             isUser = false
                         )
                     )

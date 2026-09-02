@@ -291,7 +291,7 @@ fun AssistantOverlayContent(
                             value = textQuery,
                             onValueChange = { textQuery = it },
                             modifier = Modifier.weight(1f),
-                            placeholder = { Text("Ask VASU anything...", color = VasuTextMuted, fontSize = 14.sp) },
+                            placeholder = { Text("वासु से कुछ भी पूछिए...", color = VasuTextMuted, fontSize = 14.sp) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(
@@ -348,10 +348,10 @@ fun AssistantOverlayContent(
                 // Assistant State Text
                 Text(
                     text = when (assistantState) {
-                        AssistantState.LISTENING -> "Listening to your voice..."
-                        AssistantState.THINKING -> "Thinking..."
-                        AssistantState.RESPONDING -> "Speaking..."
-                        AssistantState.IDLE -> "Tap mic or say command"
+                        AssistantState.LISTENING -> "आपकी आवाज़ सुन रही हूँ..."
+                        AssistantState.THINKING -> "सोच रही हूँ..."
+                        AssistantState.RESPONDING -> "बोल रही हूँ..."
+                        AssistantState.IDLE -> "माइक दबाएं या कमांड बोलें"
                     },
                     color = when (assistantState) {
                         AssistantState.LISTENING -> VasuCyan

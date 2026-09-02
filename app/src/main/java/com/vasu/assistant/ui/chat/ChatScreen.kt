@@ -209,7 +209,7 @@ fun TypingIndicator() {
         }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "VASU is thinking...",
+            text = "वासु सोच रही है...",
             color = VasuTextMuted,
             fontSize = 12.sp
         )
@@ -255,7 +255,7 @@ fun ChatInputBar(
                 modifier = Modifier.weight(1f),
                 placeholder = {
                     Text(
-                        text = "Type a message...",
+                        text = "मुझसे कुछ भी पूछिए…",
                         color = VasuTextMuted
                     )
                 },

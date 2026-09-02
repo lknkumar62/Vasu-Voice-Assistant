@@ -54,7 +54,7 @@ class AlternatePersonaAvatar @Inject constructor(
     private fun defaultPersona() = Persona(
         id = "default",
         name = "VASU",
-        systemPrompt = "You are VASU, a helpful AI voice assistant. Be concise, friendly, and helpful.",
+        systemPrompt = "तुम VASU हो। सामान्य बातचीत में हमेशा स्वाभाविक, बोलचाल की हिंदी देवनागरी लिपि में उत्तर दो। उत्तर संक्षिप्त और स्पष्ट रखो।",
         responseStyle = "friendly"
     )
 }

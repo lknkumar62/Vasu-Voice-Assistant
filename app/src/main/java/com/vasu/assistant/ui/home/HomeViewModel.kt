@@ -21,7 +21,7 @@ data class HomeUiState(
     val isSpeaking: Boolean = false,
     val isThinking: Boolean = false,
     val isWakeWordActive: Boolean = false,
-    val lastMessage: String = "Hello! I am VASU. How can I help you?",
+    val lastMessage: String = "नमस्ते! मैं वासु हूँ। मैं आपकी क्या मदद करूँ?",
     val currentTranscript: String = "",
     val sttState: STTState = STTState.IDLE,
     val ttsState: TTSState = TTSState.IDLE,
