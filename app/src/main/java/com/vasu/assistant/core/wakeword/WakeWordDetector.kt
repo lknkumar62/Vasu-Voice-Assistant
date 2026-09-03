@@ -187,6 +187,28 @@ class WakeWordDetector @Inject constructor(
         }
     }
 
+    private var wasRunningBeforePause = false
+
+    /**
+     * Temporarily pause wake-word microphone capture to allow SpeechRecognizer exclusive access.
+     */
+    fun pauseForSpeechRecognition() {
+        if (isRunning) {
+            wasRunningBeforePause = true
+            stop()
+        }
+    }
+
+    /**
+     * Resume wake-word microphone capture after SpeechRecognizer completes or releases the mic.
+     */
+    fun resumeAfterSpeechRecognition() {
+        if (wasRunningBeforePause) {
+            wasRunningBeforePause = false
+            start()
+        }
+    }
+
     /**
      * Check if detection is available
      */

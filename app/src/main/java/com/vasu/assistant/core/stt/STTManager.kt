@@ -1,35 +1,48 @@
 package com.vasu.assistant.core.stt
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
+import androidx.core.content.ContextCompat
+import com.vasu.assistant.core.wakeword.WakeWordDetector
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 /**
  * STTManager - Wraps Android SpeechRecognizer for voice input.
  *
- * Features:
- * - Hindi + English support
- * - Partial result streaming
- * - Error handling
- * - Auto-restart on silence
- * - Lifecycle-aware
+ * Capabilities:
+ * - Thread safety: All calls guaranteed on the Main Looper.
+ * - Anti-collision: Automatically pauses and resumes [WakeWordDetector] to avoid mic lock contention.
+ * - Lifecycle recovery: Cleans up and recreates recognizer instances on error/busy states.
+ * - Offline speech recognition: Uses on-device speech recognizer on API 33+ when network is absent.
+ * - Comprehensive technical diagnostics logged to Logcat with user-friendly error taxonomy.
  */
 @Singleton
 class STTManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val wakeWordDetectorProvider: Provider<WakeWordDetector>
 ) {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var speechRecognizer: SpeechRecognizer? = null
     private var isInitialized = false
 
@@ -60,38 +73,88 @@ class STTManager @Inject constructor(
      * Initialize the speech recognizer
      */
     fun initialize(sttConfig: STTConfig = STTConfig()) {
-        if (isInitialized) return
-
         config = sttConfig
 
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            _state.value = STTState.ERROR
-            return
-        }
+        runOnMainThread {
+            if (isInitialized && speechRecognizer != null) return@runOnMainThread
 
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-            setRecognitionListener(createListener())
+            if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+                Log.e(TAG, "SpeechRecognizer.isRecognitionAvailable returned false. Check Manifest <queries> and Google Speech Services.")
+                _state.value = STTState.ERROR
+                _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "No speech recognition service available on this device"))
+                return@runOnMainThread
+            }
+
+            createInternalRecognizer()
         }
-        isInitialized = true
-        _state.value = STTState.IDLE
+    }
+
+    private fun createInternalRecognizer() {
+        try {
+            speechRecognizer?.destroy()
+            speechRecognizer = null
+
+            val online = isNetworkAvailable()
+            val recognizer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !online && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+            ) {
+                Log.i(TAG, "Creating on-device SpeechRecognizer (offline mode)")
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            } else {
+                Log.i(TAG, "Creating standard SpeechRecognizer")
+                SpeechRecognizer.createSpeechRecognizer(context)
+            }
+
+            recognizer.setRecognitionListener(createListener())
+            speechRecognizer = recognizer
+            isInitialized = true
+            _state.value = STTState.IDLE
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed creating SpeechRecognizer", e)
+            _state.value = STTState.ERROR
+            _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "Failed to initialize speech recognizer: ${e.message}"))
+        }
     }
 
     /**
      * Start listening for speech
      */
     fun startListening() {
-        if (!isInitialized) {
-            initialize()
-        }
+        runOnMainThread {
+            if (!hasRecordAudioPermission()) {
+                Log.e(TAG, "Cannot start listening: RECORD_AUDIO permission not granted")
+                _state.value = STTState.ERROR
+                _errors.tryEmit(SttError(SttErrorKind.MIC_PERMISSION_DENIED, "Microphone permission denied - grant it in Settings"))
+                return@runOnMainThread
+            }
 
-        speechRecognizer?.let { recognizer ->
-            _state.value = STTState.LISTENING
+            // Pause WakeWordDetector to prevent microphone contention
+            pauseWakeWordMic()
 
-            val intent = createRecognizerIntent()
-            recognizer.startListening(intent)
-        } ?: run {
-            _state.value = STTState.ERROR
-            _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "Speech recognizer not initialized"))
+            if (!isInitialized || speechRecognizer == null) {
+                createInternalRecognizer()
+            }
+
+            val recognizer = speechRecognizer
+            if (recognizer == null) {
+                _state.value = STTState.ERROR
+                _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "Speech recognizer not initialized"))
+                resumeWakeWordMic()
+                return@runOnMainThread
+            }
+
+            try {
+                recognizer.cancel()
+                _state.value = STTState.LISTENING
+
+                val intent = createRecognizerIntent()
+                recognizer.startListening(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception starting SpeechRecognizer", e)
+                _state.value = STTState.ERROR
+                _errors.tryEmit(SttError(SttErrorKind.RECOGNITION_ERROR, "Could not start microphone: ${e.message}"))
+                resumeWakeWordMic()
+            }
         }
     }
 
@@ -99,16 +162,32 @@ class STTManager @Inject constructor(
      * Stop listening
      */
     fun stopListening() {
-        speechRecognizer?.stopListening()
-        _state.value = STTState.IDLE
+        runOnMainThread {
+            try {
+                speechRecognizer?.stopListening()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error stopping speech recognition", e)
+            } finally {
+                _state.value = STTState.IDLE
+                resumeWakeWordMic()
+            }
+        }
     }
 
     /**
      * Cancel recognition
      */
     fun cancel() {
-        speechRecognizer?.cancel()
-        _state.value = STTState.IDLE
+        runOnMainThread {
+            try {
+                speechRecognizer?.cancel()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error cancelling speech recognition", e)
+            } finally {
+                _state.value = STTState.IDLE
+                resumeWakeWordMic()
+            }
+        }
     }
 
     /**
@@ -120,15 +199,21 @@ class STTManager @Inject constructor(
      * Cleanup resources
      */
     fun destroy() {
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-        isInitialized = false
-        _state.value = STTState.IDLE
+        runOnMainThread {
+            try {
+                speechRecognizer?.destroy()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error destroying speech recognizer", e)
+            }
+            speechRecognizer = null
+            isInitialized = false
+            _state.value = STTState.IDLE
+            resumeWakeWordMic()
+        }
     }
 
-    // Private methods
-
     private fun createRecognizerIntent(): Intent {
+        val online = isNetworkAvailable()
         return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -142,8 +227,12 @@ class STTManager @Inject constructor(
             )
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, config.partialResults)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, config.maxResults)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, config.silenceTimeoutMs)
+
+            if (!online) {
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            }
         }
     }
 
@@ -169,21 +258,31 @@ class STTManager @Inject constructor(
         }
 
         override fun onError(error: Int) {
+            val diagnostic = explainErrorCode(error)
+            Log.e(TAG, "RecognitionListener.onError: code=$error ($diagnostic), permissionGranted=${hasRecordAudioPermission()}, online=${isNetworkAvailable()}")
+
             val sttError = toSttError(error)
             _state.value = STTState.ERROR
             _errors.tryEmit(sttError)
 
-            // Auto-restart on certain errors (silence, no match)
-            if (error == SpeechRecognizer.ERROR_NO_MATCH ||
-                error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
-            ) {
-                _state.value = STTState.IDLE
+            resumeWakeWordMic()
+
+            // Reset recognizer instance on critical/busy errors so it never stays permanently broken
+            if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                Log.w(TAG, "Resetting SpeechRecognizer instance due to error code $error")
+                speechRecognizer?.destroy()
+                speechRecognizer = null
+                isInitialized = false
             }
+
+            _state.value = STTState.IDLE
         }
 
         override fun onResults(results: Bundle?) {
             _state.value = STTState.RESULT_READY
             processResults(results, isFinal = true)
+            resumeWakeWordMic()
+            _state.value = STTState.IDLE
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
@@ -235,10 +334,6 @@ class STTManager @Inject constructor(
             SpeechRecognizer.ERROR_NETWORK -> SttErrorKind.NETWORK_ERROR
             SpeechRecognizer.ERROR_SERVER -> SttErrorKind.NETWORK_ERROR
             SpeechRecognizer.ERROR_AUDIO -> SttErrorKind.AUDIO_ERROR
-            // ERROR_CLIENT is the framework's catch-all. It is overwhelmingly caused
-            // by the recogniser being driven off the main thread or being reused
-            // after destroy, not by anything the user did, so it maps to a
-            // recognition fault rather than the meaningless "Client error".
             SpeechRecognizer.ERROR_CLIENT -> SttErrorKind.RECOGNITION_ERROR
             else -> mapApi33Error(error)
         }
@@ -260,10 +355,6 @@ class STTManager @Inject constructor(
         return SttError(kind, message, error)
     }
 
-    /**
-     * Codes added in API 31/33. Referenced numerically because the app compiles
-     * against a range of SDKs and the constants are not present on all of them.
-     */
     private fun mapApi33Error(error: Int): SttErrorKind = when (error) {
         10 -> SttErrorKind.RATE_LIMITED           // ERROR_TOO_MANY_REQUESTS
         11 -> SttErrorKind.SERVICE_UNAVAILABLE    // ERROR_SERVER_DISCONNECTED
@@ -272,5 +363,70 @@ class STTManager @Inject constructor(
         14 -> SttErrorKind.SERVICE_UNAVAILABLE    // ERROR_CANNOT_CHECK_SUPPORT
         15 -> SttErrorKind.SERVICE_UNAVAILABLE    // ERROR_CANNOT_LISTEN_TO_DOWNLOADED_MODEL
         else -> SttErrorKind.UNKNOWN
+    }
+
+    private fun explainErrorCode(code: Int): String = when (code) {
+        SpeechRecognizer.ERROR_AUDIO -> "ERROR_AUDIO"
+        SpeechRecognizer.ERROR_CLIENT -> "ERROR_CLIENT"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_INSUFFICIENT_PERMISSIONS"
+        SpeechRecognizer.ERROR_NETWORK -> "ERROR_NETWORK"
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT"
+        SpeechRecognizer.ERROR_NO_MATCH -> "ERROR_NO_MATCH"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_RECOGNIZER_BUSY"
+        SpeechRecognizer.ERROR_SERVER -> "ERROR_SERVER"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
+        10 -> "ERROR_TOO_MANY_REQUESTS"
+        11 -> "ERROR_SERVER_DISCONNECTED"
+        12 -> "ERROR_LANGUAGE_NOT_SUPPORTED"
+        13 -> "ERROR_LANGUAGE_UNAVAILABLE"
+        14 -> "ERROR_CANNOT_CHECK_SUPPORT"
+        15 -> "ERROR_CANNOT_LISTEN_TO_DOWNLOADED_MODEL"
+        else -> "UNKNOWN_$code"
+    }
+
+    private fun pauseWakeWordMic() {
+        try {
+            wakeWordDetectorProvider.get().pauseForSpeechRecognition()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed pausing wake word detector", e)
+        }
+    }
+
+    private fun resumeWakeWordMic() {
+        try {
+            wakeWordDetectorProvider.get().resumeAfterSpeechRecognition()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed resuming wake word detector", e)
+        }
+    }
+
+    private fun hasRecordAudioPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val network = cm?.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(network) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun runOnMainThread(action: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            action()
+        } else {
+            mainHandler.post(action)
+        }
+    }
+
+    companion object {
+        private const val TAG = "STTManager"
     }
 }

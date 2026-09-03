@@ -43,6 +43,15 @@ class VasuSettings @Inject constructor(
     private val _autoAllowEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_ALLOW, true))
     val autoAllowEnabled: StateFlow<Boolean> = _autoAllowEnabled.asStateFlow()
 
+    private val _androidFallbackTtsEnabled = MutableStateFlow(prefs.getBoolean(KEY_ANDROID_FALLBACK_TTS, false))
+    val androidFallbackTtsEnabled: StateFlow<Boolean> = _androidFallbackTtsEnabled.asStateFlow()
+
+    private val _geminiTtsVoice = MutableStateFlow(prefs.getString(KEY_GEMINI_TTS_VOICE, DEFAULT_GEMINI_TTS_VOICE) ?: DEFAULT_GEMINI_TTS_VOICE)
+    val geminiTtsVoice: StateFlow<String> = _geminiTtsVoice.asStateFlow()
+
+    private val _geminiTtsModel = MutableStateFlow(prefs.getString(KEY_GEMINI_TTS_MODEL, DEFAULT_GEMINI_TTS_MODEL) ?: DEFAULT_GEMINI_TTS_MODEL)
+    val geminiTtsModel: StateFlow<String> = _geminiTtsModel.asStateFlow()
+
     fun setVoiceProfile(profile: VoiceProfile) {
         prefs.edit()
             .putString(KEY_TTS_LANGUAGE, profile.language)
@@ -73,6 +82,27 @@ class VasuSettings @Inject constructor(
         _autoAllowEnabled.value = enabled
     }
 
+    fun setAndroidFallbackTtsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ANDROID_FALLBACK_TTS, enabled).apply()
+        _androidFallbackTtsEnabled.value = enabled
+    }
+
+    fun setGeminiTtsVoice(voice: String) {
+        val trimmed = voice.trim()
+        if (trimmed.isNotBlank()) {
+            prefs.edit().putString(KEY_GEMINI_TTS_VOICE, trimmed).apply()
+            _geminiTtsVoice.value = trimmed
+        }
+    }
+
+    fun setGeminiTtsModel(model: String) {
+        val trimmed = model.trim()
+        if (trimmed.isNotBlank()) {
+            prefs.edit().putString(KEY_GEMINI_TTS_MODEL, trimmed).apply()
+            _geminiTtsModel.value = trimmed
+        }
+    }
+
     private fun readVoiceProfile(): VoiceProfile {
         val language = prefs.getString(KEY_TTS_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
         return VoiceProfile(
@@ -96,8 +126,15 @@ class VasuSettings @Inject constructor(
         private const val KEY_OFFLINE_ONLY = "offline_only"
         private const val KEY_VOICE_GUARD = "voice_guard_enabled"
         private const val KEY_AUTO_ALLOW = "auto_allow_enabled"
+        private const val KEY_ANDROID_FALLBACK_TTS = "android_fallback_tts_enabled"
+        private const val KEY_GEMINI_TTS_VOICE = "gemini_tts_voice"
+        private const val KEY_GEMINI_TTS_MODEL = "gemini_tts_model"
 
         const val DEFAULT_LANGUAGE = "hi-IN"
+        const val DEFAULT_GEMINI_TTS_VOICE = "Kore"
+        const val DEFAULT_GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
+        const val FALLBACK_GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+        const val BASE_GEMINI_TTS_MODEL = "gemini-2.0-flash"
 
         /** Android TTS clamps outside these, so the UI must not offer more. */
         val PITCH_RANGE = 0.5f..2.0f

@@ -60,6 +60,9 @@ data class SettingsUiState(
     val installedVoices: List<String> = emptyList(),
     val voiceStatus: VoiceStatus = VoiceStatus(),
     val customVoiceStatus: com.vasu.assistant.core.tts.VoiceModelStatus = com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS,
+    val androidFallbackTtsEnabled: Boolean = false,
+    val geminiTtsVoice: String = VasuSettings.DEFAULT_GEMINI_TTS_VOICE,
+    val geminiTtsModel: String = VasuSettings.DEFAULT_GEMINI_TTS_MODEL,
 
     // Wake word
     val wakeWordEnabled: Boolean = false,
@@ -146,6 +149,9 @@ class SettingsViewModel @Inject constructor(
             wakeWordEnabled = settings.wakeWordEnabled.value,
             voiceGuardEnabled = settings.voiceGuardEnabled.value,
             autoAllowEnabled = settings.autoAllowEnabled.value,
+            androidFallbackTtsEnabled = settings.androidFallbackTtsEnabled.value,
+            geminiTtsVoice = settings.geminiTtsVoice.value,
+            geminiTtsModel = settings.geminiTtsModel.value,
             network = networkMonitor.state.value
         )
     }
@@ -278,6 +284,21 @@ class SettingsViewModel @Inject constructor(
             if (settings.voiceProfile.value.isHindi) "नमस्ते, मैं वासु हूँ। बताइए मैं आपकी क्या मदद करूँ?"
             else "Hello, I am VASU. How can I help you today?"
         )
+    }
+
+    fun setAndroidFallbackTtsEnabled(enabled: Boolean) {
+        settings.setAndroidFallbackTtsEnabled(enabled)
+        _uiState.value = _uiState.value.copy(androidFallbackTtsEnabled = enabled)
+    }
+
+    fun setGeminiTtsVoice(voice: String) {
+        settings.setGeminiTtsVoice(voice)
+        _uiState.value = _uiState.value.copy(geminiTtsVoice = voice)
+    }
+
+    fun setGeminiTtsModel(model: String) {
+        settings.setGeminiTtsModel(model)
+        _uiState.value = _uiState.value.copy(geminiTtsModel = model)
     }
 
     // Wake word

@@ -86,22 +86,29 @@ fun VoiceScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Status
+            // Status Message
             Text(
-                text = when {
-                    uiState.isListening -> "सुन रही हूँ..."
-                    uiState.isSpeaking -> "बोल रही हूँ..."
-                    uiState.sttState == STTState.PROCESSING -> "सोच रही हूँ..."
-                    else -> "बोलने के लिए माइक दबाएं"
-                },
-                color = when {
-                    uiState.isListening -> VasuCyan
-                    uiState.isSpeaking -> VasuPurple
-                    uiState.sttState == STTState.PROCESSING -> VasuWarning
-                    else -> VasuTextSecondary
+                text = uiState.statusMessage,
+                color = when (uiState.mode) {
+                    VoiceUiMode.LISTENING -> VasuCyan
+                    VoiceUiMode.SPEAKING -> VasuPurple
+                    VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> VasuWarning
+                    VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE -> VasuError
+                    VoiceUiMode.OFFLINE_MODE, VoiceUiMode.GEMINI_UNAVAILABLE -> VasuTextSecondary
+                    VoiceUiMode.IDLE -> VasuTextSecondary
                 },
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Voice Engine Badge
+            Text(
+                text = "वॉयस: ${uiState.activeVoiceSource.displayName}",
+                color = VasuCyanLight.copy(alpha = 0.7f),
+                fontSize = 12.sp
             )
 
             Spacer(modifier = Modifier.height(16.dp))

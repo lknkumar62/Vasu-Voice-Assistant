@@ -43,8 +43,12 @@ class SecureKeyStore @Inject constructor(
 
     val isAvailable: Boolean get() = prefs != null
 
-    fun getGeminiKey(): String? =
-        prefs?.getString(KEY_GEMINI_API_KEY, null)?.takeIf { it.isNotBlank() }
+    fun getGeminiKey(): String? {
+        val saved = prefs?.getString(KEY_GEMINI_API_KEY, null)?.takeIf { it.isNotBlank() }
+        if (saved != null) return saved
+        return System.getenv("GEMINI_API_KEY")?.takeIf { it.isNotBlank() }
+            ?: System.getProperty("GEMINI_API_KEY")?.takeIf { it.isNotBlank() }
+    }
 
     fun setGeminiKey(key: String): Boolean {
         val store = prefs ?: return false
