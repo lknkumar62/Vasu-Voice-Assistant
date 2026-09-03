@@ -26,7 +26,7 @@ fun MemoryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
-    var editingItem by remember { mutableStateOf<MemoryItem?>(false as? MemoryItem) }
+    var editingItem by remember { mutableStateOf<MemoryItem?>(null) }
     var showClearConfirmation by remember { mutableStateOf(false) }
 
     Scaffold(
