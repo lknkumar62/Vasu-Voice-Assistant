@@ -40,6 +40,9 @@ class VasuSettings @Inject constructor(
     private val _voiceGuardEnabled = MutableStateFlow(prefs.getBoolean(KEY_VOICE_GUARD, false))
     val voiceGuardEnabled: StateFlow<Boolean> = _voiceGuardEnabled.asStateFlow()
 
+    private val _autoAllowEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_ALLOW, true))
+    val autoAllowEnabled: StateFlow<Boolean> = _autoAllowEnabled.asStateFlow()
+
     fun setVoiceProfile(profile: VoiceProfile) {
         prefs.edit()
             .putString(KEY_TTS_LANGUAGE, profile.language)
@@ -65,6 +68,11 @@ class VasuSettings @Inject constructor(
         _voiceGuardEnabled.value = enabled
     }
 
+    fun setAutoAllowEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_ALLOW, enabled).apply()
+        _autoAllowEnabled.value = enabled
+    }
+
     private fun readVoiceProfile(): VoiceProfile {
         val language = prefs.getString(KEY_TTS_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
         return VoiceProfile(
@@ -87,6 +95,7 @@ class VasuSettings @Inject constructor(
         private const val KEY_WAKE_WORD = "wake_word_enabled"
         private const val KEY_OFFLINE_ONLY = "offline_only"
         private const val KEY_VOICE_GUARD = "voice_guard_enabled"
+        private const val KEY_AUTO_ALLOW = "auto_allow_enabled"
 
         const val DEFAULT_LANGUAGE = "hi-IN"
 

@@ -17,6 +17,26 @@ class NotificationListener : NotificationListenerService() {
         fun onNotificationReceived(notification: ParsedNotification)
     }
 
+    companion object {
+        var instance: NotificationListener? = null
+            private set
+    }
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        instance = this
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        if (instance == this) instance = null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance == this) instance = null
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (shouldIgnore(sbn)) return
         val parsed = notificationParser.parse(sbn)

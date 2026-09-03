@@ -43,14 +43,15 @@ sealed class PermissionResult {
  */
 @Singleton
 class PermissionGate @Inject constructor(
-    private val roleManager: RoleManager
+    private val roleManager: RoleManager,
+    private val settings: com.vasu.assistant.core.settings.VasuSettings
 ) {
     /**
      * Check if current speaker can execute a tool
      */
     fun checkPermission(tool: Tool): PermissionResult {
-        // If guardian is disabled, allow all
-        if (!roleManager.guardianEnabled.value) {
+        // If auto-allow is enabled or guardian is disabled, grant immediately
+        if (settings.autoAllowEnabled.value || !roleManager.guardianEnabled.value) {
             return PermissionResult.Granted
         }
 
@@ -74,7 +75,7 @@ class PermissionGate @Inject constructor(
             )
         }
 
-        // Require confirmation for high-risk actions
+        // Require confirmation for high-risk actions if auto-allow is off
         if (tool.riskLevel == RiskLevel.HIGH || tool.riskLevel == RiskLevel.CRITICAL) {
             return PermissionResult.RequiresConfirmation(
                 "This action requires confirmation: ${tool.description}"

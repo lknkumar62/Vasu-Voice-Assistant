@@ -49,7 +49,7 @@ fun MissionsScreen(
         containerColor = VasuDarkBg,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* TODO: Create new mission */ },
+                onClick = { viewModel.createMission("Routine #${missions.size + 1}") },
                 containerColor = VasuCyan
             ) {
                 Icon(Icons.Default.Add, contentDescription = "New Mission", tint = VasuDarkBg)

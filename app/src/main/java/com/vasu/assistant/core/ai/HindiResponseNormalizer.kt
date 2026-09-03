@@ -165,21 +165,52 @@ class HindiResponseNormalizer @Inject constructor() {
                 val time = Regex("\\d{1,2}:\\d{2}").find(result.message)?.value ?: "दिए गए समय"
                 "$time के लिए अलार्म सेट कर दिया गया है।"
             }
+            action == "set_timer" -> {
+                val sec = Regex("\\d+").find(result.message)?.value ?: ""
+                if (sec.isNotBlank()) "$sec सेकंड का टाइमर शुरू कर दिया गया है।" else "टाइमर शुरू कर दिया गया है।"
+            }
+            action == "time" || action == "get_time" -> result.message
+            action == "weather" || action == "get_weather" -> "मौसम की जानकारी प्राप्त की जा रही है..."
+            action == "location" || action == "get_current_location" -> {
+                val addr = (result.data?.get("address") as? String) ?: ""
+                if (addr.isNotBlank()) "आपकी वर्तमान लोकेशन है: $addr" else "लोकेशन प्राप्त हो गई है।"
+            }
+            action == "parking" || action == "save_parking" -> "आपकी पार्किंग लोकेशन सुरक्षित कर ली गई है।"
             action == "search_web" -> {
                 val query = result.message.removePrefix("Searching for ").trim()
                 if (query.isNotBlank()) "$query के लिए खोजा जा रहा है..." else "सर्च किया जा रहा है..."
             }
+            action == "browse" || action == "browse_files" -> "फ़ाइलें देख ली गई हैं।"
+            action == "search_files" || action == "search" -> "फ़ाइलें खोज ली गई हैं।"
+            action == "read" || action == "read_file" -> "फ़ाइल पढ़ ली गई है।"
+            action == "rename" || action == "rename_file" -> "फ़ाइल का नाम बदल दिया गया है।"
+            action == "copy" || action == "copy_file" -> "फ़ाइल कॉपी कर दी गई है।"
+            action == "move" || action == "move_file" -> "फ़ाइल स्थानांतरित कर दी गई है।"
+            action == "delete" || action == "delete_file" -> "फ़ाइल हटा दी गई है।"
+            action == "storage" || action == "storage_info" -> "स्टोरेज की जानकारी प्राप्त हो गई है।"
+            action == "take_photo" || action == "photo" -> "फ़ोटो खींच ली गई है।"
+            action == "start_recording" || action == "record_video" -> "वीडियो रिकॉर्डिंग शुरू कर दी गई है।"
+            action == "stop_recording" -> "वीडियो रिकॉर्डिंग रोक दी गई है।"
+            action == "notifications" || action == "read_notifications" -> {
+                val count = Regex("\\d+").find(result.message)?.value ?: "0"
+                "$count नए नोटिफ़िकेशन मिले हैं।"
+            }
+            action == "dismiss" || action == "dismiss_notification" -> "नोटिफ़िकेशन हटा दिया गया है।"
+            action == "macro" || action == "create_macro" || action == "run_macro" -> "मैक्रो सफलतापूर्वक पूरा हुआ।"
             action == "back" || action == "press_back" -> "वापस चले गए हैं।"
             action == "home" || action == "press_home" -> "होम स्क्रीन पर चले गए हैं।"
-            action == "click" -> "क्लिक कर दिया गया है।"
+            action == "click" || action == "click_element" -> "क्लिक कर दिया गया है।"
             action == "type" || action == "type_text" -> "टेक्स्ट टाइप कर दिया गया है।"
             action == "make_call" -> "कॉल लगाया जा रहा है।"
             action == "send_message" || action == "send_sms" -> "मैसेज भेजा जा रहा है।"
-            action == "whatsapp" -> "व्हाट्सएप खोला जा रहा है।"
-            action == "battery" -> {
+            action == "whatsapp" || action == "send_whatsapp_message" -> "व्हाट्सएप खोला जा रहा है।"
+            action == "battery" || action == "get_battery_info" -> {
                 val level = Regex("\\d+").find(result.message)?.value ?: ""
                 if (level.isNotBlank()) "बैटरी अभी $level% है।" else "बैटरी की जानकारी प्राप्त हो गई है।"
             }
+            action == "wifi" || action == "toggle_wifi" -> "वाई-फ़ाई सेटिंग्स खोल दी गई हैं।"
+            action == "ringer" || action == "set_ringer_mode" -> "रिंगर मोड बदल दिया गया है।"
+            action == "apps" || action == "list_apps" -> "इंस्टॉल किए गए ऐप्स की सूची प्राप्त हो गई है।"
             else -> translateMessageToHindi(result.message)
         }
     }

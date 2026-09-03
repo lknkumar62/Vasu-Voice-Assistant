@@ -433,7 +433,14 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsSection(title = "SECURITY") {
+            SettingsSection(title = "SECURITY & AUTOMATION") {
+                SettingsToggleItem(
+                    icon = Icons.Default.Bolt,
+                    title = "Auto-Allow Actions",
+                    subtitle = if (state.autoAllowEnabled) "Autonomous execution enabled (no confirmation prompts)" else "Ask confirmation for high-risk actions",
+                    enabled = state.autoAllowEnabled,
+                    onToggle = viewModel::setAutoAllowEnabled
+                )
                 SettingsToggleItem(
                     icon = Icons.Default.Security,
                     title = "Voice Guard",

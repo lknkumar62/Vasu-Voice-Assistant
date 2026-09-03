@@ -45,6 +45,10 @@ class STTManager @Inject constructor(
     private val _results = MutableSharedFlow<RecognitionResult>(replay = 1)
     val results: SharedFlow<RecognitionResult> = _results.asSharedFlow()
 
+    // RMS level for visualizer
+    private val _rmsLevel = MutableStateFlow(0f)
+    val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
+
     // Errors
     private val _errors = MutableSharedFlow<SttError>(replay = 1)
     val errors: SharedFlow<SttError> = _errors.asSharedFlow()
@@ -153,7 +157,7 @@ class STTManager @Inject constructor(
         }
 
         override fun onRmsChanged(rmsdB: Float) {
-            // RMS level for waveform visualization
+            _rmsLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
         }
 
         override fun onBufferReceived(buffer: ByteArray?) {

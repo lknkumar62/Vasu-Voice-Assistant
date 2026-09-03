@@ -35,9 +35,18 @@ enum class IntentType {
     // Device
     SET_VOLUME,
     TOGGLE_TORCH,
+    TOGGLE_BLUETOOTH,
+    GET_BATTERY,
     CREATE_ALARM,
+    SET_TIMER,
+    MEDIA_CONTROL,
 
-    // Information
+    // Files & Camera
+    MANAGE_FILES,
+    TAKE_PHOTO,
+
+    // Information & Navigation
+    GET_LOCATION,
     SEARCH_WEB,
     GET_WEATHER,
     GET_TIME,
@@ -66,22 +75,29 @@ class IntentParser @Inject constructor() {
 
     private val intentPatterns = mapOf(
         IntentType.OPEN_APP to listOf("open", "launch", "start", "kholo", "chalaao", "खोलो", "चलाओ", "शुरू करो", "ओपन"),
-        IntentType.CLOSE_APP to listOf("close", "stop", "band karo", "band", "बंद करो", "रोको", "हटाओ"),
+        IntentType.CLOSE_APP to listOf("close", "stop", "band karo", "बंद करो", "रोको", "हटाओ"),
         IntentType.CLICK to listOf("click", "tap", "press", "dabao", "maaro", "दबाओ", "क्लिक"),
         IntentType.TYPE_TEXT to listOf("type", "enter", "likho", "daalo", "लिखो", "टाइप करो", "डालो"),
         IntentType.SCROLL to listOf("scroll", "swipe", "upar", "niche", "ऊपर करो", "नीचे करो", "स्क्रॉल"),
-        IntentType.READ_SCREEN to listOf("read", "screen", "padho", "kya hai", "स्क्रीन पढ़ो", "पढ़ो", "क्या लिखा है", "स्क्रीन"),
+        IntentType.READ_SCREEN to listOf("screen padho", "padho", "kya likha", "स्क्रीन पढ़ो", "पढ़ो", "क्या लिखा है"),
         IntentType.SEND_MESSAGE to listOf("message", "bhejo", "send", "sms", "whatsapp", "मैसेज भेजो", "संदेश भेजो", "व्हाट्सएप भेजो"),
         IntentType.MAKE_CALL to listOf("call", "phone", "call karo", "phone lagao", "कॉल करो", "फोन करो", "फ़ोन लगाओ", "कॉल लगाओ"),
         IntentType.READ_NOTIFICATION to listOf("notification", "notification padho", "alert", "नोटिफिकेशन पढ़ो", "सूचना"),
         IntentType.SET_VOLUME to listOf("volume", "awaaz", "sound", "वॉल्यूम", "आवाज़", "ध्वनि"),
-        IntentType.TOGGLE_TORCH to listOf("torch", "flashlight", "light", "on kar", "off kar", "टॉर्च", "फ्लैशलाइट", "लाइट", "चालू", "जलाओ", "बुझाओ"),
+        IntentType.TOGGLE_TORCH to listOf("torch", "flashlight", "light", "on kar", "off kar", "टॉर्च", "फ्लैशलाइट", "लाइट", "जलाओ", "बुझाओ"),
+        IntentType.TOGGLE_BLUETOOTH to listOf("bluetooth", "ब्लूटूथ"),
+        IntentType.GET_BATTERY to listOf("battery", "charging", "बैटरी", "चार्ज"),
+        IntentType.MEDIA_CONTROL to listOf("gana", "gaana", "music", "play", "pause", "गाना", "म्यूजिक"),
         IntentType.CREATE_ALARM to listOf("alarm", "reminder", "yaad dila", "अलार्म", "रिमाइंडर", "अलार्म लगाओ", "याद दिलाना"),
+        IntentType.SET_TIMER to listOf("timer", "टाइमर"),
+        IntentType.MANAGE_FILES to listOf("file", "folder", "download", "storage", "फ़ाइल", "फोल्डर", "स्टोरेज"),
+        IntentType.TAKE_PHOTO to listOf("photo", "camera", "khicho", "फ़ोटो", "कैमरा", "फोटो"),
+        IntentType.GET_LOCATION to listOf("location", "kahan hoon", "लोकेशन", "कहाँ हूँ"),
         IntentType.SEARCH_WEB to listOf("search", "google", "dhundho", "khojho", "सर्च करो", "ढूंढो", "खोजो", "गूगल"),
         IntentType.GET_WEATHER to listOf("weather", "mausam", "temperature", "मौसम", "तापमान"),
         IntentType.GET_TIME to listOf("time", "kitne baje", "waqt", "समय", "कितने बजे", "वक्त", "टाइम"),
         IntentType.GO_BACK to listOf("back", "piche", "peeche", "वापस", "पीछे", "बैक"),
-        IntentType.GO_HOME to listOf("home", "screen", "home page", "होम", "होम स्क्रीन"),
+        IntentType.GO_HOME to listOf("home", "home page", "होम", "होम स्क्रीन"),
         IntentType.RUN_MISSION to listOf("mission", "task", "kaam", "मिशन", "टास्क"),
         IntentType.ENROLL_VOICE to listOf("enroll", "voice add", "voice save", "वॉइस सेव"),
         IntentType.CHAT to listOf("tell me", "batao", "explain", "samjhao", "kya ho raha", "बताओ", "समझाओ", "क्या हाल")

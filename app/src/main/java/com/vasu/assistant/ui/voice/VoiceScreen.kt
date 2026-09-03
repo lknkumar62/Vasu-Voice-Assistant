@@ -81,7 +81,7 @@ fun VoiceScreen(
             // Waveform visualization
             WaveformVisualizer(
                 isListening = uiState.isListening,
-                rmsLevel = 0f // Phase 2: Will add RMS level
+                rmsLevel = uiState.rmsLevel
             )
 
             Spacer(modifier = Modifier.height(48.dp))

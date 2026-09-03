@@ -164,8 +164,25 @@ class AIOrchestrator @Inject constructor(
                     intent.rawText.contains("बंद")
                 toolRouter.executeTool("turn_on_torch", mapOf("enabled" to !isOff))
             }
+            IntentType.TOGGLE_BLUETOOTH -> toolRouter.executeTool("toggle_bluetooth", emptyMap())
+            IntentType.GET_BATTERY -> toolRouter.executeTool("battery_info", emptyMap())
+            IntentType.MEDIA_CONTROL -> {
+                val action = when {
+                    intent.rawText.contains("next") || intent.rawText.contains("अगला") -> "media_next"
+                    intent.rawText.contains("previous") || intent.rawText.contains("पिछला") -> "media_previous"
+                    intent.rawText.contains("pause") || intent.rawText.contains("रोक") -> "pause_music"
+                    else -> "play_music"
+                }
+                toolRouter.executeTool(action, emptyMap())
+            }
+            IntentType.SET_TIMER -> toolRouter.executeTool("set_timer", mapOf("seconds" to (intent.entities["level"]?.toIntOrNull() ?: 60), "label" to "Timer"))
+            IntentType.MANAGE_FILES -> toolRouter.executeTool("browse_files", emptyMap())
+            IntentType.TAKE_PHOTO -> toolRouter.executeTool("take_photo", emptyMap())
+            IntentType.GET_LOCATION -> toolRouter.executeTool("get_current_location", emptyMap())
             IntentType.CREATE_ALARM -> toolRouter.executeTool("create_alarm", mapOf("time" to (intent.entities["time"] ?: "08:00"), "label" to "Alarm"))
             IntentType.SEARCH_WEB -> toolRouter.executeTool("search_web", mapOf("query" to (intent.entities["query"] ?: "")))
+            IntentType.GET_TIME -> toolRouter.executeTool("get_time", emptyMap())
+            IntentType.GET_WEATHER -> toolRouter.executeTool("get_weather", emptyMap())
             IntentType.GO_BACK -> toolRouter.executeTool("press_back", emptyMap())
             IntentType.GO_HOME -> toolRouter.executeTool("press_home", emptyMap())
             else -> ActionResult.success("chat", "Chat response")

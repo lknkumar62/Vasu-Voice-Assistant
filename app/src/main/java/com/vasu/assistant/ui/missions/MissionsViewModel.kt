@@ -20,4 +20,20 @@ class MissionsViewModel @Inject constructor(
             missionEngine.executeMission(mission)
         }
     }
+
+    fun createMission(name: String) {
+        missionEngine.createMission(
+            name = name,
+            steps = listOf(
+                com.vasu.assistant.core.automation.MissionStep(
+                    action = "battery_info",
+                    description = "Check battery status"
+                ),
+                com.vasu.assistant.core.automation.MissionStep(
+                    action = "get_time",
+                    description = "Announce current time"
+                )
+            )
+        )
+    }
 }

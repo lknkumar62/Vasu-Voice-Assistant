@@ -1,5 +1,6 @@
 package com.vasu.assistant.core.security
 
+import android.util.Log
 import com.vasu.assistant.core.stt.STTManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -146,5 +147,9 @@ class VoiceGuardian @Inject constructor(
      */
     fun listVoices(): List<EnrolledVoice> {
         return roleManager.listVoices()
+    }
+
+    companion object {
+        private const val TAG = "VoiceGuardian"
     }
 }

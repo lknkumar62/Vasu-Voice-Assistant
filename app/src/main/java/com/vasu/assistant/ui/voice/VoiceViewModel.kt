@@ -20,7 +20,8 @@ data class VoiceUiState(
     val transcript: String = "",
     val lastResponse: String = "",
     val sttState: STTState = STTState.IDLE,
-    val ttsState: TTSState = TTSState.IDLE
+    val ttsState: TTSState = TTSState.IDLE,
+    val rmsLevel: Float = 0f
 )
 
 @HiltViewModel
@@ -44,6 +45,13 @@ class VoiceViewModel @Inject constructor(
                     isListening = sttState == STTState.LISTENING,
                     sttState = sttState
                 )
+            }
+        }
+
+        // Collect RMS level
+        viewModelScope.launch {
+            sttManager.rmsLevel.collect { rms ->
+                _uiState.value = _uiState.value.copy(rmsLevel = rms)
             }
         }
 

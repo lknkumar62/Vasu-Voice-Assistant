@@ -66,7 +66,8 @@ data class SettingsUiState(
     val wakeWordState: WakeWordState = WakeWordState.IDLE,
     val wakeWordReason: String? = null,
 
-    val voiceGuardEnabled: Boolean = false
+    val voiceGuardEnabled: Boolean = false,
+    val autoAllowEnabled: Boolean = true
 ) {
     /** Cloud AI can only work when it is switched on, keyed, and reachable. */
     val cloudUsable: Boolean
@@ -106,6 +107,9 @@ class SettingsViewModel @Inject constructor(
             settings.voiceProfile.collect { _uiState.value = _uiState.value.copy(voiceProfile = it) }
         }
         viewModelScope.launch {
+            settings.autoAllowEnabled.collect { _uiState.value = _uiState.value.copy(autoAllowEnabled = it) }
+        }
+        viewModelScope.launch {
             ttsManager.availableLanguages.collect { locales ->
                 _uiState.value = _uiState.value.copy(
                     installedVoices = locales.map { it.toLanguageTag() }.distinct()
@@ -141,6 +145,7 @@ class SettingsViewModel @Inject constructor(
             voiceProfile = settings.voiceProfile.value,
             wakeWordEnabled = settings.wakeWordEnabled.value,
             voiceGuardEnabled = settings.voiceGuardEnabled.value,
+            autoAllowEnabled = settings.autoAllowEnabled.value,
             network = networkMonitor.state.value
         )
     }
@@ -297,6 +302,11 @@ class SettingsViewModel @Inject constructor(
     fun setVoiceGuardEnabled(enabled: Boolean) {
         settings.setVoiceGuardEnabled(enabled)
         _uiState.value = _uiState.value.copy(voiceGuardEnabled = enabled)
+    }
+
+    fun setAutoAllowEnabled(enabled: Boolean) {
+        settings.setAutoAllowEnabled(enabled)
+        _uiState.value = _uiState.value.copy(autoAllowEnabled = enabled)
     }
 
     // System screens. These are the only way to grant accessibility and

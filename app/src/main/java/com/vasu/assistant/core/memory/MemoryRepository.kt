@@ -86,6 +86,10 @@ class MemoryRepository @Inject constructor(
         return memoryDao.getRecentMemory(100)
     }
 
+    suspend fun clearAllMemory() {
+        memoryDao.deleteAllMemory()
+    }
+
     suspend fun getMemoryCount(): Int {
         return memoryDao.getMemoryCount()
     }
