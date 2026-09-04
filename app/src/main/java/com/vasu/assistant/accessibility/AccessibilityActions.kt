@@ -23,20 +23,28 @@ class AccessibilityActions(
     fun click(node: AccessibilityNodeInfo): ActionResult {
         return try {
             if (node.isClickable) {
-                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                ActionResult.success("click", "Clicked on element")
+                val performed = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (performed) {
+                    ActionResult.success("click", "Clicked on element")
+                } else {
+                    ActionResult.error("click", "Click action rejected by system", "ACTION_FAILED")
+                }
             } else {
                 // Try to find parent that is clickable
                 val parent = node.parent
                 if (parent != null && parent.isClickable) {
-                    parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    ActionResult.success("click", "Clicked on parent element")
+                    val performed = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    if (performed) {
+                        ActionResult.success("click", "Clicked on parent element")
+                    } else {
+                        ActionResult.error("click", "Parent click action rejected", "ACTION_FAILED")
+                    }
                 } else {
-                    ActionResult.error("click", "Element not clickable", "Node is not clickable")
+                    ActionResult.error("click", "Element is not clickable", "ACTION_FAILED")
                 }
             }
         } catch (e: Exception) {
-            ActionResult.error("click", "Click failed", e.message ?: "Unknown error")
+            ActionResult.error("click", "Click failed: ${e.message}", "ACTION_FAILED")
         }
     }
 
@@ -44,8 +52,11 @@ class AccessibilityActions(
      * Click by text
      */
     fun clickByText(text: String): ActionResult {
-        val node = nodeFinder.findNodeContainingText(service.rootInActiveWindow, text)
-            ?: return ActionResult.error("click_text", "Element not found: $text", "Node not found")
+        val root = service.rootInActiveWindow
+            ?: return ActionResult.error("click_text", "Active window is unavailable. Accessibility service may be interrupted.", "SERVICE_DISABLED")
+
+        val node = nodeFinder.findNodeContainingText(root, text)
+            ?: return ActionResult.error("click_text", "Element containing \"$text\" not found on current screen", "NODE_NOT_FOUND")
 
         return click(node)
     }
@@ -54,8 +65,11 @@ class AccessibilityActions(
      * Click by content description
      */
     fun clickByDescription(description: String): ActionResult {
-        val node = nodeFinder.findByDescription(service.rootInActiveWindow, description)
-            ?: return ActionResult.error("click_desc", "Element not found: $description", "Node not found")
+        val root = service.rootInActiveWindow
+            ?: return ActionResult.error("click_desc", "Active window is unavailable. Accessibility service may be interrupted.", "SERVICE_DISABLED")
+
+        val node = nodeFinder.findByDescription(root, description)
+            ?: return ActionResult.error("click_desc", "Element with description \"$description\" not found", "NODE_NOT_FOUND")
 
         return click(node)
     }

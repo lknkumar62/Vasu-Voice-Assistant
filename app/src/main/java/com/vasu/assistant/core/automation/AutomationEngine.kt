@@ -31,7 +31,7 @@ class AutomationEngine @Inject constructor() {
                 success = false,
                 stepsCompleted = 0,
                 totalSteps = steps.size,
-                message = "Accessibility service not enabled"
+                message = "Accessibility service is not enabled. Please enable VASU Accessibility in Android Settings."
             )
 
         _isRunning.value = true
@@ -50,7 +50,7 @@ class AutomationEngine @Inject constructor() {
                     success = false,
                     stepsCompleted = index,
                     totalSteps = steps.size,
-                    message = "Failed at step ${index + 1}: ${result.message}",
+                    message = "Failed at step ${index + 1} (${step.action}): ${result.message}",
                     stepResults = results
                 )
             }
@@ -76,7 +76,10 @@ class AutomationEngine @Inject constructor() {
         step: AutomationStep,
         retries: Int
     ): ActionResult {
-        repeat(retries) { attempt ->
+        var lastResult: ActionResult? = null
+        val effectiveRetries = retries.coerceAtLeast(1)
+
+        for (attempt in 0 until effectiveRetries) {
             val result = when (step.action) {
                 "open_app" -> {
                     val packageName = step.parameters["package"] as? String ?: ""
@@ -101,17 +104,23 @@ class AutomationEngine @Inject constructor() {
                     kotlinx.coroutines.delay(delay)
                     ActionResult.success("wait", "Waited ${delay}ms")
                 }
-                else -> ActionResult.error(step.action, "Unknown action", "Action not supported")
+                else -> ActionResult.error(step.action, "Unknown action: ${step.action}", "ACTION_NOT_SUPPORTED")
             }
 
             if (result.success) return result
+            lastResult = result
 
-            if (attempt < retries - 1) {
-                kotlinx.coroutines.delay(1000) // Wait before retry
+            // Non-recoverable failures should not blindly loop retrying
+            if (result.error == "SERVICE_DISABLED" || result.error == "PERMISSION_REQUIRED" || result.error == "ACTION_NOT_SUPPORTED") {
+                return result
+            }
+
+            if (attempt < effectiveRetries - 1) {
+                kotlinx.coroutines.delay(500)
             }
         }
 
-        return ActionResult.error(step.action, "Failed after $retries retries", "Max retries exceeded")
+        return lastResult ?: ActionResult.error(step.action, "Action '${step.action}' failed", "ACTION_FAILED")
     }
 
     /**

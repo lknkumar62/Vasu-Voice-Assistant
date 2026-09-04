@@ -50,12 +50,12 @@ class STTManager @Inject constructor(
     private val _state = MutableStateFlow(STTState.IDLE)
     val state: StateFlow<STTState> = _state.asStateFlow()
 
-    // Partial results (streaming)
-    private val _partialResults = MutableSharedFlow<String>(replay = 1)
+    // Partial results (streaming) - replay=0 ensures no stale speech results are delivered to new screens
+    private val _partialResults = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
     val partialResults: SharedFlow<String> = _partialResults.asSharedFlow()
 
-    // Final results
-    private val _results = MutableSharedFlow<RecognitionResult>(replay = 1)
+    // Final results - replay=0 ensures one speech input delivers exactly one result event
+    private val _results = MutableSharedFlow<RecognitionResult>(replay = 0, extraBufferCapacity = 1)
     val results: SharedFlow<RecognitionResult> = _results.asSharedFlow()
 
     // RMS level for visualizer
@@ -63,7 +63,7 @@ class STTManager @Inject constructor(
     val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
 
     // Errors
-    private val _errors = MutableSharedFlow<SttError>(replay = 1)
+    private val _errors = MutableSharedFlow<SttError>(replay = 0, extraBufferCapacity = 1)
     val errors: SharedFlow<SttError> = _errors.asSharedFlow()
 
     // Config
@@ -122,11 +122,13 @@ class STTManager @Inject constructor(
     fun startListening() {
         runOnMainThread {
             if (!hasRecordAudioPermission()) {
-                Log.e(TAG, "Cannot start listening: RECORD_AUDIO permission not granted")
+                Log.e(TAG, "[MIC_ERROR] Cannot start listening: RECORD_AUDIO permission not granted")
                 _state.value = STTState.ERROR
                 _errors.tryEmit(SttError(SttErrorKind.MIC_PERMISSION_DENIED, "Microphone permission denied - grant it in Settings"))
                 return@runOnMainThread
             }
+
+            Log.i(TAG, "[MIC_START] Starting microphone listening, lang=${config.language}")
 
             // Pause WakeWordDetector to prevent microphone contention
             pauseWakeWordMic()
@@ -137,6 +139,7 @@ class STTManager @Inject constructor(
 
             val recognizer = speechRecognizer
             if (recognizer == null) {
+                Log.e(TAG, "[MIC_ERROR] Speech recognizer not initialized")
                 _state.value = STTState.ERROR
                 _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "Speech recognizer not initialized"))
                 resumeWakeWordMic()
@@ -148,9 +151,10 @@ class STTManager @Inject constructor(
                 _state.value = STTState.LISTENING
 
                 val intent = createRecognizerIntent()
+                Log.i(TAG, "[STT_START] Speech recognition session started with intent")
                 recognizer.startListening(intent)
             } catch (e: Exception) {
-                Log.e(TAG, "Exception starting SpeechRecognizer", e)
+                Log.e(TAG, "[MIC_ERROR] Exception starting SpeechRecognizer: ${e.message}", e)
                 _state.value = STTState.ERROR
                 _errors.tryEmit(SttError(SttErrorKind.RECOGNITION_ERROR, "Could not start microphone: ${e.message}"))
                 resumeWakeWordMic()
@@ -163,6 +167,7 @@ class STTManager @Inject constructor(
      */
     fun stopListening() {
         runOnMainThread {
+            Log.i(TAG, "[MIC_STOP] Stopping microphone listening")
             try {
                 speechRecognizer?.stopListening()
             } catch (e: Exception) {
@@ -259,7 +264,10 @@ class STTManager @Inject constructor(
 
         override fun onError(error: Int) {
             val diagnostic = explainErrorCode(error)
-            Log.e(TAG, "RecognitionListener.onError: code=$error ($diagnostic), permissionGranted=${hasRecordAudioPermission()}, online=${isNetworkAvailable()}")
+            Log.e(TAG, "[STT_ERROR] RecognitionListener.onError: code=$error ($diagnostic), permissionGranted=${hasRecordAudioPermission()}, online=${isNetworkAvailable()}")
+            if (error == SpeechRecognizer.ERROR_AUDIO) {
+                Log.e(TAG, "[MIC_ERROR] Audio recording error detected")
+            }
 
             val sttError = toSttError(error)
             _state.value = STTState.ERROR
@@ -301,6 +309,8 @@ class STTManager @Inject constructor(
         if (!matches.isNullOrEmpty()) {
             val primaryText = matches[0]
             val primaryConfidence = confidences?.getOrNull(0) ?: 0f
+
+            Log.i(TAG, "[STT_RESULT] Result received: text=\"$primaryText\", final=$isFinal, confidence=$primaryConfidence")
 
             val alternatives = matches.drop(1).mapIndexed { index, text ->
                 RecognitionResult.AlternativeResult(

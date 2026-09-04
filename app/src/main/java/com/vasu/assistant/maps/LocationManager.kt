@@ -92,6 +92,26 @@ class VasuLocationManager @Inject constructor(
         return ActionResult.success("history", "Found ${records.size} locations", mapOf("locations" to records))
     }
 
+    fun getParkingLocation(): ActionResult {
+        val parking = locationHistory.lastOrNull { it.address.startsWith("Parking") }
+            ?: return ActionResult.error("parking", "No saved parking location found", "NOT_FOUND")
+        return ActionResult.success("parking", "Parking location: ${parking.address}", mapOf("lat" to parking.lat, "lng" to parking.lng, "address" to parking.address, "time" to parking.timestamp))
+    }
+
+    fun getTrafficInfo(destination: String): ActionResult {
+        val destQuery = if (destination.isNotBlank()) destination else "current route"
+        return try {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("google.navigation:q=${java.net.URLEncoder.encode(destQuery, "UTF-8")}&layer=t")
+            ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+            context.startActivity(intent)
+            ActionResult.success("traffic", "Opening traffic view for $destQuery", mapOf("destination" to destQuery))
+        } catch (e: Exception) {
+            ActionResult.error("traffic", "Failed to open traffic view: ${e.message}", "TRAFFIC_FAILED")
+        }
+    }
+
     private fun getAddress(lat: Double, lng: Double): String {
         return try {
             val geocoder = Geocoder(context, Locale.getDefault())

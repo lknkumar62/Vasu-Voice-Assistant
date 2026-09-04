@@ -61,6 +61,7 @@ class ToolRouter @Inject constructor(
     private val notificationActionManager: NotificationActionManager,
     private val visionProcessor: VisionProcessor,
     private val ocrManager: OcrManager,
+    private val smartModeManager: com.vasu.assistant.maps.SmartModeManager,
     private val missionEngineProvider: Provider<MissionEngine>
 ) {
     private val missionEngine: MissionEngine
@@ -337,6 +338,85 @@ class ToolRouter @Inject constructor(
                 else ActionResult.error("run_mission", "Mission execution failed", "Failed step")
             }
 
+            // === UTILITY & ALIAS EXTENSIONS ===
+            "torch" -> {
+                val state = parameters["state"] as? String ?: "toggle"
+                when (state.lowercase()) {
+                    "on" -> deviceControl.getTorch().turnOn()
+                    "off" -> deviceControl.getTorch().turnOff()
+                    else -> deviceControl.getTorch().toggle()
+                }
+            }
+            "open_settings" -> deviceControl.openSettings()
+            "get_battery" -> {
+                val info = deviceControl.getBatteryInfo()
+                ActionResult.success("battery", "Battery: ${info["level"]}%, Charging: ${info["isCharging"]}", info)
+            }
+            "get_device_info" -> {
+                val info = deviceControl.getDeviceInfo()
+                ActionResult.success("device", "${info["brand"]} ${info["model"]}, Android ${info["android_version"]}", info)
+            }
+            "weather" -> {
+                val city = parameters["city"] as? String ?: parameters["location"] as? String ?: ""
+                val query = if (city.isNotBlank()) "weather in $city" else "current weather"
+                browserManager.search(query)
+                ActionResult.success("weather", "Checking weather for ${if (city.isNotBlank()) city else "current location"}")
+            }
+            "send_whatsapp" -> {
+                val contact = parameters["contact"] as? String ?: ""
+                val msg = parameters["message"] as? String ?: ""
+                whatsappAutomation.sendMessage(contact, msg)
+            }
+            "media_control" -> deviceControl.getMedia().playPause()
+            "scroll" -> {
+                val direction = parameters["direction"] as? String ?: "down"
+                val stepAction = if (direction.equals("up", ignoreCase = true)) "scroll_up" else "scroll_down"
+                automationEngine.executeSteps(listOf(AutomationStep(stepAction)))
+                    .let { if (it.success) ActionResult.success("scroll", "Scrolled $direction") else ActionResult.error("scroll", it.message, it.message) }
+            }
+            "go_back" -> {
+                automationEngine.executeSteps(listOf(AutomationStep("back")))
+                    .let { if (it.success) ActionResult.success("back", "Pressed back") else ActionResult.error("back", it.message, it.message) }
+            }
+            "go_home" -> {
+                automationEngine.executeSteps(listOf(AutomationStep("home")))
+                    .let { if (it.success) ActionResult.success("home", "Pressed home") else ActionResult.error("home", it.message, it.message) }
+            }
+            "get_parking_location" -> locationManager.getParkingLocation()
+            "find_nearby_places" -> {
+                val query = parameters["query"] as? String ?: "restaurants"
+                placesManager.searchNearby(query)
+            }
+            "get_traffic_info" -> {
+                val dest = parameters["destination"] as? String ?: ""
+                locationManager.getTrafficInfo(dest)
+            }
+            "smart_mode" -> {
+                val modeStr = parameters["mode"] as? String ?: "NORMAL"
+                val mode = try {
+                    com.vasu.assistant.maps.SmartModeManager.SmartMode.valueOf(modeStr.uppercase())
+                } catch (e: Exception) {
+                    com.vasu.assistant.maps.SmartModeManager.SmartMode.NORMAL
+                }
+                smartModeManager.setMode(mode)
+            }
+            "calculate" -> {
+                val expr = parameters["expression"] as? String ?: ""
+                evaluateMath(expr)
+            }
+            "currency_convert" -> {
+                val amount = (parameters["amount"] as? Number)?.toDouble() ?: 1.0
+                val from = (parameters["from"] as? String)?.uppercase() ?: "USD"
+                val to = (parameters["to"] as? String)?.uppercase() ?: "INR"
+                convertCurrency(amount, from, to)
+            }
+            "unit_convert" -> {
+                val value = (parameters["value"] as? Number)?.toDouble() ?: 1.0
+                val from = (parameters["from"] as? String)?.lowercase() ?: "km"
+                val to = (parameters["to"] as? String)?.lowercase() ?: "miles"
+                convertUnit(value, from, to)
+            }
+
             else -> ActionResult.error(toolName, "Tool not implemented", "Not yet available: $toolName")
         }
     }
@@ -442,8 +522,102 @@ class ToolRouter @Inject constructor(
             ToolDefinition("list_macros", "List all created macros", emptyList(), RiskLevel.LOW),
             ToolDefinition("toggle_macro", "Enable or disable a macro", listOf(ToolParameter("macro_id", "string", "Macro ID")), RiskLevel.LOW),
             ToolDefinition("delete_macro", "Delete an automation macro", listOf(ToolParameter("macro_id", "string", "Macro ID")), RiskLevel.MEDIUM),
-            ToolDefinition("run_mission", "Run a complex multi-step mission", listOf(ToolParameter("mission_id", "string", "Mission ID")), RiskLevel.HIGH)
+            ToolDefinition("run_mission", "Run a complex multi-step mission", listOf(ToolParameter("mission_id", "string", "Mission ID")), RiskLevel.HIGH),
+
+            // Utilities & Aliases
+            ToolDefinition("torch", "Toggle or set device flashlight", listOf(ToolParameter("state", "string", "toggle/on/off", false)), RiskLevel.LOW),
+            ToolDefinition("open_settings", "Open device system settings", emptyList(), RiskLevel.LOW),
+            ToolDefinition("smart_mode", "Set device smart mode", listOf(ToolParameter("mode", "string", "NORMAL/DRIVING/SLEEP/WORK/GAMING")), RiskLevel.LOW),
+            ToolDefinition("calculate", "Evaluate math expression", listOf(ToolParameter("expression", "string", "Math expression e.g. 25 * 4")), RiskLevel.LOW),
+            ToolDefinition("currency_convert", "Convert between currencies", listOf(ToolParameter("amount", "number", "Amount"), ToolParameter("from", "string", "Source currency"), ToolParameter("to", "string", "Target currency")), RiskLevel.LOW),
+            ToolDefinition("unit_convert", "Convert units of measurement", listOf(ToolParameter("value", "number", "Value"), ToolParameter("from", "string", "Source unit"), ToolParameter("to", "string", "Target unit")), RiskLevel.LOW)
         )
         tools.forEach { toolRegistry[it.name] = it }
+    }
+
+    private fun evaluateMath(expression: String): ActionResult {
+        return try {
+            val clean = expression.replace(" ", "").replace("x", "*").replace("X", "*")
+            val tokens = clean.split(Regex("(?<=[-+*/])|(?=[-+*/])")).filter { it.isNotBlank() }
+            if (tokens.isEmpty()) return ActionResult.error("calculate", "Invalid math expression", "INVALID_INPUT")
+
+            var result = tokens[0].toDoubleOrNull() ?: return ActionResult.error("calculate", "Invalid number: ${tokens[0]}", "INVALID_INPUT")
+            var i = 1
+            while (i < tokens.size) {
+                val op = tokens[i]
+                val nextVal = tokens.getOrNull(i + 1)?.toDoubleOrNull() ?: break
+                when (op) {
+                    "+" -> result += nextVal
+                    "-" -> result -= nextVal
+                    "*" -> result *= nextVal
+                    "/" -> {
+                        if (nextVal == 0.0) return ActionResult.error("calculate", "Division by zero", "DIVISION_BY_ZERO")
+                        result /= nextVal
+                    }
+                }
+                i += 2
+            }
+            val formatted = if (result % 1.0 == 0.0) result.toLong().toString() else "%.2f".format(Locale.US, result)
+            ActionResult.success("calculate", "$expression = $formatted", mapOf("expression" to expression, "result" to formatted))
+        } catch (e: Exception) {
+            ActionResult.error("calculate", "Calculation failed: ${e.message}", "CALCULATION_ERROR")
+        }
+    }
+
+    private fun convertCurrency(amount: Double, from: String, to: String): ActionResult {
+        // Standard baseline reference rates against USD
+        val usdRates = mapOf(
+            "USD" to 1.0,
+            "INR" to 86.50,
+            "EUR" to 0.92,
+            "GBP" to 0.79,
+            "AED" to 3.67,
+            "JPY" to 155.0,
+            "CAD" to 1.36,
+            "AUD" to 1.52
+        )
+
+        val fromRate = usdRates[from]
+        val toRate = usdRates[to]
+
+        if (fromRate == null || toRate == null) {
+            return ActionResult.error("currency_convert", "Unsupported currency: $from to $to", "UNSUPPORTED_CURRENCY")
+        }
+
+        val inUsd = amount / fromRate
+        val converted = inUsd * toRate
+        val formatted = "%.2f".format(Locale.US, converted)
+        return ActionResult.success(
+            "currency_convert",
+            "$amount $from = $formatted $to",
+            mapOf("amount" to amount, "from" to from, "to" to to, "result" to formatted)
+        )
+    }
+
+    private fun convertUnit(value: Double, from: String, to: String): ActionResult {
+        return try {
+            val (converted, unitStr) = when {
+                // Length
+                (from == "km" || from == "kilometer") && (to == "miles" || to == "mile") -> (value * 0.621371) to "miles"
+                (from == "miles" || from == "mile") && (to == "km" || to == "kilometer") -> (value * 1.60934) to "km"
+                (from == "m" || from == "meter") && (to == "feet" || to == "ft") -> (value * 3.28084) to "feet"
+                (from == "feet" || from == "ft") && (to == "m" || to == "meter") -> (value * 0.3048) to "meters"
+
+                // Weight
+                (from == "kg" || from == "kilogram") && (to == "lbs" || to == "pounds" || to == "pound") -> (value * 2.20462) to "lbs"
+                (from == "lbs" || from == "pounds" || from == "pound") && (to == "kg" || to == "kilogram") -> (value * 0.453592) to "kg"
+
+                // Temperature
+                (from == "c" || from == "celsius") && (to == "f" || to == "fahrenheit") -> (value * 9.0 / 5.0 + 32.0) to "°F"
+                (from == "f" || from == "fahrenheit") && (to == "c" || to == "celsius") -> ((value - 32.0) * 5.0 / 9.0) to "°C"
+
+                else -> return ActionResult.error("unit_convert", "Conversion from $from to $to is not supported", "UNSUPPORTED_UNIT")
+            }
+
+            val formatted = "%.2f".format(Locale.US, converted)
+            ActionResult.success("unit_convert", "$value $from = $formatted $unitStr", mapOf("result" to formatted, "unit" to unitStr))
+        } catch (e: Exception) {
+            ActionResult.error("unit_convert", "Conversion failed: ${e.message}", "CONVERSION_ERROR")
+        }
     }
 }

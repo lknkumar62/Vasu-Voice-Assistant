@@ -16,6 +16,7 @@ import javax.inject.Singleton
  */
 enum class AIProvider(val displayName: String) {
     GEMINI("Google Gemini"),
+    CLAUDE("Claude / OmniRoute"),
     LOCAL("Offline commands")
 }
 
@@ -51,28 +52,58 @@ enum class AIState {
 @Singleton
 class AIClient @Inject constructor(
     private val gemini: GeminiProvider,
+    private val claude: ClaudeProvider,
     private val keyStore: SecureKeyStore
 ) {
     private val _state = MutableStateFlow(AIState.IDLE)
     val state: StateFlow<AIState> = _state.asStateFlow()
 
-    private val _currentProvider = MutableStateFlow(AIProvider.GEMINI)
+    private val initialProvider = when (keyStore.selectedProvider.lowercase()) {
+        "claude", "omniroute", "anthropic" -> AIProvider.CLAUDE
+        "local" -> AIProvider.LOCAL
+        else -> AIProvider.GEMINI
+    }
+
+    private val _currentProvider = MutableStateFlow(initialProvider)
     val currentProvider: StateFlow<AIProvider> = _currentProvider.asStateFlow()
 
     private val _lastError = MutableStateFlow<AiErrorKind?>(null)
     val lastError: StateFlow<AiErrorKind?> = _lastError.asStateFlow()
 
-    /** True only when a key is stored and the user has switched Gemini on. */
+    /** True when a key is stored and the selected provider is enabled. */
     val isCloudReady: Boolean
-        get() = keyStore.geminiEnabled && keyStore.hasGeminiKey()
+        get() = when (_currentProvider.value) {
+            AIProvider.GEMINI -> keyStore.geminiEnabled && keyStore.hasGeminiKey()
+            AIProvider.CLAUDE -> keyStore.claudeEnabled && keyStore.hasClaudeKey()
+            AIProvider.LOCAL -> false
+        }
 
-    fun setProvider(provider: AIProvider) { _currentProvider.value = provider }
+    fun setProvider(provider: AIProvider) {
+        _currentProvider.value = provider
+        keyStore.selectedProvider = when (provider) {
+            AIProvider.GEMINI -> "gemini"
+            AIProvider.CLAUDE -> "claude"
+            AIProvider.LOCAL -> "local"
+        }
+    }
 
-    fun saveApiKey(key: String): Boolean = keyStore.setGeminiKey(key)
+    fun saveApiKey(key: String): Boolean = when (_currentProvider.value) {
+        AIProvider.GEMINI -> keyStore.setGeminiKey(key)
+        AIProvider.CLAUDE -> keyStore.setClaudeKey(key)
+        AIProvider.LOCAL -> false
+    }
 
-    fun removeApiKey(): Boolean = keyStore.clearGeminiKey()
+    fun removeApiKey(): Boolean = when (_currentProvider.value) {
+        AIProvider.GEMINI -> keyStore.clearGeminiKey()
+        AIProvider.CLAUDE -> keyStore.clearClaudeKey()
+        AIProvider.LOCAL -> false
+    }
 
-    suspend fun testConnection(): AiResult = gemini.testConnection()
+    suspend fun testConnection(): AiResult = when (_currentProvider.value) {
+        AIProvider.GEMINI -> gemini.testConnection()
+        AIProvider.CLAUDE -> claude.testConnection()
+        AIProvider.LOCAL -> AiResult.Failure(AiErrorKind.NOT_CONFIGURED, "Local provider does not use cloud connections.")
+    }
 
     /** Reads which models the stored key may use, so the picker offers real choices. */
     suspend fun refreshModels(): ModelCatalog = gemini.refreshModels()
@@ -83,6 +114,12 @@ class AIClient @Inject constructor(
 
         val result = when (request.provider) {
             AIProvider.GEMINI -> gemini.generate(
+                prompt = request.prompt,
+                systemPrompt = request.systemPrompt,
+                temperature = request.temperature,
+                maxTokens = request.maxTokens
+            )
+            AIProvider.CLAUDE -> claude.generate(
                 prompt = request.prompt,
                 systemPrompt = request.systemPrompt,
                 temperature = request.temperature,
@@ -120,13 +157,26 @@ class AIClient @Inject constructor(
 
         val prompt = messages.lastOrNull { it.role == "user" }?.content.orEmpty()
         val history = messages.dropLast(1)
+        val resolvedSystemPrompt = systemPrompt.ifBlank { defaultSystemPrompt() }
 
-        val result = gemini.generate(
-            prompt = prompt,
-            systemPrompt = systemPrompt.ifBlank { defaultSystemPrompt() },
-            history = history,
-            tools = tools
-        )
+        val result = when (provider) {
+            AIProvider.GEMINI -> gemini.generate(
+                prompt = prompt,
+                systemPrompt = resolvedSystemPrompt,
+                history = history,
+                tools = tools
+            )
+            AIProvider.CLAUDE -> claude.generate(
+                prompt = prompt,
+                systemPrompt = resolvedSystemPrompt,
+                history = history,
+                tools = tools
+            )
+            AIProvider.LOCAL -> AiResult.Failure(
+                AiErrorKind.NOT_CONFIGURED,
+                "Online AI unavailable — using offline commands."
+            )
+        }
 
         return result.toResponse(provider, System.currentTimeMillis() - startTime)
     }

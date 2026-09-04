@@ -58,7 +58,44 @@ class VasuCameraManager @Inject constructor(
     }
 
     fun takePhoto(): ActionResult {
-        val capture = imageCapture ?: return ActionResult.error("photo", "Camera not initialized", "No imageCapture")
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.CAMERA
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return ActionResult.error(
+                "photo",
+                "Camera permission required. Please grant camera access in Settings.",
+                "CAMERA_PERMISSION_REQUIRED"
+            )
+        }
+
+        var capture = imageCapture
+        if (capture == null) {
+            try {
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+                val provider = cameraProviderFuture.get(3, java.util.concurrent.TimeUnit.SECONDS)
+                cameraProvider = provider
+
+                val newCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setFlashMode(if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
+                    .build()
+
+                provider.unbindAll()
+                provider.bindToLifecycle(
+                    androidx.lifecycle.ProcessLifecycleOwner.get(),
+                    activeCameraSelector,
+                    newCapture
+                )
+                imageCapture = newCapture
+                capture = newCapture
+            } catch (e: Exception) {
+                android.util.Log.e("CameraManager", "Failed to initialize CameraX for photo", e)
+                return ActionResult.error("photo", "Camera initialization failed: ${e.message}", "CAMERA_NOT_READY")
+            }
+        }
+
         return photoCapture.capturePhoto(capture, getOutputDir())
     }
 

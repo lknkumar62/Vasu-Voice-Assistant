@@ -46,14 +46,24 @@ data class AiProviderConfig(
             displayName = "Google Gemini",
             baseUrl = "https://generativelanguage.googleapis.com/v1beta",
             primaryModel = "gemini-2.0-flash",
-            // Every id here is still checked against the provider's own catalogue,
-            // so an entry a given key cannot use is dropped rather than guessed at.
             fallbackModels = listOf(
                 "gemini-2.5-flash",
                 "gemini-2.0-flash-001",
                 "gemini-1.5-flash",
                 "gemini-flash-latest"
             )
+        )
+
+        val CLAUDE = AiProviderConfig(
+            providerId = "claude",
+            displayName = "Claude / OmniRoute",
+            baseUrl = "https://api.anthropic.com/v1",
+            primaryModel = "claude-3-5-sonnet-20241022",
+            fallbackModels = listOf(
+                "claude-3-opus-20240229",
+                "claude-3-haiku-20240307"
+            ),
+            allowFallback = false
         )
     }
 }

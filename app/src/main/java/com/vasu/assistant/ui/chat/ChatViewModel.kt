@@ -44,6 +44,8 @@ class ChatViewModel @Inject constructor(
 
     private val currentConversationId = System.currentTimeMillis().toString()
 
+    private val sendMutex = kotlinx.coroutines.sync.Mutex()
+
     init {
         ttsManager.initialize()
 
@@ -66,7 +68,7 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             sttManager.results.collect { result ->
-                if (result.isFinal) {
+                if (result.isFinal && result.text.isNotBlank()) {
                     _uiState.value = _uiState.value.copy(partialTranscript = "")
                     updateInput(result.text)
                     sendMessage()
@@ -87,16 +89,22 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
-        if (text.isEmpty()) return
-
-        addMessage(ChatMessage(content = text, isUser = true))
-        _uiState.value = _uiState.value.copy(inputText = "", isLoading = true)
+        if (text.isEmpty() || _uiState.value.isLoading) return
 
         viewModelScope.launch {
-            val response = aiOrchestrator.processInput(text)
-            addMessage(ChatMessage(content = response, isUser = false))
-            _uiState.value = _uiState.value.copy(isLoading = false)
-            ttsManager.speakQueued(response)
+            if (!sendMutex.tryLock()) return@launch
+
+            try {
+                _uiState.value = _uiState.value.copy(inputText = "", isLoading = true)
+                addMessage(ChatMessage(content = text, isUser = true))
+
+                val response = aiOrchestrator.processInput(text)
+                addMessage(ChatMessage(content = response, isUser = false))
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                ttsManager.speakQueued(response)
+            } finally {
+                sendMutex.unlock()
+            }
         }
     }
 
@@ -113,6 +121,11 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun addMessage(message: ChatMessage) {
+        val last = _uiState.value.messages.lastOrNull()
+        if (last != null && last.isUser == message.isUser && last.content.trim() == message.content.trim()) {
+            return // Skip duplicate
+        }
+
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + message
         )
@@ -135,14 +148,22 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val messages = conversationDao.getGlobalRecentMessages(limit = 50).reversed()
             if (messages.isNotEmpty()) {
-                val chatMessages = messages.map { entity ->
-                    ChatMessage(
-                        id = entity.id.toString(),
-                        content = entity.content,
-                        isUser = entity.role == "user",
-                        timestamp = entity.timestamp,
-                        toolName = entity.toolName,
-                        toolResult = entity.toolResult
+                val chatMessages = mutableListOf<ChatMessage>()
+                for (entity in messages) {
+                    val isUser = entity.role == "user"
+                    val last = chatMessages.lastOrNull()
+                    if (last != null && last.isUser == isUser && last.content.trim() == entity.content.trim()) {
+                        continue // Drop duplicate historical records
+                    }
+                    chatMessages.add(
+                        ChatMessage(
+                            id = entity.id.toString(),
+                            content = entity.content,
+                            isUser = isUser,
+                            timestamp = entity.timestamp,
+                            toolName = entity.toolName,
+                            toolResult = entity.toolResult
+                        )
                     )
                 }
                 _uiState.value = _uiState.value.copy(messages = chatMessages)

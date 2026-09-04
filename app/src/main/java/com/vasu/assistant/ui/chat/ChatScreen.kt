@@ -116,6 +116,7 @@ fun ChatScreen(
             ChatInputBar(
                 inputText = uiState.inputText,
                 isListening = uiState.isListening,
+                isLoading = uiState.isLoading,
                 onInputChange = viewModel::updateInput,
                 onSend = viewModel::sendMessage,
                 onMicClick = viewModel::toggleListening
@@ -220,6 +221,7 @@ fun TypingIndicator() {
 fun ChatInputBar(
     inputText: String,
     isListening: Boolean,
+    isLoading: Boolean = false,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onMicClick: () -> Unit
@@ -274,12 +276,12 @@ fun ChatInputBar(
             // Send Button
             IconButton(
                 onClick = onSend,
-                enabled = inputText.isNotBlank()
+                enabled = inputText.isNotBlank() && !isLoading
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send",
-                    tint = if (inputText.isNotBlank()) VasuCyan else VasuTextMuted
+                    tint = if (inputText.isNotBlank() && !isLoading) VasuCyan else VasuTextMuted
                 )
             }
         }

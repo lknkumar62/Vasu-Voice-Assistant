@@ -4,6 +4,8 @@ import android.util.Log
 import com.vasu.assistant.core.automation.ActionResult
 import com.vasu.assistant.core.memory.MemoryManager
 import com.vasu.assistant.core.tts.TTSManager
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +27,32 @@ class AIOrchestrator @Inject constructor(
     private val _lastResponse = MutableStateFlow<String?>(null)
     val lastResponse: StateFlow<String?> = _lastResponse.asStateFlow()
 
-    suspend fun processInput(input: String): String {
+    private val inFlightRequests = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<String>>()
+
+    suspend fun processInput(input: String): String = kotlinx.coroutines.coroutineScope {
+        val trimmed = input.trim()
+        if (trimmed.isEmpty()) return@coroutineScope ""
+
+        // Request deduplication: if exact identical query is already being evaluated, join it
+        val existing = inFlightRequests[trimmed]
+        if (existing != null && existing.isActive) {
+            Log.d(TAG, "Joining in-flight AI request for: \"$trimmed\"")
+            return@coroutineScope existing.await()
+        }
+
+        val deferred = async {
+            executeTurn(trimmed)
+        }
+        inFlightRequests[trimmed] = deferred
+
+        try {
+            deferred.await()
+        } finally {
+            inFlightRequests.remove(trimmed)
+        }
+    }
+
+    private suspend fun executeTurn(input: String): String {
         _isProcessing.value = true
 
         return try {

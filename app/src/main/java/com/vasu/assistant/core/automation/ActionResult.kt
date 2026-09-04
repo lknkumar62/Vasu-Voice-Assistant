@@ -19,11 +19,12 @@ data class ActionResult(
             data = data
         )
 
-        fun error(action: String, message: String, error: String) = ActionResult(
+        fun error(action: String, message: String, error: String, data: Map<String, Any>? = null) = ActionResult(
             success = false,
             action = action,
             message = message,
-            error = error
+            error = error,
+            data = data
         )
     }
 }

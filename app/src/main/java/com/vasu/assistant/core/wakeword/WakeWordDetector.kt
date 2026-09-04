@@ -46,8 +46,8 @@ class WakeWordDetector @Inject constructor(
     private val _state = MutableStateFlow(WakeWordState.IDLE)
     val state: StateFlow<WakeWordState> = _state.asStateFlow()
 
-    // Detection events
-    private val _detections = MutableSharedFlow<String>(replay = 1)
+    // Detection events - replay=0 prevents replaying wake detections to new collectors
+    private val _detections = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
     val detections: SharedFlow<String> = _detections.asSharedFlow()
 
     /** Why the wake word is not running, in words the UI can show verbatim. */

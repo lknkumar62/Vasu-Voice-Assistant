@@ -103,6 +103,53 @@ class SecureKeyStore @Inject constructor(
         get() = prefs?.getBoolean(KEY_GEMINI_ENABLED, false) ?: false
         set(value) { prefs?.edit()?.putBoolean(KEY_GEMINI_ENABLED, value)?.apply() }
 
+    fun getClaudeKey(): String? {
+        val saved = prefs?.getString(KEY_CLAUDE_API_KEY, null)?.takeIf { it.isNotBlank() }
+        if (saved != null) return saved
+        return System.getenv("CLAUDE_API_KEY")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("ANTHROPIC_API_KEY")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("OMNIROUTE_API_KEY")?.takeIf { it.isNotBlank() }
+            ?: System.getProperty("CLAUDE_API_KEY")?.takeIf { it.isNotBlank() }
+            ?: System.getProperty("ANTHROPIC_API_KEY")?.takeIf { it.isNotBlank() }
+            ?: System.getProperty("OMNIROUTE_API_KEY")?.takeIf { it.isNotBlank() }
+    }
+
+    fun setClaudeKey(key: String): Boolean {
+        val store = prefs ?: return false
+        store.edit().putString(KEY_CLAUDE_API_KEY, key.trim()).apply()
+        return true
+    }
+
+    fun clearClaudeKey(): Boolean {
+        val store = prefs ?: return false
+        store.edit().remove(KEY_CLAUDE_API_KEY).apply()
+        return true
+    }
+
+    fun hasClaudeKey(): Boolean = getClaudeKey() != null
+
+    fun maskedClaudeKey(): String? {
+        val key = getClaudeKey() ?: return null
+        return if (key.length <= 8) "*".repeat(key.length)
+        else "${key.take(4)}${"*".repeat(key.length - 8)}${key.takeLast(4)}"
+    }
+
+    var claudeModel: String
+        get() = prefs?.getString(KEY_CLAUDE_MODEL, DEFAULT_CLAUDE_MODEL) ?: DEFAULT_CLAUDE_MODEL
+        set(value) { prefs?.edit()?.putString(KEY_CLAUDE_MODEL, value)?.apply() }
+
+    var claudeBaseUrl: String
+        get() = prefs?.getString(KEY_CLAUDE_BASE_URL, DEFAULT_CLAUDE_BASE_URL) ?: DEFAULT_CLAUDE_BASE_URL
+        set(value) { prefs?.edit()?.putString(KEY_CLAUDE_BASE_URL, value.trim().trimEnd('/'))?.apply() }
+
+    var claudeEnabled: Boolean
+        get() = prefs?.getBoolean(KEY_CLAUDE_ENABLED, false) ?: false
+        set(value) { prefs?.edit()?.putBoolean(KEY_CLAUDE_ENABLED, value)?.apply() }
+
+    var selectedProvider: String
+        get() = prefs?.getString(KEY_SELECTED_PROVIDER, "gemini") ?: "gemini"
+        set(value) { prefs?.edit()?.putString(KEY_SELECTED_PROVIDER, value)?.apply() }
+
     var lastSuccessfulConnection: Long
         get() = prefs?.getLong(KEY_LAST_SUCCESS, 0L) ?: 0L
         set(value) { prefs?.edit()?.putLong(KEY_LAST_SUCCESS, value)?.apply() }
@@ -118,21 +165,19 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_GEMINI_MODEL = "gemini_model"
         private const val KEY_GEMINI_ENABLED = "gemini_enabled"
+        private const val KEY_CLAUDE_API_KEY = "claude_api_key"
+        private const val KEY_CLAUDE_MODEL = "claude_model"
+        private const val KEY_CLAUDE_BASE_URL = "claude_base_url"
+        private const val KEY_CLAUDE_ENABLED = "claude_enabled"
+        private const val KEY_SELECTED_PROVIDER = "selected_provider"
         private const val KEY_LAST_SUCCESS = "gemini_last_success"
         private const val KEY_LAST_ERROR = "gemini_last_error"
         private const val KEY_ALLOW_FALLBACK = "gemini_allow_fallback"
         private const val KEY_DISCOVERED_MODELS = "gemini_discovered_models"
         private const val KEY_ACTIVE_MODEL = "gemini_active_model"
 
-        /**
-         * The model asked for until the user picks another. AiProviderConfig owns
-         * the value; a second copy here is how "gemini-2.0-flash" ended up
-         * hardcoded in two files that could disagree.
-         *
-         * There is deliberately no hardcoded list of available models. Which models
-         * a key can use is a property of the key, so it is read from the provider
-         * and cached in [discoveredModels] instead of guessed at.
-         */
         val DEFAULT_MODEL: String = AiProviderConfig.GEMINI.primaryModel
+        val DEFAULT_CLAUDE_MODEL: String = AiProviderConfig.CLAUDE.primaryModel
+        val DEFAULT_CLAUDE_BASE_URL: String = AiProviderConfig.CLAUDE.baseUrl
     }
 }

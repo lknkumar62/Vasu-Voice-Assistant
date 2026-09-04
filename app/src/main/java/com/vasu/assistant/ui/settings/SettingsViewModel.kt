@@ -32,10 +32,16 @@ enum class ConnectionTest { NOT_TESTED, TESTING, PASSED, FAILED }
 
 data class SettingsUiState(
     // AI provider
+    val selectedProvider: com.vasu.assistant.core.ai.AIProvider = com.vasu.assistant.core.ai.AIProvider.GEMINI,
     val geminiEnabled: Boolean = false,
     val hasKey: Boolean = false,
     val maskedKey: String? = null,
     val model: String = SecureKeyStore.DEFAULT_MODEL,
+    val claudeEnabled: Boolean = false,
+    val hasClaudeKey: Boolean = false,
+    val maskedClaudeKey: String? = null,
+    val claudeModel: String = SecureKeyStore.DEFAULT_CLAUDE_MODEL,
+    val claudeBaseUrl: String = SecureKeyStore.DEFAULT_CLAUDE_BASE_URL,
     /**
      * What the key can actually use. Falls back to the configured chain until the
      * catalogue has been read, so the picker never invents a model.
@@ -74,7 +80,11 @@ data class SettingsUiState(
 ) {
     /** Cloud AI can only work when it is switched on, keyed, and reachable. */
     val cloudUsable: Boolean
-        get() = geminiEnabled && hasKey && network != NetworkState.OFFLINE
+        get() = when (selectedProvider) {
+            com.vasu.assistant.core.ai.AIProvider.GEMINI -> geminiEnabled && hasKey && network != NetworkState.OFFLINE
+            com.vasu.assistant.core.ai.AIProvider.CLAUDE -> claudeEnabled && hasClaudeKey && network != NetworkState.OFFLINE
+            com.vasu.assistant.core.ai.AIProvider.LOCAL -> false
+        }
 }
 
 @HiltViewModel
@@ -130,10 +140,16 @@ class SettingsViewModel @Inject constructor(
     private fun refresh() {
         val discovered = keyStore.discoveredModels
         _uiState.value = _uiState.value.copy(
+            selectedProvider = aiClient.currentProvider.value,
             geminiEnabled = keyStore.geminiEnabled,
             hasKey = keyStore.hasGeminiKey(),
             maskedKey = keyStore.maskedGeminiKey(),
             model = keyStore.geminiModel,
+            claudeEnabled = keyStore.claudeEnabled,
+            hasClaudeKey = keyStore.hasClaudeKey(),
+            maskedClaudeKey = keyStore.maskedClaudeKey(),
+            claudeModel = keyStore.claudeModel,
+            claudeBaseUrl = keyStore.claudeBaseUrl,
             availableModels = if (discovered.isEmpty()) {
                 AiProviderConfig.GEMINI.candidatesFor(keyStore.geminiModel)
             } else {
@@ -158,8 +174,44 @@ class SettingsViewModel @Inject constructor(
 
     // AI provider
 
+    fun setProvider(provider: com.vasu.assistant.core.ai.AIProvider) {
+        aiClient.setProvider(provider)
+        refresh()
+    }
+
     fun setGeminiEnabled(enabled: Boolean) {
         keyStore.geminiEnabled = enabled
+        refresh()
+    }
+
+    fun setClaudeEnabled(enabled: Boolean) {
+        keyStore.claudeEnabled = enabled
+        refresh()
+    }
+
+    fun saveClaudeKey(key: String) {
+        if (key.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                connectionTest = ConnectionTest.FAILED,
+                connectionMessage = "Enter a Claude key first."
+            )
+            return
+        }
+        val saved = keyStore.setClaudeKey(key)
+        _uiState.value = _uiState.value.copy(
+            connectionTest = ConnectionTest.NOT_TESTED,
+            connectionMessage = if (saved) "Claude key saved." else "Could not save key."
+        )
+        refresh()
+    }
+
+    fun setClaudeModel(model: String) {
+        keyStore.claudeModel = model
+        refresh()
+    }
+
+    fun setClaudeBaseUrl(url: String) {
+        keyStore.claudeBaseUrl = url
         refresh()
     }
 
@@ -172,8 +224,6 @@ class SettingsViewModel @Inject constructor(
             return
         }
         val saved = aiClient.saveApiKey(key)
-        // Which models are available is a property of the key, so a cached
-        // catalogue from the previous one would filter the new key's chain wrongly.
         forgetModelCatalog()
         _uiState.value = _uiState.value.copy(
             connectionTest = ConnectionTest.NOT_TESTED,
