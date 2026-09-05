@@ -33,7 +33,8 @@ class TTSManager @Inject constructor(
     private val speechQueue: SpeechQueue,
     private val settings: VasuSettings,
     private val customVoiceEngine: CustomVoiceEngine,
-    private val voiceRouter: VoiceRouter
+    private val voiceRouter: VoiceRouter,
+    private val localTtsEngine: LocalTtsEngine
 ) : HindiSpeechService {
 
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -65,11 +66,11 @@ class TTSManager @Inject constructor(
     val availableLanguages: StateFlow<List<Locale>> = _availableLanguages.asStateFlow()
 
     // Available voices list
-    private val _availableVoices = MutableStateFlow<List<String>>(listOf("Vasu-Gemini-Female (Erinome)", "Vasu-Local-Female"))
+    private val _availableVoices = MutableStateFlow<List<String>>(listOf("Vasu-Gemini-Female (Kore)", "Vasu-Local-Female"))
     override val availableVoices: StateFlow<List<String>> = _availableVoices.asStateFlow()
 
     // Voice Status (female indicator)
-    private val _voiceStatus = MutableStateFlow(VoiceStatus(VoiceGender.FEMALE, "Erinome (Gemini) / Local"))
+    private val _voiceStatus = MutableStateFlow(VoiceStatus(VoiceGender.FEMALE, "Kore (Gemini) / Local"))
     val voiceStatus: StateFlow<VoiceStatus> = _voiceStatus.asStateFlow()
 
     // Custom local voice model status
@@ -96,7 +97,10 @@ class TTSManager @Inject constructor(
 
     override fun isAvailable(): Boolean = isInitialized
 
-    override fun isOfflineVoiceAvailable(): Boolean = true
+    override fun isOfflineVoiceAvailable(): Boolean =
+        customVoiceEngine.status.value == VoiceModelStatus.ACTIVE_CUSTOM_MODEL ||
+        customVoiceEngine.status.value == VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES ||
+        localTtsEngine.isAvailable
 
     override fun speak(
         text: String,

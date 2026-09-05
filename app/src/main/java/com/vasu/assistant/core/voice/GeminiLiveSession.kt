@@ -83,8 +83,8 @@ class GeminiLiveSession @Inject constructor() {
         private const val TAG = "GeminiLiveSession"
         private const val LIVE_ENDPOINT =
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
-        const val TARGET_VOICE = "Erinome"
-        const val LIVE_MODEL = "models/gemini-2.0-flash-exp"
+        const val TARGET_VOICE = "Kore"
+        const val LIVE_MODEL = "models/gemini-3.1-flash-live-preview"
     }
 
     fun setCallbacks(

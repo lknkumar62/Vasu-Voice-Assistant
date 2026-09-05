@@ -25,7 +25,7 @@ export class GeminiLiveVoiceService {
   private listener: VoiceServiceListener;
   private currentState: VoiceState = 'IDLE';
 
-  public static readonly TARGET_VOICE = 'Erinome';
+  public static readonly TARGET_VOICE = 'Kore';
 
   constructor(listener: VoiceServiceListener) {
     this.listener = listener;

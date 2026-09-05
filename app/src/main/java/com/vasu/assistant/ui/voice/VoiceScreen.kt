@@ -171,12 +171,12 @@ fun VoiceScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = { viewModel.testErinomeVoice("Namaste Vasu, ek chhota sa greeting bolo.") },
+                onClick = { viewModel.testKoreVoice("Namaste Vasu, ek chhota sa greeting bolo.") },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuCyan),
                 border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.5f)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Test Erinome Voice (Text Test)", fontSize = 13.sp)
+                Text("Test Kore Voice (Text Test)", fontSize = 13.sp)
             }
         }
     }

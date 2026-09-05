@@ -34,8 +34,8 @@ export class GeminiLiveSession {
   private state: LiveSessionState = 'DISCONNECTED';
   private callbacks: GeminiLiveSessionCallbacks;
 
-  public static readonly TARGET_VOICE = 'Erinome';
-  public static readonly LIVE_MODEL = 'models/gemini-2.0-flash-exp';
+  public static readonly TARGET_VOICE = 'Kore';
+  public static readonly LIVE_MODEL = 'models/gemini-3.1-flash-live-preview';
 
   private readyResolver: ((success: boolean) => void) | null = null;
 

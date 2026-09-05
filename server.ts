@@ -13,7 +13,7 @@ app.get('/api/config', (_req, res) => {
   res.json({
     ok: true,
     hasApiKey: Boolean(apiKey.trim()),
-    voiceName: 'Erinome',
+    voiceName: 'Kore',
     audioFormatInput: '16-bit PCM / 16 kHz / mono',
     audioFormatOutput: '16-bit PCM / 24 kHz / mono',
   });

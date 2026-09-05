@@ -17,8 +17,8 @@ import org.junit.Test
 class VoiceEngineArchitectureTest {
 
     @Test
-    fun `default gemini voice is natural female Erinome`() {
-        assertEquals("Erinome", VasuSettings.DEFAULT_GEMINI_TTS_VOICE)
+    fun `default gemini voice is natural female Kore`() {
+        assertEquals("Kore", VasuSettings.DEFAULT_GEMINI_TTS_VOICE)
     }
 
     @Test
@@ -73,8 +73,13 @@ class VoiceEngineArchitectureTest {
     }
 
     @Test
-    fun `gemini live target voice is Erinome`() {
-        assertEquals("Erinome", com.vasu.assistant.core.voice.GeminiLiveSession.TARGET_VOICE)
+    fun `gemini live target voice is Kore`() {
+        assertEquals("Kore", com.vasu.assistant.core.voice.GeminiLiveSession.TARGET_VOICE)
+    }
+
+    @Test
+    fun `gemini live target model is gemini 3_1 flash live preview`() {
+        assertEquals("models/gemini-3.1-flash-live-preview", com.vasu.assistant.core.voice.GeminiLiveSession.LIVE_MODEL)
     }
 
     @Test

@@ -27,7 +27,7 @@ enum class ActiveVoiceSource(val displayName: String) {
  * VoiceRouter - Intelligent online/offline speech synthesis router.
  *
  * Priority routing:
- * 1. ONLINE: Gemini TTS (Erinome female assistant voice)
+ * 1. ONLINE: Gemini TTS (Kore female assistant voice)
  * 2. OFFLINE: Local TTS (custom assets / offline neural voice)
  * 3. LAST RESORT: Android Fallback TTS (only if explicitly enabled by user)
  */

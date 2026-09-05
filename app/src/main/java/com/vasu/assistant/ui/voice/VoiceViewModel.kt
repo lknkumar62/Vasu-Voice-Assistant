@@ -22,7 +22,7 @@ import javax.inject.Inject
 enum class VoiceUiMode(val labelHindi: String, val labelEnglish: String) {
     IDLE("बोलने के लिए माइक दबाएं", "Tap mic to speak"),
     CONNECTING("जेमिनी लाइव से कनेक्ट हो रहा है...", "Connecting to Gemini Live..."),
-    CONNECTED("लाइव वॉइस तैयार है (Erinome)", "Live voice ready (Erinome)"),
+    CONNECTED("लाइव वॉइस तैयार है (Kore)", "Live voice ready (Kore)"),
     LISTENING("आपकी आवाज़ सुन रही हूँ...", "Listening..."),
     PROCESSING("कमांड प्रोसेस कर रही हूँ...", "Processing..."),
     THINKING("सोच रही हूँ...", "Thinking..."),
@@ -223,10 +223,15 @@ class VoiceViewModel @Inject constructor(
     }
 
     /**
-     * TEXT-ONLY TEST: Test Gemini Live session with text and receive native Erinome audio.
+     * TEXT-ONLY TEST: Test Gemini Live session with text and receive native Kore audio.
      */
-    fun testErinomeVoice(text: String = "Namaste Vasu, ek chhota sa greeting bolo.") {
+    fun testKoreVoice(text: String = "Namaste Vasu, ek chhota sa greeting bolo.") {
         geminiLiveVoiceService.sendTextTurn(text)
+    }
+
+    @Deprecated("Use testKoreVoice instead", ReplaceWith("testKoreVoice(text)"))
+    fun testErinomeVoice(text: String = "Namaste Vasu, ek chhota sa greeting bolo.") {
+        testKoreVoice(text)
     }
 
     private fun processVoiceCommand(command: String) {

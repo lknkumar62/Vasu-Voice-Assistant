@@ -39,7 +39,7 @@ import javax.inject.Singleton
  *   Primary: gemini-3.1-flash-tts-preview
  *   Fallback 1: gemini-2.5-flash-preview-tts
  *   Fallback 2: gemini-2.0-flash
- * - Prebuilt natural female assistant voice: "Erinome" (warm, conversational, friendly).
+ * - Prebuilt natural female assistant voice: "Kore" (warm, conversational, friendly).
  * - Tailored Hindi-first assistant prompting for natural cadence and clear pronunciation.
  * - Handles inline audio response decoding (WAV, MP3, and raw 24kHz PCM).
  * - Integrated AudioFocus and interruption handling.

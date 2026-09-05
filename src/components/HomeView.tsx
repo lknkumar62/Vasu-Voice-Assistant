@@ -141,7 +141,7 @@ export const HomeView: React.FC = () => {
           VASU VOICE ASSISTANT
         </h1>
         <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#94a3b8' }}>
-          Native Gemini Live Conversational Engine • Voice: <strong style={{ color: '#38bdf8' }}>Erinome</strong>
+          Native Gemini Live Conversational Engine • Voice: <strong style={{ color: '#38bdf8' }}>Kore</strong>
         </p>
       </div>
 
@@ -232,7 +232,7 @@ export const HomeView: React.FC = () => {
             cursor: 'pointer',
           }}
         >
-          🔊 Test Erinome Voice (Text Test)
+          🔊 Test Kore Voice (Text Test)
         </button>
 
         {voiceState === 'SPEAKING' && (
@@ -305,7 +305,7 @@ export const HomeView: React.FC = () => {
             backgroundColor: '#1e1b4b',
             borderLeft: '4px solid #a855f7',
           }}>
-            <span style={{ fontSize: '11px', color: '#c084fc', display: 'block' }}>VASU (Erinome Voice):</span>
+            <span style={{ fontSize: '11px', color: '#c084fc', display: 'block' }}>VASU (Kore Voice):</span>
             <div style={{ fontSize: '15px', color: '#f3e8ff', marginTop: '4px' }}>{response}</div>
           </div>
         )}

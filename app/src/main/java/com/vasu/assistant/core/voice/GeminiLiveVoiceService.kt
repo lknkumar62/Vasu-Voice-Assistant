@@ -18,7 +18,7 @@ import javax.inject.Singleton
 
 /**
  * GeminiLiveVoiceService - Main coordinator for real-time natural conversational voice
- * using Gemini Live native AUDIO with target voice "Erinome".
+ * using Gemini Live native AUDIO with target voice "Kore".
  *
  * Implements:
  * USER MICROPHONE -> 16-bit PCM / 16 kHz / mono
@@ -54,7 +54,7 @@ class GeminiLiveVoiceService @Inject constructor(
 
     companion object {
         private const val TAG = "GeminiLiveVoiceService"
-        const val TARGET_VOICE = "Erinome"
+        const val TARGET_VOICE = "Kore"
     }
 
     init {
@@ -74,9 +74,11 @@ class GeminiLiveVoiceService @Inject constructor(
                 handleInterruption()
             },
             onTurnComplete = {
-                audioPlayer.markEndOfResponse()
-                pendingOnDoneCallback?.invoke()
+                val doneCallback = pendingOnDoneCallback
                 pendingOnDoneCallback = null
+                audioPlayer.markEndOfResponse {
+                    doneCallback?.invoke()
+                }
             },
             onError = { errorReason ->
                 _voiceState.value = GeminiVoiceState.ERROR

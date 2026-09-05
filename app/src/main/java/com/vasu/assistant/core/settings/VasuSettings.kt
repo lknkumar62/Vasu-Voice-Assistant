@@ -131,7 +131,7 @@ class VasuSettings @Inject constructor(
         private const val KEY_GEMINI_TTS_MODEL = "gemini_tts_model"
 
         const val DEFAULT_LANGUAGE = "hi-IN"
-        const val DEFAULT_GEMINI_TTS_VOICE = "Erinome"
+        const val DEFAULT_GEMINI_TTS_VOICE = "Kore"
         const val DEFAULT_GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
         const val FALLBACK_GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
         const val BASE_GEMINI_TTS_MODEL = "gemini-2.0-flash"

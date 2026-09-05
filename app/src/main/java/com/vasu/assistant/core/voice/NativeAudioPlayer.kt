@@ -43,7 +43,7 @@ class NativeAudioPlayer @Inject constructor() {
 
     sealed interface PlaybackCommand {
         class Chunk(val pcm: ByteArray) : PlaybackCommand
-        object EndOfTurn : PlaybackCommand
+        class EndOfTurn(val onFinished: (() -> Unit)? = null) : PlaybackCommand
     }
 
     private var audioTrack: AudioTrack? = null
@@ -130,11 +130,13 @@ class NativeAudioPlayer @Inject constructor() {
     /**
      * Explicit end-of-response signal: marks that Gemini has finished sending audio chunks.
      * Allows remaining queued PCM chunks and hardware buffer to drain and play out completely,
-     * then stops AudioTrack and resets isPlaying to false.
+     * then stops AudioTrack, resets isPlaying to false, and invokes onFinished callback.
      */
-    fun markEndOfResponse() {
+    fun markEndOfResponse(onFinished: (() -> Unit)? = null) {
         if (_isPlaying.value) {
-            audioQueue.trySend(PlaybackCommand.EndOfTurn)
+            audioQueue.trySend(PlaybackCommand.EndOfTurn(onFinished))
+        } else {
+            onFinished?.invoke()
         }
     }
 
@@ -144,6 +146,7 @@ class NativeAudioPlayer @Inject constructor() {
             var totalFramesWritten = 0L
             try {
                 val track = ensureAudioTrack()
+                val startHeadPosition = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
                 if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
                     track.play()
                 }
@@ -165,15 +168,16 @@ class NativeAudioPlayer @Inject constructor() {
                             if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                                 track.stop()
                             }
-                            // Wait for the hardware playback buffer to drain with safety timeout
+                            // Wait for the hardware playback buffer to drain with safety timeout relative to startHeadPosition
+                            val targetHeadPosition = startHeadPosition + totalFramesWritten
                             val drainStartMs = System.currentTimeMillis()
-                            val remainingFrames = totalFramesWritten - (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL)
+                            val remainingFrames = targetHeadPosition - (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL)
                             val maxDrainWaitMs = if (remainingFrames > 0) {
                                 (remainingFrames * 1000L / SAMPLE_RATE) + 500L
                             } else {
                                 300L
                             }
-                            while (isActive && (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL) < totalFramesWritten) {
+                            while (isActive && (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL) < targetHeadPosition) {
                                 if (track.playState == AudioTrack.PLAYSTATE_STOPPED) break
                                 if (System.currentTimeMillis() - drainStartMs > maxDrainWaitMs) {
                                     Log.d(TAG, "Hardware playback buffer drain timeout reached")
@@ -181,6 +185,7 @@ class NativeAudioPlayer @Inject constructor() {
                                 }
                                 kotlinx.coroutines.delay(20)
                             }
+                            cmd.onFinished?.invoke()
                             break
                         }
                     }

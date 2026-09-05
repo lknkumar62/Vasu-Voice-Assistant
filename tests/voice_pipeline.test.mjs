@@ -45,7 +45,7 @@ async function runTests() {
         ws.send(JSON.stringify({ setupComplete: {} }));
       } else if (msg.clientContent) {
         serverA_receivedClientContent = msg;
-        // Simulate Gemini 24 kHz Erinome PCM audio output (100ms chunk = 4800 bytes)
+        // Simulate Gemini 24 kHz Kore PCM audio output (100ms chunk = 4800 bytes)
         const fake24kPcm = Buffer.alloc(4800, 0x7a).toString('base64');
         ws.send(JSON.stringify({
           serverContent: {
@@ -73,13 +73,13 @@ async function runTests() {
       // Send setup
       clientWsA.send(JSON.stringify({
         setup: {
-          model: 'models/gemini-2.0-flash-exp',
+          model: 'models/gemini-3.1-flash-live-preview',
           generationConfig: {
             responseModalities: ['AUDIO'],
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: 'Erinome'
+                  voiceName: 'Kore'
                 }
               }
             }
@@ -130,7 +130,7 @@ async function runTests() {
 
   assert(clientA_connected, 'Gemini connection OPEN');
   assert(clientA_setupComplete, 'setupComplete received');
-  assert(serverA_receivedSetup?.setup?.generationConfig?.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName === 'Erinome', 'Erinome native voice configured');
+  assert(serverA_receivedSetup?.setup?.generationConfig?.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName === 'Kore', 'Kore native voice configured');
   assert(serverA_receivedClientContent?.clientContent?.turns?.[0]?.parts?.[0]?.text === 'Namaste Vasu, mera naam Vasu hai.', 'Text turn sent: "Namaste Vasu, mera naam Vasu hai."');
   assert(clientA_audioBytesReceived > 0, `AUDIO response received`, `${clientA_audioBytesReceived} bytes`);
   assert(clientA_playbackStarted, 'playback started');
@@ -203,7 +203,7 @@ async function runTests() {
         serverB_receivedAudioChunk = msg.realtimeInput.mediaChunks?.[0]?.data;
         serverB_audioMimeType = msg.realtimeInput.mediaChunks?.[0]?.mimeType;
 
-        // Server answers with Erinome 24kHz audio
+        // Server answers with Kore 24kHz audio
         const resp24k = Buffer.alloc(2400, 0x42).toString('base64');
         ws.send(JSON.stringify({
           serverContent: {
@@ -225,12 +225,12 @@ async function runTests() {
     clientWsB.on('open', () => {
       clientWsB.send(JSON.stringify({
         setup: {
-          model: 'models/gemini-2.0-flash-exp',
+          model: 'models/gemini-3.1-flash-live-preview',
           generationConfig: {
             responseModalities: ['AUDIO'],
             speechConfig: {
               voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Erinome' }
+                prebuiltVoiceConfig: { voiceName: 'Kore' }
               }
             }
           }
@@ -264,7 +264,7 @@ async function runTests() {
 
   assert(serverB_audioMimeType === 'audio/pcm;rate=16000', 'Gemini received audio chunk with mimeType audio/pcm;rate=16000');
   assert(serverB_receivedAudioChunk === base64MicChunk, 'Gemini receives actual 16 kHz microphone audio chunk');
-  assert(clientB_audioResponseBytes > 0, `Gemini responds with native AUDIO (Erinome voice)`, `${clientB_audioResponseBytes} bytes`);
+  assert(clientB_audioResponseBytes > 0, `Gemini responds with native AUDIO (Kore voice)`, `${clientB_audioResponseBytes} bytes`);
 
   clientWsB.close();
   mockServerB.close();
