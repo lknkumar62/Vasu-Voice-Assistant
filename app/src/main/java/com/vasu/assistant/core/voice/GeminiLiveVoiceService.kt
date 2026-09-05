@@ -6,6 +6,7 @@ import com.vasu.assistant.core.ai.PromptManager
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.settings.VasuSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,7 +28,7 @@ import javax.inject.Singleton
  *       ↓
  * native AUDIO response -> 16-bit PCM / 24 kHz
  *       ↓
- * audio playback -> VASU FEMALE VOICE
+ * audio playback -> VASU FEMALE VOICE (Kore)
  */
 @Singleton
 class GeminiLiveVoiceService @Inject constructor(
@@ -43,6 +44,9 @@ class GeminiLiveVoiceService @Inject constructor(
 
     private val _voiceState = MutableStateFlow(GeminiVoiceState.IDLE)
     val voiceState: StateFlow<GeminiVoiceState> = _voiceState.asStateFlow()
+
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     private val _currentTranscript = MutableStateFlow("")
     val currentTranscript: StateFlow<String> = _currentTranscript.asStateFlow()
@@ -81,8 +85,9 @@ class GeminiLiveVoiceService @Inject constructor(
                 }
             },
             onError = { errorReason ->
+                _lastError.value = errorReason
                 _voiceState.value = GeminiVoiceState.ERROR
-                Log.e(TAG, "Gemini Live session error: $errorReason")
+                Log.e(TAG, "[GEMINI_KORE_AUDIO] Gemini Live session error: $errorReason")
             }
         )
     }
@@ -124,8 +129,10 @@ class GeminiLiveVoiceService @Inject constructor(
 
         val apiKey = keyStore.getGeminiKey()
         if (apiKey.isNullOrBlank()) {
+            val err = "Gemini API key is not configured"
+            _lastError.value = err
             _voiceState.value = GeminiVoiceState.ERROR
-            Log.w(TAG, "Cannot start voice session: Gemini API key missing")
+            Log.w(TAG, "[GEMINI_KORE_AUDIO] Cannot start voice session: $err")
             return false
         }
 
@@ -133,8 +140,12 @@ class GeminiLiveVoiceService @Inject constructor(
         val ready = liveSession.connectAndWaitReady(apiKey, getSystemInstruction())
         if (ready) {
             _voiceState.value = GeminiVoiceState.CONNECTED
+            _lastError.value = null
         } else {
+            val err = liveSession.lastErrorMessage ?: "Gemini Live session connection failed"
+            _lastError.value = err
             _voiceState.value = GeminiVoiceState.ERROR
+            Log.e(TAG, "[GEMINI_KORE_AUDIO] Session connection failed: $err")
         }
         return ready
     }
@@ -146,7 +157,8 @@ class GeminiLiveVoiceService @Inject constructor(
         val apiKey = keyStore.getGeminiKey()
         if (apiKey.isNullOrBlank()) {
             _voiceState.value = GeminiVoiceState.ERROR
-            Log.w(TAG, "Cannot start voice session: Gemini API key missing")
+            _lastError.value = "Gemini API key missing"
+            Log.w(TAG, "[GEMINI_KORE_AUDIO] Cannot start voice session: Gemini API key missing")
             return false
         }
 
@@ -158,9 +170,70 @@ class GeminiLiveVoiceService @Inject constructor(
     }
 
     /**
-     * TEST 4 & TEXT-ONLY TEST:
-     * Sends a text prompt to Gemini Live ("Namaste Vasu, ek chhota sa greeting bolo."),
-     * waits for READY state safely, receives native 24 kHz AUDIO, decodes and plays immediately.
+     * Primary speech synthesis function:
+     * Sends a text prompt to Gemini Live ("Kore"), receives 24 kHz PCM audio, decodes and
+     * streams directly through NativeAudioPlayer -> AudioTrack -> Speaker.
+     * Suspends until the hardware audio playback has completely finished playing out.
+     */
+    suspend fun speakText(
+        text: String,
+        onStart: (() -> Unit)? = null,
+        onDone: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ): Boolean {
+        val apiKey = keyStore.getGeminiKey()
+        if (apiKey.isNullOrBlank()) {
+            val err = "Gemini API key is not configured in settings"
+            _lastError.value = err
+            _voiceState.value = GeminiVoiceState.ERROR
+            Log.w(TAG, "[GEMINI_KORE_AUDIO] Cannot speak text turn: $err")
+            onError?.invoke(err)
+            return false
+        }
+
+        val ready = ensureConnectedSuspend()
+        if (!ready) {
+            val err = liveSession.lastErrorMessage ?: _lastError.value ?: "Gemini Live session failed to reach READY state"
+            _lastError.value = err
+            _voiceState.value = GeminiVoiceState.ERROR
+            Log.e(TAG, "[GEMINI_KORE_AUDIO] Cannot speak text turn: $err")
+            onError?.invoke(err)
+            return false
+        }
+
+        val turnCompletion = CompletableDeferred<Boolean>()
+        pendingOnDoneCallback = {
+            onDone?.invoke()
+            turnCompletion.complete(true)
+        }
+
+        _voiceState.value = GeminiVoiceState.THINKING
+        _currentTranscript.value = text
+        _lastResponse.value = ""
+        onStart?.invoke()
+
+        val sent = liveSession.sendTextTurn(text)
+        if (!sent) {
+            val err = liveSession.lastErrorMessage ?: "Failed to send text turn to Gemini Live WebSocket"
+            _lastError.value = err
+            _voiceState.value = GeminiVoiceState.ERROR
+            Log.e(TAG, "[GEMINI_KORE_AUDIO] $err")
+            onError?.invoke(err)
+            return false
+        }
+
+        return try {
+            turnCompletion.await()
+        } catch (e: Exception) {
+            val err = "Turn completion error: ${e.message}"
+            _lastError.value = err
+            onError?.invoke(err)
+            false
+        }
+    }
+
+    /**
+     * Non-suspending turn invocation wrapper.
      */
     fun sendTextTurn(
         promptText: String = "Namaste Vasu, ek chhota sa greeting bolo.",
@@ -169,31 +242,14 @@ class GeminiLiveVoiceService @Inject constructor(
         val apiKey = keyStore.getGeminiKey()
         if (apiKey.isNullOrBlank()) {
             _voiceState.value = GeminiVoiceState.ERROR
-            Log.w(TAG, "Cannot start voice session: Gemini API key missing")
+            _lastError.value = "Gemini API key missing"
+            Log.w(TAG, "[GEMINI_KORE_AUDIO] Cannot start voice session: Gemini API key missing")
             return false
         }
 
-        pendingOnDoneCallback = onDone
-
         serviceScope.launch {
-            val isReady = ensureConnectedSuspend()
-            if (!isReady) {
-                _voiceState.value = GeminiVoiceState.ERROR
-                Log.e(TAG, "Cannot send text: Gemini Live session not ready")
-                return@launch
-            }
-
-            _voiceState.value = GeminiVoiceState.THINKING
-            _currentTranscript.value = promptText
-            _lastResponse.value = ""
-
-            val sent = liveSession.sendTextTurn(promptText)
-            if (!sent) {
-                _voiceState.value = GeminiVoiceState.ERROR
-                Log.e(TAG, "Failed to send text turn")
-            }
+            speakText(promptText, onDone = onDone)
         }
-
         return true
     }
 
@@ -277,6 +333,7 @@ class GeminiLiveVoiceService @Inject constructor(
     private fun handleIncomingAudioChunk(audioBytes: ByteArray) {
         if (audioBytes.isNotEmpty()) {
             _voiceState.value = GeminiVoiceState.SPEAKING
+            Log.d(TAG, "[GEMINI_KORE_AUDIO] Streaming ${audioBytes.size} PCM bytes to NativeAudioPlayer (AudioTrack)")
             audioPlayer.enqueueAudioChunk(audioBytes)
         }
     }

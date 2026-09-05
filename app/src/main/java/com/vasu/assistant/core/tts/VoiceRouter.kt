@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.util.Log
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.settings.VasuSettings
+import com.vasu.assistant.core.voice.GeminiLiveVoiceService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,15 +28,17 @@ enum class ActiveVoiceSource(val displayName: String) {
  * VoiceRouter - Intelligent online/offline speech synthesis router.
  *
  * Priority routing:
- * 1. ONLINE: Gemini TTS (Kore female assistant voice)
- * 2. OFFLINE: Local TTS (custom assets / offline neural voice)
- * 3. LAST RESORT: Android Fallback TTS (only if explicitly enabled by user)
+ * 1. ONLINE PRIMARY: Gemini Live native AUDIO (Kore female assistant voice -> 24kHz PCM -> AudioTrack)
+ * 2. ONLINE SECONDARY: Gemini REST TTS (Kore female assistant voice)
+ * 3. OFFLINE: Local TTS (custom assets / offline neural voice)
+ * 4. LAST RESORT: Android Fallback TTS (only if explicitly enabled by user)
  */
 @Singleton
 class VoiceRouter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settings: VasuSettings,
     private val keyStore: SecureKeyStore,
+    private val geminiLiveVoiceService: GeminiLiveVoiceService,
     private val geminiTtsEngine: GeminiTtsEngine,
     private val localTtsEngine: LocalTtsEngine,
     private val androidFallbackTtsEngine: AndroidFallbackTtsEngine
@@ -60,17 +63,29 @@ class VoiceRouter @Inject constructor(
         val online = isOnline() && !settings.offlineOnly.value
         val geminiConfigured = keyStore.hasGeminiKey()
 
-        // 1. Online with Gemini configured
+        // 1. Online with Gemini configured: Primary route is Gemini Live native Kore audio
         if (online && geminiConfigured) {
             _currentSource.value = ActiveVoiceSource.GEMINI_ONLINE
-            Log.d(TAG, "Routing turn to GeminiTtsEngine")
+            Log.d(TAG, "[GEMINI_KORE_AUDIO] Routing speech turn to GeminiLiveVoiceService (Kore 24kHz PCM -> AudioTrack)")
 
+            val liveSuccess = geminiLiveVoiceService.speakText(
+                text = text,
+                onStart = onStart,
+                onDone = onDone,
+                onError = { liveError ->
+                    Log.w(TAG, "[GEMINI_KORE_AUDIO] Gemini Live synthesis failed ($liveError); trying GeminiTtsEngine fallback")
+                }
+            )
+
+            if (liveSuccess) return true
+
+            Log.d(TAG, "[GEMINI_KORE_AUDIO] Routing speech turn to GeminiTtsEngine fallback")
             val geminiSuccess = geminiTtsEngine.speak(
                 text = text,
                 onStart = onStart,
                 onDone = onDone,
                 onError = { geminiError ->
-                    Log.w(TAG, "Gemini TTS failed ($geminiError); falling back to LocalTtsEngine")
+                    Log.w(TAG, "[GEMINI_KORE_AUDIO] Gemini TTS failed ($geminiError); falling back to LocalTtsEngine")
                     fallbackToLocal(text, onStart, onDone, onError)
                 }
             )
@@ -78,15 +93,20 @@ class VoiceRouter @Inject constructor(
             if (geminiSuccess) return true
         }
 
-        // 2. Offline / Local TTS
-        Log.d(TAG, "Routing turn to LocalTtsEngine (offline or Gemini not ready)")
+        // 2. Offline / Local TTS fallback
+        val reason = when {
+            !online -> "Device offline or offline-only mode active"
+            !geminiConfigured -> "Gemini API key is not configured"
+            else -> "Gemini Live and REST audio generation both failed"
+        }
+        Log.w(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Gemini audio unavailable ($reason). Routing turn to LocalTtsEngine")
         _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
         val localSuccess = localTtsEngine.speak(
             text = text,
             onStart = onStart,
             onDone = onDone,
             onError = { localError ->
-                Log.w(TAG, "LocalTtsEngine failed: $localError")
+                Log.w(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] LocalTtsEngine failed: $localError")
                 if (settings.androidFallbackTtsEnabled.value) {
                     fallbackToAndroidSystem(text, onStart, onDone, onError)
                 } else {
@@ -118,12 +138,13 @@ class VoiceRouter @Inject constructor(
     ) {
         CoroutineScope(Dispatchers.Main).launch {
             _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
+            Log.w(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Executing fallback to LocalTtsEngine")
             val success = localTtsEngine.speak(
                 text = text,
                 onStart = onStart,
                 onDone = onDone,
                 onError = { localErr ->
-                    Log.w(TAG, "LocalTtsEngine fallback failed: $localErr")
+                    Log.w(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] LocalTtsEngine fallback failed: $localErr")
                     if (settings.androidFallbackTtsEnabled.value) {
                         fallbackToAndroidSystem(text, onStart, onDone, onError)
                     } else {
@@ -145,7 +166,7 @@ class VoiceRouter @Inject constructor(
         onError: ((String) -> Unit)?
     ): Boolean {
         _currentSource.value = ActiveVoiceSource.ANDROID_FALLBACK
-        Log.i(TAG, "Engaging emergency AndroidFallbackTtsEngine")
+        Log.i(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Engaging emergency AndroidFallbackTtsEngine")
         CoroutineScope(Dispatchers.Main).launch {
             androidFallbackTtsEngine.speak(text, onStart, onDone, onError)
         }
@@ -153,6 +174,7 @@ class VoiceRouter @Inject constructor(
     }
 
     fun stop() {
+        geminiLiveVoiceService.stopSpeaking()
         geminiTtsEngine.stop()
         localTtsEngine.stop()
         androidFallbackTtsEngine.stop()

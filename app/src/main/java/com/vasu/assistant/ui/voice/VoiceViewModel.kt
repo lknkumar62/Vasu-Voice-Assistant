@@ -1,5 +1,6 @@
 package com.vasu.assistant.ui.voice
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vasu.assistant.core.ai.AIOrchestrator
@@ -224,29 +225,55 @@ class VoiceViewModel @Inject constructor(
 
     /**
      * TEXT-ONLY TEST: Test Gemini Live session with text and receive native Kore audio.
-     * When Gemini API key is not configured or session is unavailable, seamlessly falls back
-     * to on-device TTS with an informative status so VASU never fails silently.
+     * Streams 24 kHz PCM audio directly from Gemini Live into NativeAudioPlayer -> AudioTrack -> speaker.
+     * If Gemini API key is missing or session fails, reports the exact error on the UI.
+     * Does NOT silently switch to Android TextToSpeech or bundled audio clips.
      */
     fun testKoreVoice(text: String = "Namaste Vasu, ek chhota sa greeting bolo.") {
-        val hasSession = geminiLiveVoiceService.connectSession()
-        if (!hasSession) {
+        viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
-                mode = VoiceUiMode.OFFLINE_MODE,
-                statusMessage = "जेमिनी API कुंजी मौजूद नहीं है — ऑफ़लाइन वॉइस टेस्ट",
-                lastResponse = "नमस्ते! मैं वासु हूँ। कृपया सेटिंग्स में जेमिनी एपीआई कुंजी दर्ज करें।"
+                mode = VoiceUiMode.CONNECTING,
+                statusMessage = "जेमिनी लाइव Kore वॉइस से जुड़ रहा है...",
+                isSpeaking = false
             )
-            ttsManager.speakQueued("नमस्ते! मैं वासु हूँ। कृपया सेटिंग्स में जेमिनी एपीआई कुंजी दर्ज करें।")
-            return
-        }
 
-        val sent = geminiLiveVoiceService.sendTextTurn(text)
-        if (!sent) {
-            _uiState.value = _uiState.value.copy(
-                mode = VoiceUiMode.OFFLINE_MODE,
-                statusMessage = "जेमिनी लाइव सत्र तैयार नहीं है — ऑफ़लाइन वॉइस टेस्ट",
-                lastResponse = "नमस्ते! मैं वासु हूँ। आपकी आवाज़ सहायक।"
+            val success = geminiLiveVoiceService.speakText(
+                text = text,
+                onStart = {
+                    _uiState.value = _uiState.value.copy(
+                        mode = VoiceUiMode.SPEAKING,
+                        statusMessage = "जेमिनी Kore आवाज़ बोल रही है...",
+                        isSpeaking = true
+                    )
+                },
+                onDone = {
+                    _uiState.value = _uiState.value.copy(
+                        mode = VoiceUiMode.CONNECTED,
+                        statusMessage = "जेमिनी Kore टेस्ट पूरा हुआ",
+                        isSpeaking = false
+                    )
+                },
+                onError = { errorReason ->
+                    Log.e(TAG, "[GEMINI_KORE_AUDIO] testKoreVoice failed: $errorReason")
+                    _uiState.value = _uiState.value.copy(
+                        mode = VoiceUiMode.ERROR,
+                        statusMessage = "त्रुटि: $errorReason",
+                        lastResponse = "Gemini Live Kore Voice failed: $errorReason",
+                        isSpeaking = false
+                    )
+                }
             )
-            ttsManager.speakQueued("नमस्ते! मैं वासु हूँ। आपकी आवाज़ सहायक।")
+
+            if (!success && _uiState.value.mode != VoiceUiMode.ERROR) {
+                val errorReason = geminiLiveVoiceService.lastError.value ?: "Gemini Live Kore voice session failed"
+                Log.e(TAG, "[GEMINI_KORE_AUDIO] testKoreVoice failed: $errorReason")
+                _uiState.value = _uiState.value.copy(
+                    mode = VoiceUiMode.ERROR,
+                    statusMessage = "त्रुटि: $errorReason",
+                    lastResponse = "Gemini Live Kore Voice failed: $errorReason",
+                    isSpeaking = false
+                )
+            }
         }
     }
 
@@ -284,5 +311,9 @@ class VoiceViewModel @Inject constructor(
         geminiLiveVoiceService.disconnect()
         sttManager.stopListening()
         ttsManager.stop()
+    }
+
+    companion object {
+        private const val TAG = "VoiceViewModel"
     }
 }

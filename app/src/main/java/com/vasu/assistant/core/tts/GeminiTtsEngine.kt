@@ -96,7 +96,7 @@ class GeminiTtsEngine @Inject constructor(
         // 1. Connectivity check
         if (!isOnline() || settings.offlineOnly.value) {
             val err = "Gemini network unavailable"
-            Log.w(TAG, err)
+            Log.w(TAG, "[GEMINI_KORE_AUDIO] $err")
             withContext(Dispatchers.Main) { onError?.invoke(err) }
             return@withContext false
         }
@@ -105,7 +105,7 @@ class GeminiTtsEngine @Inject constructor(
         val apiKey = keyStore.getGeminiKey()
         if (apiKey.isNullOrBlank()) {
             val err = "Gemini API key missing"
-            Log.w(TAG, err)
+            Log.w(TAG, "[GEMINI_KORE_AUDIO] $err")
             withContext(Dispatchers.Main) { onError?.invoke(err) }
             return@withContext false
         }
@@ -114,13 +114,15 @@ class GeminiTtsEngine @Inject constructor(
         val cacheKey = "${settings.geminiTtsVoice.value}_$speakable"
         val cachedAudio = audioMemoryCache.get(cacheKey)
         if (cachedAudio != null) {
-            Log.d(TAG, "Playing Gemini TTS from memory cache for: \"$speakable\"")
+            Log.d(TAG, "[GEMINI_KORE_AUDIO] Playing Gemini TTS from memory cache for: \"$speakable\"")
             return@withContext playAudioBytes(cachedAudio, onStart, onDone, onError)
         }
 
         // 4. Synthesize via Gemini API with model fallback chain
         val preferredModel = settings.geminiTtsModel.value
         val modelChain = linkedSetOf(
+            "gemini-2.0-flash-exp",
+            "gemini-2.0-flash",
             preferredModel,
             VasuSettings.DEFAULT_GEMINI_TTS_MODEL,
             VasuSettings.FALLBACK_GEMINI_TTS_MODEL,
@@ -133,15 +135,17 @@ class GeminiTtsEngine @Inject constructor(
             val synthesisResult = requestGeminiAudio(model, apiKey, speakable)
             when (synthesisResult) {
                 is TtsSynthesisResult.Success -> {
+                    Log.d(TAG, "[GEMINI_KORE_AUDIO] Successfully synthesized Kore audio using model: $model")
                     audioMemoryCache.put(cacheKey, synthesisResult.audioBytes)
                     return@withContext playAudioBytes(synthesisResult.audioBytes, onStart, onDone, onError)
                 }
                 is TtsSynthesisResult.ModelNotFound -> {
-                    Log.w(TAG, "Model $model not found or unsupported for TTS on this key, trying next fallback")
+                    Log.w(TAG, "[GEMINI_KORE_AUDIO] Model $model not found or unsupported for TTS on this key, trying next fallback")
                     lastErrorReason = "Gemini TTS model unavailable"
                 }
                 is TtsSynthesisResult.Failure -> {
                     lastErrorReason = synthesisResult.reason
+                    Log.w(TAG, "[GEMINI_KORE_AUDIO] Model $model failed: $lastErrorReason")
                     // Non-model errors (key rejected, quota exhausted, network dropped) should not cycle through all models
                     if (synthesisResult.shouldHaltChain) {
                         break
@@ -150,7 +154,7 @@ class GeminiTtsEngine @Inject constructor(
             }
         }
 
-        Log.e(TAG, "Gemini TTS failed across all candidates: $lastErrorReason")
+        Log.e(TAG, "[GEMINI_KORE_AUDIO] Gemini TTS failed across all candidates: $lastErrorReason")
         withContext(Dispatchers.Main) { onError?.invoke(lastErrorReason) }
         return@withContext false
     }

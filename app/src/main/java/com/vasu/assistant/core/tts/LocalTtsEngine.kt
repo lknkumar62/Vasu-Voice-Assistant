@@ -43,7 +43,7 @@ class LocalTtsEngine @Inject constructor(
 
         // 1. Check if a pre-recorded custom voice sample matches this phrase
         if (customVoiceEngine.hasCustomSampleFor(speakable)) {
-            Log.d(TAG, "Playing local custom voice sample for: \"$speakable\"")
+            Log.d(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Playing local custom voice sample for: \"$speakable\"")
             onStart?.invoke()
             val played = customVoiceEngine.playCustomSample(speakable) {
                 onDone?.invoke()
@@ -53,7 +53,7 @@ class LocalTtsEngine @Inject constructor(
 
         // 2. Check if a local neural model is active
         if (customVoiceEngine.status.value == VoiceModelStatus.ACTIVE_CUSTOM_MODEL) {
-            Log.d(TAG, "Local custom neural model active, utilizing custom engine")
+            Log.d(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Local custom neural model active, utilizing custom engine")
             onStart?.invoke()
             val played = customVoiceEngine.playCustomSample(speakable) {
                 onDone?.invoke()
@@ -63,20 +63,20 @@ class LocalTtsEngine @Inject constructor(
 
         // 3. Synthesize via on-device offline voice if available
         if (androidSpeechService.isOfflineVoiceAvailable()) {
-            Log.d(TAG, "Synthesizing with on-device offline Hindi voice")
+            Log.d(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Synthesizing with on-device offline Hindi voice")
             androidSpeechService.speak(speakable, onStart, onDone, onError)
             return@withContext true
         }
 
         // 4. Synthesize via on-device Android TextToSpeech engine
         if (androidSpeechService.isAvailable()) {
-            Log.d(TAG, "Synthesizing with Android system TextToSpeech")
+            Log.d(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Synthesizing with Android system TextToSpeech")
             androidSpeechService.speak(speakable, onStart, onDone, onError)
             return@withContext true
         }
 
         // 5. If no TTS engine is ready on device
-        Log.w(TAG, "No TTS voice or voice pack found for arbitrary phrase: \"$speakable\"")
+        Log.w(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] No TTS voice or voice pack found for arbitrary phrase: \"$speakable\"")
         onError?.invoke("TTS not available on device")
         return@withContext false
     }

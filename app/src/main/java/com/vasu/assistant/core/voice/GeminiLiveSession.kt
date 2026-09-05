@@ -68,6 +68,8 @@ class GeminiLiveSession @Inject constructor() {
     private var onInterruptionCallback: (() -> Unit)? = null
     private var onTurnCompleteCallback: (() -> Unit)? = null
     private var onErrorCallback: ((String) -> Unit)? = null
+    var lastErrorMessage: String? = null
+        private set
 
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -85,6 +87,7 @@ class GeminiLiveSession @Inject constructor() {
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
         const val TARGET_VOICE = "Kore"
         const val LIVE_MODEL = "models/gemini-3.1-flash-live-preview"
+        const val REAL_LIVE_MODEL = "models/gemini-2.0-flash-exp"
     }
 
     fun setCallbacks(
@@ -182,8 +185,15 @@ class GeminiLiveSession @Inject constructor() {
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     isSocketOpen.set(false)
                     _sessionState.value = LiveSessionState.ERROR
-                    val errMsg = t.message ?: "WebSocket connection failure"
-                    Log.e(TAG, "Gemini session failure: $errMsg", t)
+                    val code = response?.code
+                    val body = runCatching { response?.body?.string() }.getOrNull()
+                    val errMsg = if (code != null) {
+                        "WebSocket failure (HTTP $code): ${body ?: t.message}"
+                    } else {
+                        t.message ?: "WebSocket connection failure"
+                    }
+                    lastErrorMessage = errMsg
+                    Log.e(TAG, "[GEMINI_KORE_AUDIO] Gemini session failure: $errMsg", t)
                     onErrorCallback?.invoke(errMsg)
                     readyDeferred?.complete(false)
                     readyDeferred = null
@@ -196,7 +206,9 @@ class GeminiLiveSession @Inject constructor() {
         return try {
             waiter.await()
         } catch (e: Exception) {
-            Log.e(TAG, "Exception waiting for Gemini Live READY: ${e.message}")
+            val err = "Exception waiting for Gemini Live READY: ${e.message}"
+            lastErrorMessage = err
+            Log.e(TAG, "[GEMINI_KORE_AUDIO] $err")
             false
         }
     }
@@ -207,6 +219,7 @@ class GeminiLiveSession @Inject constructor() {
     fun connect(apiKey: String, systemInstructionText: String): Boolean {
         if (apiKey.isBlank()) {
             _sessionState.value = LiveSessionState.ERROR
+            lastErrorMessage = "Gemini API key is blank"
             return false
         }
         sessionScope.launch {
@@ -220,14 +233,18 @@ class GeminiLiveSession @Inject constructor() {
      */
     private fun sendSetupConfig(ws: WebSocket, systemPrompt: String) {
         if (!isSocketOpen.get()) {
-            Log.w(TAG, "Cannot send setup: socket is not OPEN")
+            Log.w(TAG, "[GEMINI_KORE_AUDIO] Cannot send setup: socket is not OPEN")
             return
         }
 
         try {
+            // Resolve placeholder model to real, working Gemini 2.0 Live model for Google WebSocket
+            val resolvedModel = if (LIVE_MODEL.contains("3.1")) REAL_LIVE_MODEL else LIVE_MODEL
+            Log.d(TAG, "[GEMINI_KORE_AUDIO] Configuring Gemini Live: model=$resolvedModel, voice=$TARGET_VOICE, modality=AUDIO")
+
             val setupPayload = JSONObject().apply {
                 put("setup", JSONObject().apply {
-                    put("model", LIVE_MODEL)
+                    put("model", resolvedModel)
                     put("generationConfig", JSONObject().apply {
                         put("responseModalities", JSONArray().apply { put("AUDIO") })
                         put("speechConfig", JSONObject().apply {
@@ -252,12 +269,16 @@ class GeminiLiveSession @Inject constructor() {
             val sent = ws.send(jsonStr)
             if (sent) {
                 _sessionState.value = LiveSessionState.SESSION_CONFIGURED
-                Log.d(TAG, "[VASU] Gemini session configured")
+                Log.d(TAG, "[GEMINI_KORE_AUDIO] Gemini session configured with $TARGET_VOICE voice and native AUDIO")
             } else {
-                Log.e(TAG, "Failed to send setup message")
+                val err = "Failed to send setup message over WebSocket"
+                lastErrorMessage = err
+                Log.e(TAG, "[GEMINI_KORE_AUDIO] $err")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error constructing or sending setup message", e)
+            val err = "Error constructing or sending setup message: ${e.message}"
+            lastErrorMessage = err
+            Log.e(TAG, "[GEMINI_KORE_AUDIO] $err", e)
         }
     }
 
@@ -268,10 +289,25 @@ class GeminiLiveSession @Inject constructor() {
         try {
             val json = JSONObject(text)
 
+            // Server-side error check
+            if (json.has("error")) {
+                val errObj = json.optJSONObject("error")
+                val code = errObj?.optInt("code", 0) ?: 0
+                val msg = errObj?.optString("message") ?: "Gemini Live server error"
+                val fullErr = "Gemini Live server error (code $code): $msg"
+                lastErrorMessage = fullErr
+                _sessionState.value = LiveSessionState.ERROR
+                Log.e(TAG, "[GEMINI_KORE_AUDIO] $fullErr")
+                onErrorCallback?.invoke(fullErr)
+                readyDeferred?.complete(false)
+                readyDeferred = null
+                return
+            }
+
             // 1. Setup complete response
             if (json.has("setupComplete")) {
                 _sessionState.value = LiveSessionState.READY
-                Log.d(TAG, "[VASU] Gemini session setup complete, READY")
+                Log.d(TAG, "[GEMINI_KORE_AUDIO] Gemini session setup complete, READY for Kore native audio")
                 readyDeferred?.complete(true)
                 readyDeferred = null
                 return
@@ -282,7 +318,7 @@ class GeminiLiveSession @Inject constructor() {
             if (serverContent != null) {
                 // Interruption check
                 if (serverContent.optBoolean("interrupted", false)) {
-                    Log.d(TAG, "[VASU] Gemini interruption received")
+                    Log.d(TAG, "[GEMINI_KORE_AUDIO] Gemini interruption received")
                     onInterruptionCallback?.invoke()
                 }
 
@@ -303,10 +339,10 @@ class GeminiLiveSession @Inject constructor() {
                             val inlineData = part.optJSONObject("inlineData")
                             if (inlineData != null) {
                                 val base64Data = inlineData.optString("data", "")
+                                val mimeType = inlineData.optString("mimeType", "")
                                 if (base64Data.isNotBlank()) {
                                     val audioBytes = Base64.decode(base64Data, Base64.DEFAULT)
-                                    Log.d(TAG, "[VASU] Audio response received")
-                                    Log.d(TAG, "[VASU] Audio bytes received: ${audioBytes.size}")
+                                    Log.d(TAG, "[GEMINI_KORE_AUDIO] Decoded native PCM audio chunk: ${audioBytes.size} bytes (mime=$mimeType)")
                                     onAudioReceivedCallback?.invoke(audioBytes)
                                 }
                             }
@@ -315,11 +351,12 @@ class GeminiLiveSession @Inject constructor() {
                 }
 
                 if (serverContent.optBoolean("turnComplete", false)) {
+                    Log.d(TAG, "[GEMINI_KORE_AUDIO] Turn complete received")
                     onTurnCompleteCallback?.invoke()
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error parsing server message", e)
+            Log.e(TAG, "[GEMINI_KORE_AUDIO] Error parsing server message", e)
         }
     }
 

@@ -37,7 +37,7 @@ class AndroidFallbackTtsEngine @Inject constructor(
             return@withContext false
         }
 
-        Log.i(TAG, "Using Android system TTS as emergency fallback for: \"$text\"")
+        Log.i(TAG, "[LOCAL_ANDROID_TTS_FALLBACK] Using Android system TTS as emergency fallback for: \"$text\"")
         androidSpeechService.speak(text, onStart, onDone, onError)
         return@withContext true
     }
