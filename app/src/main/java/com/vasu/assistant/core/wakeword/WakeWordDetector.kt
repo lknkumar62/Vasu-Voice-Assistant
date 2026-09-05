@@ -6,211 +6,325 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.os.Handler
-import android.os.HandlerThread
+import android.util.Log
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.sqrt
 
 /**
- * WakeWordDetector - Detects "Hello Vasu" wake word.
+ * WakeWordDetector - Continuous On-Device Wake-Word Detection Pipeline.
  *
- * Features:
- * - Continuous background listening
- * - TensorFlow Lite-based detection
- * - Low power consumption
- * - False positive reduction
- * - Auto-restart after timeout
+ * Pipeline:
+ * 16 kHz Mono PCM AudioRecord
+ *        ↓
+ * VAD / Energy Gate
+ *        ↓
+ * Rolling Window (~1.5s / 25,088 samples)
+ *        ↓
+ * MelSpectrogram (98 frames x 40 mel bands)
+ *        ↓
+ * TensorFlow Lite (hello_vasu.tflite)
+ *        ↓
+ * Debounced Wake Word Event ("Hello Vasu")
  */
 @Singleton
 class WakeWordDetector @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private var audioRecord: AudioRecord? = null
-    private var model: WakeWordModel? = null
-    private var melSpectrogram: MelSpectrogram? = null
-    private var recordingThread: HandlerThread? = null
-    private var recordingHandler: Handler? = null
+    companion object {
+        private const val TAG = "WakeWordDetector"
+        const val SAMPLE_RATE = 16000
+        private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+        private const val CHUNK_SAMPLES = 1600 // 100ms per frame
+        private const val ROLLING_WINDOW_SAMPLES = 25088 // 98 frames * 256 hop
+        private const val DEBOUNCE_MS = 1800L
+        private const val VAD_ENERGY_THRESHOLD = 0.015f // Minimum RMS to invoke inference
+    }
 
-    private var isRunning = false
-    private var isModelLoaded = false
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    // State
+    private val wakeWordModel = WakeWordModel(context)
+    private val melExtractor = MelSpectrogram(
+        sampleRate = SAMPLE_RATE,
+        fftSize = 512,
+        numMelBands = 40
+    )
+
     private val _state = MutableStateFlow(WakeWordState.IDLE)
     val state: StateFlow<WakeWordState> = _state.asStateFlow()
 
-    // Detection events - replay=0 prevents replaying wake detections to new collectors
-    private val _detections = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
-    val detections: SharedFlow<String> = _detections.asSharedFlow()
-
-    /** Why the wake word is not running, in words the UI can show verbatim. */
     private val _unavailableReason = MutableStateFlow<String?>(null)
     val unavailableReason: StateFlow<String?> = _unavailableReason.asStateFlow()
 
-    // Config
-    private var config = WakeWordConfig()
+    private val _detections = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 2)
+    val detections: SharedFlow<Unit> = _detections.asSharedFlow()
 
-    // Audio configuration
-    private val sampleRate = 16000
-    private val channelConfig = AudioFormat.CHANNEL_IN_MONO
-    private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    private var audioRecord: AudioRecord? = null
+    private var listeningJob: Job? = null
 
-    // Detection buffer
-    private val detectionBuffer = FloatArray(16000) // 1 second buffer
-    private var bufferIndex = 0
-    private val detectionInterval = 16000 // Process every 1 second
+    private val isPausedForStt = AtomicBoolean(false)
+    private val isMutedForPlayback = AtomicBoolean(false)
+    private var lastDetectionTimestamp = 0L
 
-    // Silence detection
-    private var silenceCounter = 0
-    private val silenceThreshold = 500 // 500ms of silence
-    private val speechThreshold = 500 // Minimum speech duration
-
-    // Cooldown tracking
-    private var lastDetectionTime = 0L
+    // Rolling audio buffer
+    private val rollingBuffer = FloatArray(ROLLING_WINDOW_SAMPLES)
+    private var rollingBufferFilled = 0
 
     /**
-     * Initialize the wake word detector
+     * Initialize the TFLite model and check permissions.
      */
-    fun initialize(wakeWordConfig: WakeWordConfig = WakeWordConfig()) {
-        if (isRunning) return
+    fun initialize() {
+        if (_state.value == WakeWordState.LISTENING) return
 
-        config = wakeWordConfig
-
-        // Check permission
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            _unavailableReason.value =
-                "Microphone permission is not granted, so VASU cannot listen for \"Hello Vasu\"."
-            _state.value = WakeWordState.ERROR
+        val modelStatus = wakeWordModel.load()
+        if (modelStatus != ModelStatus.READY) {
+            _state.value = WakeWordState.MODEL_NOT_AVAILABLE
+            _unavailableReason.value = modelStatus.detail
+            Log.w(TAG, "Wake word model unavailable: ${modelStatus.detail}")
             return
         }
 
-        // Initialize audio record
+        _unavailableReason.value = null
+        if (_state.value != WakeWordState.LISTENING) {
+            _state.value = WakeWordState.IDLE
+        }
+        Log.i(TAG, "WakeWordDetector successfully initialized with hello_vasu.tflite")
+    }
+
+    /**
+     * Start continuous microphone capture and wake-word evaluation.
+     */
+    @Synchronized
+    fun start(): Boolean {
+        if (_state.value == WakeWordState.LISTENING) return true
+
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            _state.value = WakeWordState.ERROR
+            _unavailableReason.value = "Microphone permission not granted"
+            Log.e(TAG, "Cannot start WakeWordDetector: RECORD_AUDIO permission missing")
+            return false
+        }
+
+        if (wakeWordModel.status != ModelStatus.READY) {
+            initialize()
+            if (wakeWordModel.status != ModelStatus.READY) {
+                return false
+            }
+        }
+
+        val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+        if (minBuf <= 0) {
+            _state.value = WakeWordState.ERROR
+            _unavailableReason.value = "AudioRecord min buffer size invalid: $minBuf"
+            return false
+        }
+
         try {
-            // initialize() can be called again on every enable/disable cycle, and
-            // the previous recorder was never released, leaking a mic handle.
             audioRecord?.release()
             audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                SAMPLE_RATE,
+                CHANNEL_CONFIG,
+                AUDIO_FORMAT,
+                maxOf(minBuf * 2, CHUNK_SAMPLES * 4)
             )
 
-            // Initialize mel spectrogram
-            melSpectrogram = MelSpectrogram(
-                sampleRate = sampleRate,
-                fftSize = 512,
-                numMelBands = 40
-            )
-
-            // Load TFLite model
-            model?.close()
-            model = WakeWordModel(context)
-            val modelStatus = model?.load() ?: ModelStatus.LOAD_FAILED
-            isModelLoaded = modelStatus == ModelStatus.READY
-
-            if (!isModelLoaded) {
-                _unavailableReason.value = modelStatus.detail
-                _state.value = WakeWordState.MODEL_NOT_AVAILABLE
-                return
+            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                _state.value = WakeWordState.ERROR
+                _unavailableReason.value = "AudioRecord failed to initialize"
+                return false
             }
 
+            audioRecord?.startRecording()
+            _state.value = WakeWordState.LISTENING
             _unavailableReason.value = null
-            _state.value = WakeWordState.IDLE
+            startListeningLoop()
+            Log.i(TAG, "WakeWordDetector started listening continuously for \"Hello Vasu\"")
+            return true
         } catch (e: Exception) {
-            // The exception used to be discarded, leaving "ERROR" with no cause.
-            _unavailableReason.value =
-                "The microphone could not be opened: ${e.message ?: e.javaClass.simpleName}"
+            Log.e(TAG, "Exception starting AudioRecord", e)
             _state.value = WakeWordState.ERROR
+            _unavailableReason.value = "AudioRecord start failed: ${e.message}"
+            return false
         }
     }
 
     /**
-     * Start wake word detection
+     * Continuous audio ingestion and inference coroutine loop.
      */
-    fun start() {
-        if (isRunning) return
-        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-            initialize()
-        }
+    private fun startListeningLoop() {
+        listeningJob?.cancel()
+        listeningJob = scope.launch {
+            val audioBuffer = ShortArray(CHUNK_SAMPLES)
 
-        // Bail out if initialization failed (permission denied, model not available, etc.)
-        if (_state.value == WakeWordState.ERROR || _state.value == WakeWordState.MODEL_NOT_AVAILABLE) {
+            while (isActive && _state.value == WakeWordState.LISTENING) {
+                // If paused for STT or muted for speaker playback, yield without recording
+                if (isPausedForStt.get() || isMutedForPlayback.get()) {
+                    delay(50)
+                    continue
+                }
+
+                val record = audioRecord ?: break
+                val readCount = record.read(audioBuffer, 0, CHUNK_SAMPLES)
+                if (readCount <= 0) {
+                    delay(20)
+                    continue
+                }
+
+                // Check again to avoid processing buffered audio if state changed during read
+                if (isPausedForStt.get() || isMutedForPlayback.get()) {
+                    continue
+                }
+
+                // Convert 16-bit PCM to normalized Float [-1.0, 1.0] and compute RMS
+                var sumSquares = 0.0
+                val floatChunk = FloatArray(readCount)
+                for (i in 0 until readCount) {
+                    val sample = audioBuffer[i] / 32768.0f
+                    floatChunk[i] = sample
+                    sumSquares += sample * sample
+                }
+                val rms = sqrt(sumSquares / readCount).toFloat()
+
+                // Append chunk into rolling buffer
+                appendAudioChunk(floatChunk)
+
+                // VAD Gate: only perform MelSpectrogram & inference if energy indicates speech
+                if (rms < VAD_ENERGY_THRESHOLD) {
+                    continue
+                }
+
+                // Ensure rolling buffer has enough data
+                if (rollingBufferFilled < ROLLING_WINDOW_SAMPLES) {
+                    continue
+                }
+
+                // Check debounce window
+                val now = System.currentTimeMillis()
+                if (now - lastDetectionTimestamp < DEBOUNCE_MS) {
+                    continue
+                }
+
+                // Extract Mel Spectrogram and run TFLite inference
+                try {
+                    val melFeatures = melExtractor.computeMelSpectrogram(rollingBuffer)
+                    if (melFeatures.size >= wakeWordModel.inputSize) {
+                        // Take the most recent 98 frames
+                        val modelInput = Array(wakeWordModel.inputSize) { idx ->
+                            melFeatures[melFeatures.size - wakeWordModel.inputSize + idx]
+                        }
+
+                        val confidence = wakeWordModel.predict(modelInput)
+                        if (confidence >= wakeWordModel.threshold) {
+                            lastDetectionTimestamp = now
+                            Log.i(TAG, ">>> [WAKE WORD DETECTED] \"Hello Vasu\" heard with confidence $confidence")
+                            
+                            _state.value = WakeWordState.DETECTED
+                            _detections.emit(Unit)
+
+                            // Clear rolling buffer after detection to prevent repeated triggers
+                            rollingBufferFilled = 0
+                            java.util.Arrays.fill(rollingBuffer, 0f)
+
+                            // Transition back to LISTENING after short indicator interval
+                            delay(400)
+                            if (_state.value == WakeWordState.DETECTED) {
+                                _state.value = WakeWordState.LISTENING
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Wake word inference error: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun appendAudioChunk(chunk: FloatArray) {
+        val size = chunk.size
+        if (size >= ROLLING_WINDOW_SAMPLES) {
+            System.arraycopy(chunk, size - ROLLING_WINDOW_SAMPLES, rollingBuffer, 0, ROLLING_WINDOW_SAMPLES)
+            rollingBufferFilled = ROLLING_WINDOW_SAMPLES
             return
         }
 
-        isRunning = true
-        _state.value = WakeWordState.LISTENING
+        // Shift left
+        System.arraycopy(rollingBuffer, size, rollingBuffer, 0, ROLLING_WINDOW_SAMPLES - size)
+        // Copy new samples to the end
+        System.arraycopy(chunk, 0, rollingBuffer, ROLLING_WINDOW_SAMPLES - size, size)
 
-        // Start recording thread
-        recordingThread = HandlerThread("WakeWordRecording").apply {
-            start()
-        }
-        recordingHandler = Handler(recordingThread!!.looper)
-
-        // Start audio recording
-        audioRecord?.startRecording()
-
-        // Start detection loop
-        recordingHandler?.post(::detectionLoop)
+        rollingBufferFilled = (rollingBufferFilled + size).coerceAtMost(ROLLING_WINDOW_SAMPLES)
     }
 
     /**
-     * Stop wake word detection
+     * Temporarily pause listening when Android SpeechRecognizer or Gemini Live microphone opens.
      */
-    fun stop() {
-        isRunning = false
-        _state.value = WakeWordState.IDLE
+    fun pauseForSpeechRecognition() {
+        Log.d(TAG, "Pausing wake word for STT")
+        isPausedForStt.set(true)
+    }
 
-        recordingHandler?.removeCallbacksAndMessages(null)
-        recordingThread?.quitSafely()
-        recordingThread = null
-        recordingHandler = null
+    /**
+     * Resume wake word after speech recognition finishes.
+     */
+    fun resumeAfterSpeechRecognition() {
+        Log.d(TAG, "Resuming wake word after STT")
+        isPausedForStt.set(false)
+    }
+
+    /**
+     * Mute microphone detection while VASU assistant is speaking (Echo & Self-trigger protection).
+     */
+    fun setMutedForPlayback(muted: Boolean) {
+        isMutedForPlayback.set(muted)
+        if (muted) {
+            // Reset buffer so echo doesn't linger
+            rollingBufferFilled = 0
+        }
+    }
+
+    /**
+     * Stop and release AudioRecord resources cleanly.
+     */
+    @Synchronized
+    fun stop() {
+        listeningJob?.cancel()
+        listeningJob = null
 
         try {
             audioRecord?.stop()
+            audioRecord?.release()
         } catch (e: Exception) {
-            // Ignore
+            Log.w(TAG, "Error stopping AudioRecord", e)
         }
-    }
-
-    private var wasRunningBeforePause = false
-
-    /**
-     * Temporarily pause wake-word microphone capture to allow SpeechRecognizer exclusive access.
-     */
-    fun pauseForSpeechRecognition() {
-        if (isRunning) {
-            wasRunningBeforePause = true
-            stop()
-        }
+        audioRecord = null
+        _state.value = WakeWordState.IDLE
+        Log.i(TAG, "WakeWordDetector stopped")
     }
 
     /**
-     * Resume wake-word microphone capture after SpeechRecognizer completes or releases the mic.
-     */
-    fun resumeAfterSpeechRecognition() {
-        if (wasRunningBeforePause) {
-            wasRunningBeforePause = false
-            start()
-        }
-    }
-
-    /**
-     * Check if detection is available
+     * Check if detection is available (microphone permission granted).
      */
     fun isAvailable(): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -220,138 +334,14 @@ class WakeWordDetector @Inject constructor(
     }
 
     /**
-     * Cleanup resources
+     * Check if wake word is currently detected.
+     */
+    fun isDetected(): Boolean = _state.value == WakeWordState.DETECTED
+
+    /**
+     * Complete cleanup and release of resources.
      */
     fun destroy() {
         stop()
-        model?.close()
-        audioRecord?.release()
-        audioRecord = null
-        isModelLoaded = false
-    }
-
-    /**
-     * Check if wake word is currently detected
-     */
-    fun isDetected(): Boolean {
-        return _state.value == WakeWordState.DETECTED
-    }
-
-    private fun detectionLoop() {
-        if (!isRunning) return
-
-        val audioBuffer = ShortArray(bufferSize / 2)
-
-        while (isRunning) {
-            try {
-                // Read audio data
-                val readSize = audioRecord?.read(audioBuffer, 0, audioBuffer.size) ?: 0
-
-                if (readSize > 0) {
-                    // Convert to float
-                    val floatBuffer = FloatArray(readSize) { i ->
-                        audioBuffer[i].toFloat() / Short.MAX_VALUE
-                    }
-
-                    // Check for speech
-                    val hasSpeech = checkForSpeech(floatBuffer)
-
-                    if (hasSpeech) {
-                        // Add to detection buffer
-                        for (sample in floatBuffer) {
-                            if (bufferIndex < detectionBuffer.size) {
-                                detectionBuffer[bufferIndex++] = sample
-                            }
-                        }
-
-                        // Process when buffer is full
-                        if (bufferIndex >= detectionBuffer.size) {
-                            processBuffer()
-                            bufferIndex = 0
-                        }
-
-                        silenceCounter = 0
-                    } else {
-                        silenceCounter++
-
-                        // If silence for too long, reset buffer
-                        if (silenceCounter > silenceThreshold) {
-                            bufferIndex = 0
-                            silenceCounter = 0
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                if (isRunning) {
-                    _state.value = WakeWordState.ERROR
-                }
-            }
-        }
-    }
-
-    private fun checkForSpeech(buffer: FloatArray): Boolean {
-        // Simple energy-based VAD
-        var energy = 0f
-        for (sample in buffer) {
-            energy += sample * sample
-        }
-        energy /= buffer.size
-
-        return energy > 0.01f // Threshold for speech
-    }
-
-    private fun processBuffer() {
-        if (!isModelLoaded || model == null || melSpectrogram == null) return
-
-        // Skip processing during cooldown period
-        val now = System.currentTimeMillis()
-        if (now - lastDetectionTime < config.cooldownMs) return
-
-        try {
-            // Extract mel spectrogram features
-            val featuresRaw = melSpectrogram?.extractForWakeWord(detectionBuffer)
-            val features = featuresRaw?.let { raw ->
-                Array(98) { i -> FloatArray(40) { j -> raw.getOrElse(i * 40 + j) { 0f } } }
-            }
-
-            if (features != null) {
-                // Run inference
-                val detected = model?.detect(features) ?: false
-
-                if (detected) {
-                    lastDetectionTime = now
-                    _state.value = WakeWordState.DETECTED
-                    _detections.tryEmit("Hello Vasu")
-
-                    // Reset to listening after detection
-                    _state.value = WakeWordState.LISTENING
-                }
-            }
-        } catch (e: Exception) {
-            _unavailableReason.value = "Wake word detection error: ${e.message}"
-            _state.value = WakeWordState.ERROR
-        }
     }
 }
-
-/**
- * Wake word detection state
- */
-enum class WakeWordState {
-    IDLE,
-    LISTENING,
-    DETECTED,
-    MODEL_NOT_AVAILABLE,
-    ERROR
-}
-
-/**
- * Wake word configuration
- */
-data class WakeWordConfig(
-    val wakePhrase: String = "Hello Vasu",
-    val threshold: Float = 0.7f,
-    val cooldownMs: Long = 3000,        // 3 seconds cooldown after detection
-    val maxSilenceMs: Long = 5000,      // 5 seconds silence = stop listening
-    val enableAutoRestart: Boolean = true
-)

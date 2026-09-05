@@ -43,7 +43,7 @@ class VasuSettings @Inject constructor(
     private val _autoAllowEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_ALLOW, true))
     val autoAllowEnabled: StateFlow<Boolean> = _autoAllowEnabled.asStateFlow()
 
-    private val _androidFallbackTtsEnabled = MutableStateFlow(prefs.getBoolean(KEY_ANDROID_FALLBACK_TTS, false))
+    private val _androidFallbackTtsEnabled = MutableStateFlow(prefs.getBoolean(KEY_ANDROID_FALLBACK_TTS, true))
     val androidFallbackTtsEnabled: StateFlow<Boolean> = _androidFallbackTtsEnabled.asStateFlow()
 
     private val _geminiTtsVoice = MutableStateFlow(prefs.getString(KEY_GEMINI_TTS_VOICE, DEFAULT_GEMINI_TTS_VOICE) ?: DEFAULT_GEMINI_TTS_VOICE)

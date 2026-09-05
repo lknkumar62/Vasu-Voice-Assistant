@@ -1,218 +1,214 @@
 package com.vasu.assistant.core.voice
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Build
 import android.util.Log
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * NativeAudioPlayer - Ultra-low latency streaming PCM audio player.
+ * NativeAudioPlayer - High-performance PCM audio player for Gemini Live voice output.
  *
- * Configured precisely for Gemini Live native audio output:
- * - 16-bit Linear PCM
- * - 24,000 Hz (24 kHz)
- * - Mono
- * - Little-endian
- *
- * Features:
- * - Progressive streaming: audio chunks are fed to AudioTrack immediately upon receipt.
- * - Instant interruption: audio can be halted and flushed in < 10ms when user speaks.
- * - Safe error handling: handles audio track state transitions without throwing uncaught exceptions.
+ * Plays 24 kHz, 16-bit Mono PCM audio chunks directly through AudioTrack with
+ * zero transcoding latency, precise hardware buffer draining, and immediate interruption support.
  */
 @Singleton
-class NativeAudioPlayer @Inject constructor() {
+class NativeAudioPlayer internal constructor(
+    private val audioManager: AudioManager?
+) {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    )
 
-    private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val playbackMutex = Mutex()
-
-    sealed interface PlaybackCommand {
-        class Chunk(val pcm: ByteArray) : PlaybackCommand
-        class EndOfTurn(val onFinished: (() -> Unit)? = null) : PlaybackCommand
-    }
-
-    private var audioTrack: AudioTrack? = null
-    private var playbackJob: Job? = null
-    private var audioQueue = Channel<PlaybackCommand>(Channel.UNLIMITED)
-
-    private val _isPlaying = MutableStateFlow(false)
-    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private var hasLoggedPlaybackStart = false
+    constructor() : this(null as AudioManager?)
 
     companion object {
         private const val TAG = "NativeAudioPlayer"
-        const val SAMPLE_RATE = 24000
+        const val SAMPLE_RATE = 24000 // Gemini Live native output rate
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }
 
-    private fun getMinBufferSize(): Int {
-        val minBuf = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
-        return if (minBuf <= 0) SAMPLE_RATE * 2 else minBuf
-    }
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    private fun ensureAudioTrack(): AudioTrack {
-        val current = audioTrack
-        if (current != null && current.state == AudioTrack.STATE_INITIALIZED) {
-            return current
+    private val audioQueue = ConcurrentLinkedQueue<ByteArray>()
+    private val isInterrupted = AtomicBoolean(false)
+    private val isDraining = AtomicBoolean(false)
+    private val lock = Object()
+
+    private var audioTrack: AudioTrack? = null
+    private var playbackThread: Thread? = null
+    private var totalFramesWritten: Long = 0
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var activeOnEndCallback: (() -> Unit)? = null
+
+    @Synchronized
+    private fun initAudioTrack(): AudioTrack? {
+        try {
+            audioTrack?.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error releasing previous AudioTrack: ${e.message}")
         }
 
-        val bufferSize = getMinBufferSize() * 2
+        return try {
+            val minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+            val bufferSize = if (minBufferSize > 0) maxOf(minBufferSize * 4, 16384) else 16384
 
-        val track = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setSampleRate(SAMPLE_RATE)
-                        .setChannelMask(CHANNEL_CONFIG)
-                        .setEncoding(AUDIO_FORMAT)
-                        .build()
-                )
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+
+            val format = AudioFormat.Builder()
+                .setSampleRate(SAMPLE_RATE)
+                .setChannelMask(CHANNEL_CONFIG)
+                .setEncoding(AUDIO_FORMAT)
+                .build()
+
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(attributes)
+                .setAudioFormat(format)
                 .setBufferSizeInBytes(bufferSize)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
-        } else {
-            @Suppress("DEPRECATION")
-            AudioTrack(
-                android.media.AudioManager.STREAM_MUSIC,
-                SAMPLE_RATE,
-                CHANNEL_CONFIG,
-                AUDIO_FORMAT,
-                bufferSize,
-                AudioTrack.MODE_STREAM
-            )
-        }
 
-        audioTrack = track
-        return track
+            audioTrack = track
+            totalFramesWritten = 0
+            track
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize AudioTrack: ${e.message}", e)
+            null
+        }
     }
 
     /**
-     * Feed an audio chunk (16-bit PCM, 24kHz) for progressive streaming playback.
+     * Enqueue a PCM chunk received from Gemini Live.
      */
     fun enqueueAudioChunk(pcmChunk: ByteArray) {
         if (pcmChunk.isEmpty()) return
-
-        if (!_isPlaying.value) {
-            _isPlaying.value = true
-            if (!hasLoggedPlaybackStart) {
-                Log.d(TAG, "[VASU] Audio playback started")
-                hasLoggedPlaybackStart = true
-            }
-            startPlaybackLoop()
-        }
-
-        audioQueue.trySend(PlaybackCommand.Chunk(pcmChunk))
+        isInterrupted.set(false)
+        audioQueue.add(pcmChunk)
+        startPlaybackLoopIfNeeded()
     }
 
     /**
-     * Explicit end-of-response signal: marks that Gemini has finished sending audio chunks.
-     * Allows remaining queued PCM chunks and hardware buffer to drain and play out completely,
-     * then stops AudioTrack, resets isPlaying to false, and invokes onFinished callback.
+     * Signals that the model has finished sending audio chunks for this turn.
+     * The player will smoothly drain the audio buffer before switching isPlaying to false.
+     * Invokes optional onFinished callback once hardware audio draining completes.
      */
     fun markEndOfResponse(onFinished: (() -> Unit)? = null) {
-        if (_isPlaying.value) {
-            audioQueue.trySend(PlaybackCommand.EndOfTurn(onFinished))
-        } else {
-            onFinished?.invoke()
+        activeOnEndCallback = onFinished
+        isDraining.set(true)
+        synchronized(lock) {
+            lock.notifyAll()
         }
     }
 
-    private fun startPlaybackLoop() {
-        playbackJob?.cancel()
-        playbackJob = playerScope.launch {
-            var totalFramesWritten = 0L
+    @Synchronized
+    private fun startPlaybackLoopIfNeeded() {
+        if (playbackThread != null && playbackThread!!.isAlive) {
+            synchronized(lock) {
+                lock.notifyAll()
+            }
+            return
+        }
+
+        isInterrupted.set(false)
+        isDraining.set(false)
+        _isPlaying.value = true
+
+        playbackThread = Thread {
+            requestAudioFocus()
             try {
-                val track = ensureAudioTrack()
-                val startHeadPosition = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
-                if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
-                    track.play()
+                if (audioTrack == null || audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
+                    initAudioTrack()
                 }
 
-                while (isActive) {
-                    val cmd = audioQueue.receiveCatching().getOrNull() ?: break
-                    when (cmd) {
-                        is PlaybackCommand.Chunk -> {
-                            if (cmd.pcm.isNotEmpty() && isActive) {
-                                val written = track.write(cmd.pcm, 0, cmd.pcm.size)
-                                if (written > 0) {
-                                    totalFramesWritten += written / 2
-                                }
-                            }
+                audioTrack?.let { track ->
+                    if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                        track.play()
+                    }
+                }
+
+                while (!isInterrupted.get()) {
+                    val chunk = audioQueue.poll()
+                    if (chunk != null && chunk.isNotEmpty()) {
+                        _isPlaying.value = true
+                        val written = audioTrack?.write(chunk, 0, chunk.size) ?: 0
+                        if (written > 0) {
+                            totalFramesWritten += (written / 2) // 16-bit mono = 2 bytes/frame
                         }
-                        is PlaybackCommand.EndOfTurn -> {
-                            // All chunks for this turn have been written to AudioTrack.
-                            // In MODE_STREAM, track.stop() allows already-buffered audio to finish playing.
-                            if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                                track.stop()
-                            }
-                            // Wait for the hardware playback buffer to drain with safety timeout relative to startHeadPosition
-                            val targetHeadPosition = startHeadPosition + totalFramesWritten
-                            val drainStartMs = System.currentTimeMillis()
-                            val remainingFrames = targetHeadPosition - (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL)
-                            val maxDrainWaitMs = if (remainingFrames > 0) {
-                                (remainingFrames * 1000L / SAMPLE_RATE) + 500L
-                            } else {
-                                300L
-                            }
-                            while (isActive && (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL) < targetHeadPosition) {
-                                if (track.playState == AudioTrack.PLAYSTATE_STOPPED) break
-                                if (System.currentTimeMillis() - drainStartMs > maxDrainWaitMs) {
-                                    Log.d(TAG, "Hardware playback buffer drain timeout reached")
-                                    break
-                                }
-                                kotlinx.coroutines.delay(20)
-                            }
-                            cmd.onFinished?.invoke()
+                    } else {
+                        // Queue empty, wait or drain
+                        if (isDraining.get() && audioQueue.isEmpty()) {
+                            drainHardwareAudio()
+                            break
+                        }
+                        synchronized(lock) {
+                            lock.wait(50)
+                        }
+                        if (audioQueue.isEmpty() && isDraining.get()) {
+                            drainHardwareAudio()
                             break
                         }
                     }
                 }
-            } catch (e: CancellationException) {
-                // Normal cancellation on user interruption
+            } catch (e: InterruptedException) {
+                Log.d(TAG, "Audio playback thread interrupted")
             } catch (e: Exception) {
-                Log.e(TAG, "AudioTrack error during playback", e)
+                Log.e(TAG, "Error in audio playback loop: ${e.message}", e)
             } finally {
                 _isPlaying.value = false
-                hasLoggedPlaybackStart = false
-                Log.d(TAG, "[VASU] Audio playback completed")
+                isDraining.set(false)
+                abandonAudioFocus()
+
+                val callback = activeOnEndCallback
+                activeOnEndCallback = null
+                try {
+                    callback?.invoke()
+                } catch (cbErr: Exception) {
+                    Log.w(TAG, "Error in onEnd callback: ${cbErr.message}", cbErr)
+                }
             }
+        }.apply {
+            name = "VasuGeminiAudioPlayerThread"
+            priority = Thread.MAX_PRIORITY
+            start()
+        }
+    }
+
+    private fun drainHardwareAudio() {
+        val track = audioTrack ?: return
+        val targetFrames = totalFramesWritten
+        var attempts = 0
+        while (attempts < 60 && !isInterrupted.get()) {
+            val head = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
+            if (head >= targetFrames) break
+            Thread.sleep(25)
+            attempts++
         }
     }
 
     /**
-     * Immediately halts assistant audio playback and flushes pending audio chunks.
-     * Required for real-time user interruption (< 10ms latency).
+     * Stop speech playback immediately and discard buffered audio.
      */
     fun stopAndFlush() {
-        playbackJob?.cancel()
-        playbackJob = null
-
-        // Recreate the queue to discard remaining chunks
-        audioQueue.close()
-        audioQueue = Channel(Channel.UNLIMITED)
+        isInterrupted.set(true)
+        isDraining.set(false)
+        audioQueue.clear()
 
         try {
             audioTrack?.let { track ->
@@ -223,9 +219,65 @@ class NativeAudioPlayer @Inject constructor() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Error flushing AudioTrack: ${e.message}")
-        } finally {
-            _isPlaying.value = false
-            hasLoggedPlaybackStart = false
+        }
+
+        playbackThread?.interrupt()
+        playbackThread = null
+        _isPlaying.value = false
+        abandonAudioFocus()
+
+        val callback = activeOnEndCallback
+        activeOnEndCallback = null
+        try {
+            callback?.invoke()
+        } catch (cbErr: Exception) {
+            Log.w(TAG, "Error in onEnd callback on interrupt: ${cbErr.message}")
+        }
+    }
+
+    private fun requestAudioFocus() {
+        val manager = audioManager ?: return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setOnAudioFocusChangeListener { focusChange ->
+                        if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+                            stopAndFlush()
+                        }
+                    }
+                    .build()
+                audioFocusRequest = req
+                manager.requestAudioFocus(req)
+            } else {
+                @Suppress("DEPRECATION")
+                manager.requestAudioFocus(
+                    null,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to request audio focus: ${e.message}")
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val manager = audioManager ?: return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { manager.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                manager.abandonAudioFocus(null)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to abandon audio focus: ${e.message}")
         }
     }
 
@@ -235,11 +287,11 @@ class NativeAudioPlayer @Inject constructor() {
     fun release() {
         stopAndFlush()
         try {
+            audioTrack?.stop()
             audioTrack?.release()
+            audioTrack = null
         } catch (e: Exception) {
             Log.w(TAG, "Error releasing AudioTrack: ${e.message}")
-        } finally {
-            audioTrack = null
         }
     }
 }

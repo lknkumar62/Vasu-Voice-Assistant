@@ -16,6 +16,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.vasu.assistant.MainActivity
+import com.vasu.assistant.core.tts.TTSManager
+import com.vasu.assistant.core.voice.GeminiLiveVoiceService
+import com.vasu.assistant.core.voice.GeminiVoiceState
 import com.vasu.assistant.core.wakeword.WakeWordDetector
 import com.vasu.assistant.core.wakeword.WakeWordState
 import com.vasu.assistant.ui.overlay.AssistantOverlayActivity
@@ -31,6 +34,8 @@ import javax.inject.Inject
 class VasuForegroundService : Service() {
 
     @Inject lateinit var wakeWordListener: WakeWordDetector
+    @Inject lateinit var geminiLiveVoiceService: GeminiLiveVoiceService
+    @Inject lateinit var ttsManager: TTSManager
 
     private val channelId = "vasu_service"
     private val notificationId = 1001
@@ -98,6 +103,39 @@ class VasuForegroundService : Service() {
         scope.launch {
             wakeWordListener.detections.collect {
                 AssistantOverlayActivity.launch(this@VasuForegroundService)
+            }
+        }
+
+        // Echo suppression: mute wake-word detection when Gemini or TTS is speaking
+        // STT suppression: pause wake-word detection when Gemini is listening to user speech
+        scope.launch {
+            geminiLiveVoiceService.voiceState.collect { voiceState ->
+                when (voiceState) {
+                    GeminiVoiceState.SPEAKING -> {
+                        wakeWordListener.setMutedForPlayback(true)
+                    }
+                    GeminiVoiceState.LISTENING -> {
+                        wakeWordListener.pauseForSpeechRecognition()
+                        wakeWordListener.setMutedForPlayback(false)
+                    }
+                    else -> {
+                        wakeWordListener.resumeAfterSpeechRecognition()
+                        if (!ttsManager.isSpeaking.value) {
+                            wakeWordListener.setMutedForPlayback(false)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Mute wake-word when local/fallback TTS is speaking
+        scope.launch {
+            ttsManager.isSpeaking.collect { isSpeaking ->
+                if (isSpeaking) {
+                    wakeWordListener.setMutedForPlayback(true)
+                } else if (geminiLiveVoiceService.voiceState.value != GeminiVoiceState.SPEAKING) {
+                    wakeWordListener.setMutedForPlayback(false)
+                }
             }
         }
     }

@@ -68,9 +68,16 @@ class LocalTtsEngine @Inject constructor(
             return@withContext true
         }
 
-        // 4. If offline voice pack is not installed on device
-        Log.w(TAG, "No offline voice model or voice pack found for arbitrary phrase: \"$speakable\"")
-        onError?.invoke("Offline voice pack not installed on device")
+        // 4. Synthesize via on-device Android TextToSpeech engine
+        if (androidSpeechService.isAvailable()) {
+            Log.d(TAG, "Synthesizing with Android system TextToSpeech")
+            androidSpeechService.speak(speakable, onStart, onDone, onError)
+            return@withContext true
+        }
+
+        // 5. If no TTS engine is ready on device
+        Log.w(TAG, "No TTS voice or voice pack found for arbitrary phrase: \"$speakable\"")
+        onError?.invoke("TTS not available on device")
         return@withContext false
     }
 
