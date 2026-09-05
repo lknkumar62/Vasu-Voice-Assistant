@@ -315,6 +315,10 @@ export class GeminiLiveSession {
   }
 
   public disconnect(): void {
+    if (this.readyResolver) {
+      this.readyResolver(false);
+      this.readyResolver = null;
+    }
     if (this.ws) {
       try {
         this.ws.close(1000, 'Normal disconnect');

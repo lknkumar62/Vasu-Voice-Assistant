@@ -142,9 +142,8 @@ class NativeAudioPlayer @Inject constructor() {
         playbackJob?.cancel()
         playbackJob = playerScope.launch {
             var totalFramesWritten = 0L
-            var track: AudioTrack? = null
             try {
-                track = ensureAudioTrack()
+                val track = ensureAudioTrack()
                 if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
                     track.play()
                 }
@@ -166,9 +165,20 @@ class NativeAudioPlayer @Inject constructor() {
                             if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                                 track.stop()
                             }
-                            // Wait for the hardware playback buffer to drain
+                            // Wait for the hardware playback buffer to drain with safety timeout
+                            val drainStartMs = System.currentTimeMillis()
+                            val remainingFrames = totalFramesWritten - (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL)
+                            val maxDrainWaitMs = if (remainingFrames > 0) {
+                                (remainingFrames * 1000L / SAMPLE_RATE) + 500L
+                            } else {
+                                300L
+                            }
                             while (isActive && (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL) < totalFramesWritten) {
                                 if (track.playState == AudioTrack.PLAYSTATE_STOPPED) break
+                                if (System.currentTimeMillis() - drainStartMs > maxDrainWaitMs) {
+                                    Log.d(TAG, "Hardware playback buffer drain timeout reached")
+                                    break
+                                }
                                 kotlinx.coroutines.delay(20)
                             }
                             break

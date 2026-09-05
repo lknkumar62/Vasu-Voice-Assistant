@@ -13,9 +13,15 @@ export class BrowserAudioPlayer {
   private isPlayingAudio = false;
   private hasLoggedPlaybackStart = false;
   private activeSourceNodes: AudioBufferSourceNode[] = [];
+  private onPlaybackEndedCallback?: () => void;
+  private endTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // Lazy initialize to comply with browser autoplay policies
+  }
+
+  public setOnPlaybackEnded(callback: () => void): void {
+    this.onPlaybackEndedCallback = callback;
   }
 
   private ensureContext(): AudioContext {
@@ -35,6 +41,11 @@ export class BrowserAudioPlayer {
    */
   public enqueueAudioChunk(pcm24kBytes: Uint8Array): void {
     if (!pcm24kBytes || pcm24kBytes.length === 0) return;
+
+    if (this.endTimeoutId) {
+      clearTimeout(this.endTimeoutId);
+      this.endTimeoutId = null;
+    }
 
     const ctx = this.ensureContext();
 
@@ -74,9 +85,19 @@ export class BrowserAudioPlayer {
       if (index !== -1) {
         this.activeSourceNodes.splice(index, 1);
       }
-      if (this.activeSourceNodes.length === 0 && ctx.currentTime >= this.nextPlayTime - 0.05) {
-        this.isPlayingAudio = false;
-        this.hasLoggedPlaybackStart = false;
+      if (this.activeSourceNodes.length === 0) {
+        if (this.endTimeoutId) {
+          clearTimeout(this.endTimeoutId);
+        }
+        const remainingMs = Math.max(0, (this.nextPlayTime - ctx.currentTime) * 1000);
+        this.endTimeoutId = setTimeout(() => {
+          if (this.activeSourceNodes.length === 0) {
+            this.isPlayingAudio = false;
+            this.hasLoggedPlaybackStart = false;
+            console.log('[VASU] Audio playback completed');
+            this.onPlaybackEndedCallback?.();
+          }
+        }, remainingMs + 30);
       }
     };
   }
@@ -86,6 +107,10 @@ export class BrowserAudioPlayer {
    * Required for interruption.
    */
   public stopAndFlush(): void {
+    if (this.endTimeoutId) {
+      clearTimeout(this.endTimeoutId);
+      this.endTimeoutId = null;
+    }
     for (const source of this.activeSourceNodes) {
       try {
         source.stop();

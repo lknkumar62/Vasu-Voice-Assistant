@@ -32,6 +32,12 @@ export class GeminiLiveVoiceService {
     this.audioPlayer = new BrowserAudioPlayer();
     this.micRecorder = new BrowserMicrophoneRecorder();
 
+    this.audioPlayer.setOnPlaybackEnded(() => {
+      if (this.currentState === 'SPEAKING') {
+        this.setState(this.micRecorder.isRecording() ? 'LISTENING' : 'CONNECTED');
+      }
+    });
+
     this.session = new GeminiLiveSession({
       onStateChange: (sessionState: LiveSessionState) => {
         this.mapSessionState(sessionState);
@@ -126,6 +132,7 @@ export class GeminiLiveVoiceService {
       if (!connected) return false;
     }
 
+    this.audioPlayer.stopAndFlush();
     this.setState('THINKING');
     this.listener.onTranscript(promptText);
 

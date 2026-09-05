@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "server": "node --experimental-strip-types server.ts"
+    "server": "node --experimental-strip-types server.ts",
+    "test:pipeline": "node tests/voice_pipeline.test.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",
