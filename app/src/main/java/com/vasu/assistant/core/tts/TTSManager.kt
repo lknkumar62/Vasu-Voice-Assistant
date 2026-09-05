@@ -65,11 +65,11 @@ class TTSManager @Inject constructor(
     val availableLanguages: StateFlow<List<Locale>> = _availableLanguages.asStateFlow()
 
     // Available voices list
-    private val _availableVoices = MutableStateFlow<List<String>>(listOf("Vasu-Gemini-Female (Kore)", "Vasu-Local-Female"))
+    private val _availableVoices = MutableStateFlow<List<String>>(listOf("Vasu-Gemini-Female (Erinome)", "Vasu-Local-Female"))
     override val availableVoices: StateFlow<List<String>> = _availableVoices.asStateFlow()
 
     // Voice Status (female indicator)
-    private val _voiceStatus = MutableStateFlow(VoiceStatus(VoiceGender.FEMALE, "Kore (Gemini) / Local"))
+    private val _voiceStatus = MutableStateFlow(VoiceStatus(VoiceGender.FEMALE, "Erinome (Gemini) / Local"))
     val voiceStatus: StateFlow<VoiceStatus> = _voiceStatus.asStateFlow()
 
     // Custom local voice model status

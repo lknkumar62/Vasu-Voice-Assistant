@@ -93,9 +93,9 @@ fun VoiceScreen(
                     VoiceUiMode.LISTENING -> VasuCyan
                     VoiceUiMode.SPEAKING -> VasuPurple
                     VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> VasuWarning
-                    VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE -> VasuError
-                    VoiceUiMode.OFFLINE_MODE, VoiceUiMode.GEMINI_UNAVAILABLE -> VasuTextSecondary
-                    VoiceUiMode.IDLE -> VasuTextSecondary
+                    VoiceUiMode.CONNECTING, VoiceUiMode.CONNECTED -> VasuCyan
+                    VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE, VoiceUiMode.ERROR -> VasuError
+                    VoiceUiMode.OFFLINE_MODE, VoiceUiMode.GEMINI_UNAVAILABLE, VoiceUiMode.DISCONNECTED, VoiceUiMode.IDLE -> VasuTextSecondary
                 },
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Medium,
@@ -167,6 +167,17 @@ fun VoiceScreen(
                 isSpeaking = uiState.isSpeaking,
                 onClick = { viewModel.toggleListening() }
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = { viewModel.testErinomeVoice("Namaste Vasu, ek chhota sa greeting bolo.") },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuCyan),
+                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Test Erinome Voice (Text Test)", fontSize = 13.sp)
+            }
         }
     }
 }

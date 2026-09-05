@@ -17,8 +17,8 @@ import org.junit.Test
 class VoiceEngineArchitectureTest {
 
     @Test
-    fun `default gemini voice is natural female Kore`() {
-        assertEquals("Kore", VasuSettings.DEFAULT_GEMINI_TTS_VOICE)
+    fun `default gemini voice is natural female Erinome`() {
+        assertEquals("Erinome", VasuSettings.DEFAULT_GEMINI_TTS_VOICE)
     }
 
     @Test
@@ -70,5 +70,55 @@ class VoiceEngineArchitectureTest {
     fun `stt error kind mic permission denied requires user intervention`() {
         assertTrue(SttErrorKind.MIC_PERMISSION_DENIED.needsUserAction)
         assertFalse(SttErrorKind.MIC_PERMISSION_DENIED.canRetry)
+    }
+
+    @Test
+    fun `gemini live target voice is Erinome`() {
+        assertEquals("Erinome", com.vasu.assistant.core.voice.GeminiLiveSession.TARGET_VOICE)
+    }
+
+    @Test
+    fun `gemini voice states cover all 8 required lifecycle states`() {
+        val states = com.vasu.assistant.core.voice.GeminiVoiceState.values().map { it.name }
+        assertEquals(8, states.size)
+        assertTrue(states.contains("IDLE"))
+        assertTrue(states.contains("CONNECTING"))
+        assertTrue(states.contains("CONNECTED"))
+        assertTrue(states.contains("LISTENING"))
+        assertTrue(states.contains("THINKING"))
+        assertTrue(states.contains("SPEAKING"))
+        assertTrue(states.contains("DISCONNECTED"))
+        assertTrue(states.contains("ERROR"))
+    }
+
+    @Test
+    fun `live session lifecycle states cover strict connection progression`() {
+        val states = com.vasu.assistant.core.voice.LiveSessionState.values().map { it.name }
+        assertTrue(states.contains("DISCONNECTED"))
+        assertTrue(states.contains("CONNECTING"))
+        assertTrue(states.contains("OPEN"))
+        assertTrue(states.contains("SESSION_CONFIGURED"))
+        assertTrue(states.contains("READY"))
+        assertTrue(states.contains("STREAMING"))
+        assertTrue(states.contains("ERROR"))
+    }
+
+    @Test
+    fun `native audio sample rates match gemini live specification`() {
+        assertEquals(16000, com.vasu.assistant.core.voice.NativeMicrophoneRecorder.SAMPLE_RATE)
+        assertEquals(24000, com.vasu.assistant.core.voice.NativeAudioPlayer.SAMPLE_RATE)
+    }
+
+    @Test
+    fun `gemini live session initial state is disconnected and not ready`() {
+        val session = com.vasu.assistant.core.voice.GeminiLiveSession()
+        assertEquals(com.vasu.assistant.core.voice.LiveSessionState.DISCONNECTED, session.sessionState.value)
+        assertFalse(session.isReady())
+    }
+
+    @Test
+    fun `native audio player initial state is not playing`() {
+        val player = com.vasu.assistant.core.voice.NativeAudioPlayer()
+        assertFalse(player.isPlaying.value)
     }
 }
