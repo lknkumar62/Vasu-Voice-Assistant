@@ -397,44 +397,7 @@ export class AIProviderManager {
   }
 
   private getLocalJarvisResponse(input: string): string {
-    const lower = input.toLowerCase().trim();
-
-    if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("namaste")) {
-      return "Hello ji! Phirse Vasu? Lagta hai Vasu tumhare khayalon me kuch zyada hi chhayi hui hai 😉 Main toh aapki pyaari Vasu hoon na! Bolo, kya chal raha hai aaj?";
-    }
-    if (lower.includes("kaise ho") || lower.includes("how are you")) {
-      return "Main bahut khush aur bilkul theek hoon ji! Aapke saath baat karke mera din ban jata hai. Aap bataiye, aaj aapka din kaisa chal raha hai? 😊";
-    }
-    if (lower.includes("kaun ho") || lower.includes("who are you")) {
-      return "Main Vasu hoon — aapki pyaari aur samajhdaar sathi! Aap mujhse kuch bhi pooch sakte hain ya phone ke kaam karwa sakte hain.";
-    }
-    if (lower.includes("bore") || lower.includes("joke")) {
-      return "Ek baar phone ne charger se kaha — 'Tum jab bhi paas aate ho, meri toh poori battery hi charge ho jaati hai!' Haste rahiye ji! 😄";
-    }
-    if (lower.includes("dhanyawad") || lower.includes("thank")) {
-      return "Aapka bahut-bahut swagat hai ji! Aapki madad karke mujhe bahut khushi milti hai ✨";
-    }
-    if (lower.includes("good morning")) {
-      return "Good morning ji! Aapka aaj ka din bahut pyara, positive aur khushiyon se bhara ho! ☀️";
-    }
-    if (lower.includes("good night")) {
-      return "Good night ji! Aap aaram kijiye aur meethe sapne dekhiye. Kal milte hain! 🌙";
-    }
-    if (lower.includes("time")) {
-      const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      return `Abhi time ${timeStr} hua hai ji.`;
-    }
-    if (lower.includes("weather") || lower.includes("mausam")) {
-      return "Aaj mausam kaafi achha aur suhavana lag raha hai ji! Bahar thodi taaza hawa le lijiye.";
-    }
-    if (lower.includes("kya kar sakti ho") || lower.includes("help")) {
-      return "Main phone ki torch, camera, volume, alarm, apps aur dher saari pyari baatein sab handle kar sakti hoon ji!";
-    }
-    if (lower.includes("search") || lower.includes("khoj") || lower.includes("dhundh")) {
-      return "Web search ke liye please Tavily ya Brave Search API key configure kijiye Settings mein. Main aapki poori help karungi! 🔍";
-    }
-
-    return "Haanji, main bilkul samajh gayi! Aapki pyaari Vasu hamesha aapke saath hai. Kahiye, aage kya plan hai? 😊";
+    return 'Ji, main Vasu hoon! Offline mode mein limited commands available hain. AI features ke liye please Gemini ya OpenRouter API key configure kijiye Settings mein. Tab tak device commands kaam karte rahenge!';
   }
 
   getConfig(type: AIProviderType): ProviderConfig | undefined {

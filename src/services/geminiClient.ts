@@ -195,32 +195,17 @@ export class GeminiClient {
 
     // Local Jarvis fallback
     return {
-      replyText: cleanAssistantText(this.getLocalJarvisResponse(params.message)),
+      replyText: cleanAssistantText(
+        'Ji, main Vasu hoon! Offline mode mein limited commands available hain. ' +
+        'AI features ke liye please Gemini ya OpenRouter API key configure kijiye Settings mein. ' +
+        'Tab tak torch, camera, alarm jaise device commands kaam karte rahenge!'
+      ),
       source: 'local_jarvis',
     };
   }
 
   private static getLocalJarvisResponse(input: string): string {
-    const lower = input.toLowerCase().trim();
-    if (lower.includes("namaste") || lower.includes("hello") || lower.includes("hi") || lower.includes("hey")) {
-      return "Hello ji! Phirse Vasu? Lagta hai Vasu tumhare khayalon me kuch zyada hi chhayi hui hai 😉 Main toh aapki pyaari Vasu hoon na! Bolo, kya chal raha hai aaj?";
-    }
-    if (lower.includes("kaise ho") || lower.includes("how are you")) {
-      return "Main bahut khush aur bilkul theek hoon ji! Aapke saath baat karke mera din ban jata hai. Aap bataiye, aaj aapka din kaisa chal raha hai? 😊";
-    }
-    if (lower.includes("kaun ho") || lower.includes("who are you")) {
-      return "Main Vasu hoon — aapki pyaari aur samajhdaar sathi! Aap mujhse kuch bhi pooch sakte hain.";
-    }
-    if (lower.includes("bore") || lower.includes("joke")) {
-      return "Ek baar phone ne charger se kaha — 'Tum jab bhi paas aate ho, meri toh poori battery hi charge ho jaati hai!' Haste rahiye ji! 😄";
-    }
-    if (lower.includes("dhanyawad") || lower.includes("thank")) {
-      return "Aapka bahut-bahut swagat hai ji! Aapki madad karke mujhe bahut khushi milti hai ✨";
-    }
-    if (lower.includes("search") || lower.includes("khoj") || lower.includes("dhundh")) {
-      return "Web search ke liye please Tavily ya Brave Search API key configure kijiye Settings mein. Main aapki poori help karungi! 🔍";
-    }
-    return "Haanji, main bilkul samajh gayi! Aapki pyaari Vasu hamesha aapke saath hai. Kahiye, aage kya plan hai? 😊";
+    return '';
   }
 
   public static async generateTTSAudio(text: string, apiKey?: string): Promise<string | null> {

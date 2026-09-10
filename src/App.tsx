@@ -156,6 +156,9 @@ export default function App() {
 
   // Live voice input for real-time transcription in Chat
   const [liveVoiceTranscript, setLiveVoiceTranscript] = useState('');
+  // Processing lock to prevent duplicate command processing
+  const processingRef = useRef<boolean>(false);
+  const processMessageIdRef = useRef<string>('');
 
   // 4. Persistent Memory
   const [memories, setMemories] = useState<MemoryItem[]>(() => {
@@ -397,6 +400,16 @@ export default function App() {
     async (text: string, isVoice = false) => {
       if (!text.trim()) return;
 
+      // Deduplication: prevent same text processed twice within 800ms
+      const dedupeKey = `${text.trim().toLowerCase()}_${isVoice ? 'v' : 't'}`;
+      if (processingRef.current && processMessageIdRef.current === dedupeKey) {
+        return;
+      }
+      processingRef.current = true;
+      processMessageIdRef.current = dedupeKey;
+
+      try {
+
       // Append user message with voice indicator
       const userMsgId = `user_${Date.now()}`;
       setMessages((prev) => [
@@ -500,6 +513,7 @@ export default function App() {
       }
 
       // 2. AI Brain via Gemini Client (Direct Gemini REST + Server fallback + Offline Jarvis)
+      const aiMsgId = `vasu_${Date.now()}_ai`;
       try {
         const historyContext = messages.slice(-8).map((m) => ({
           role: (m.sender === 'user' ? 'user' : 'model') as 'user' | 'model',
@@ -520,7 +534,7 @@ export default function App() {
         setMessages((prev) => [
           ...prev,
           {
-            id: `vasu_${Date.now()}`,
+            id: aiMsgId,
             sender: 'vasu',
             text: replyText,
             timestamp: Date.now(),
@@ -536,7 +550,7 @@ export default function App() {
         setMessages((prev) => [
           ...prev,
           {
-            id: `vasu_${Date.now()}`,
+            id: aiMsgId,
             sender: 'vasu',
             text: fallbackText,
             timestamp: Date.now(),
@@ -545,6 +559,9 @@ export default function App() {
         ]);
 
         await speakAssistantResponse(fallbackText, { source: isVoice ? 'voice' : 'typed' });
+      }
+      } finally {
+        processingRef.current = false;
       }
     },
     [memories, settings, messages, handleExecuteTool, speakAssistantResponse]

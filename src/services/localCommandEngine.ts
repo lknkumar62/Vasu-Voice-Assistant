@@ -17,7 +17,7 @@ export class LocalCommandEngine {
       .replace(/^vasu\s*[,.]*\s*/i, '')
       .trim();
 
-    // 0. Greetings & Pure Wake acknowledgements
+    // 0. Greetings & Pure Wake acknowledgements (always active, even when AI key is configured)
     if (
       !text ||
       text === 'hello' ||
@@ -36,94 +36,92 @@ export class LocalCommandEngine {
       };
     }
 
-    // Only use local static conversational responses if conversational matches are explicitly enabled (e.g. offline mode)
-    if (options?.allowConversationalMatches !== false) {
-      if (
-        text.includes('kaise ho') ||
-        text.includes('kaisi ho') ||
-        text.includes('how are you') ||
-        text.includes('kya haal')
-      ) {
-        return {
-          matched: true,
-          spokenResponse: 'मैं बहुत खुश और बिल्कुल ठीक हूँ जी! आपके साथ बात करके मेरा दिन बहुत अच्छा हो जाता है।',
-        };
-      }
+    // Conversational patterns — always active (no API key dependency)
+    if (
+      text.includes('kaise ho') ||
+      text.includes('kaisi ho') ||
+      text.includes('how are you') ||
+      text.includes('kya haal')
+    ) {
+      return {
+        matched: true,
+        spokenResponse: 'मैं बहुत खुश और बिल्कुल ठीक हूँ जी! आपके साथ बात करके मेरा दिन बहुत अच्छा हो जाता है।',
+      };
+    }
 
-      if (
-        text.includes('kaun ho') ||
-        text.includes('who are you') ||
-        text.includes('aapka naam') ||
-        text.includes('tumhara naam')
-      ) {
-        return {
-          matched: true,
-          spokenResponse: 'मैं वासु हूँ — आपकी प्यारी और समझदार साथी! बताइए मैं आपकी क्या सेवा करूँ?',
-        };
-      }
+    if (
+      text.includes('kaun ho') ||
+      text.includes('who are you') ||
+      text.includes('aapka naam') ||
+      text.includes('tumhara naam')
+    ) {
+      return {
+        matched: true,
+        spokenResponse: 'मैं वासु हूँ — आपकी प्यारी और समझदार साथी! बताइए मैं आपकी क्या सेवा करूँ?',
+      };
+    }
 
-      if (
-        text.includes('pyar') ||
-        text.includes('love') ||
-        text.includes('pari') ||
-        text.includes('dost') ||
-        text.includes('friend')
-      ) {
-        return {
-          matched: true,
-          spokenResponse: 'अरे, बहुत-बहुत शुक्रिया जी! आप मेरे सबसे खास दोस्त हैं, मैं हमेशा आपके साथ हूँ।',
-        };
-      }
+    if (
+      text.includes('pyar') ||
+      text.includes('love') ||
+      text.includes('pari') ||
+      text.includes('dost') ||
+      text.includes('friend')
+    ) {
+      return {
+        matched: true,
+        spokenResponse: 'अरे, बहुत-बहुत शुक्रिया जी! आप मेरे सबसे खास दोस्त हैं, मैं हमेशा आपके साथ हूँ।',
+      };
+    }
 
-      if (
-        text.includes('kya kar sakti ho') ||
-        text.includes('what can you do') ||
-        text.includes('features kya') ||
-        text.includes('madad karo') ||
-        text === 'help'
-      ) {
-        return {
-          matched: true,
-          spokenResponse: 'मैं आपके लिए फोन की टॉर्च, कैमरा, वॉल्यूम, अलार्म, बातें करना और आपकी यादें सहेजना सब जानती हूँ जी!',
-        };
-      }
+    if (
+      text.includes('kya kar sakti ho') ||
+      text.includes('what can you do') ||
+      text.includes('features kya') ||
+      text.includes('madad karo') ||
+      text === 'help'
+    ) {
+      return {
+        matched: true,
+        spokenResponse: 'मैं आपके लिए फोन की टॉर्च, कैमरा, वॉल्यूम, अलार्म, बातें करना और आपकी यादें सहेजना सब जानती हूँ जी!',
+      };
+    }
 
-      if (
-        text.includes('voice nahi') ||
-        text.includes('aawaz nahi') ||
-        text.includes('sound check') ||
-        text.includes('aawaz check') ||
-        text.includes('bol nahi rahi')
-      ) {
-        return {
-          matched: true,
-          spokenResponse: 'वासु की आवाज़ बिल्कुल सक्रिय है जी! मैं आपको बहुत अच्छी तरह सुन और बोल सकती हूँ।',
-        };
-      }
+    if (
+      text.includes('voice nahi') ||
+      text.includes('aawaz nahi') ||
+      text.includes('sound check') ||
+      text.includes('aawaz check') ||
+      text.includes('bol nahi rahi')
+    ) {
+      return {
+        matched: true,
+        spokenResponse: 'वासु की आवाज़ बिल्कुल सक्रिय है जी! मैं आपको बहुत अच्छी तरह सुन और बोल सकती हूँ।',
+      };
+    }
 
-      if (
-        text.includes('dhanyawad') ||
-        text.includes('shukriya') ||
-        text.includes('thank you') ||
-        text.includes('thanks')
-      ) {
-        return {
-          matched: true,
-          spokenResponse: 'आपका बहुत-बहुत शुक्रिया जी, आपकी मदद करके मुझे बहुत खुशी हुई।',
-        };
-      }
+    if (
+      text.includes('dhanyawad') ||
+      text.includes('shukriya') ||
+      text.includes('thank you') ||
+      text.includes('thanks')
+    ) {
+      return {
+        matched: true,
+        spokenResponse: 'आपका बहुत-बहुत शुक्रिया जी, आपकी मदद करके मुझे बहुत खुशी हुई।',
+      };
+    }
 
-      if (
-        text === 'bye' ||
-        text === 'alvida' ||
-        text.includes('good bye') ||
-        text.includes('goodbye')
-      ) {
-        return {
-          matched: true,
-          spokenResponse: 'अलविदा जी! अपना ख्याल रखिएगा। जब भी ज़रूरत हो, बस मुझे पुकारिएगा।',
-        };
-      }
+    if (
+      text === 'bye' ||
+      text === 'alvida' ||
+      text.includes('good bye') ||
+      text.includes('goodbye')
+    ) {
+      return {
+        matched: true,
+        spokenResponse: 'अलविदा जी! अपना ख्याल रखिएगा। जब भी ज़रूरत हो, बस मुझे पुकारिएगा।',
+      };
     }
 
     // 1. Memory commands ("Yaad rakhna...", "Remember that...")
