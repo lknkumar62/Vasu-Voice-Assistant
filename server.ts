@@ -49,6 +49,202 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", app: "VASU Assistant", version: "1.0.0" });
 });
 
+// Web Search - Tavily
+app.post("/api/search/tavily", async (req, res) => {
+  const { query, maxResults = 5, apiKey } = req.body;
+  const key = apiKey || process.env.TAVILY_API_KEY;
+  if (!key) {
+    return res.status(400).json({ error: "Tavily API key not configured" });
+  }
+  if (!query) {
+    return res.status(400).json({ error: "Query parameter is required" });
+  }
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: key,
+        query,
+        max_results: maxResults,
+        search_depth: "basic",
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      throw new Error(`Tavily HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const results = (data.results || []).map((r: any) => ({
+      title: r.title || "",
+      url: r.url || "",
+      snippet: r.content || "",
+      source: "tavily",
+      score: r.score || 0,
+    }));
+    return res.json({ results, source: "tavily" });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Search failed" });
+  }
+});
+
+// Web Search - Brave
+app.post("/api/search/brave", async (req, res) => {
+  const { query, maxResults = 5, apiKey } = req.body;
+  const key = apiKey || process.env.BRAVE_SEARCH_API_KEY;
+  if (!key) {
+    return res.status(400).json({ error: "Brave Search API key not configured" });
+  }
+  if (!query) {
+    return res.status(400).json({ error: "Query parameter is required" });
+  }
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const url = new URL("https://api.search.brave.com/res/v1/web");
+    url.searchParams.set("q", query);
+    url.searchParams.set("count", String(maxResults));
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": key,
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      throw new Error(`Brave HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const results = (data.web?.results || []).map((r: any) => ({
+      title: r.title || "",
+      url: r.url || "",
+      snippet: r.description || "",
+      source: "brave",
+    }));
+    return res.json({ results, source: "brave" });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Search failed" });
+  }
+});
+
+// Multi-provider chat proxy
+app.post("/api/chat", async (req, res) => {
+  const { message, provider, apiKey, model, history = [], language = "Hinglish" } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: "Message is required" });
+  }
+
+  const systemInstruction = `You are VASU, a friendly Indian AI assistant. Respond in ${language}. Keep responses concise and natural.`;
+
+  try {
+    if (provider === "openrouter" || provider === "groq" || provider === "deepseek" || provider === "xai" || provider === "custom") {
+      const baseUrls: Record<string, string> = {
+        openrouter: "https://openrouter.ai/api/v1",
+        groq: "https://api.groq.com/openai/v1",
+        deepseek: "https://api.deepseek.com/v1",
+        xai: "https://api.x.ai/v1",
+        custom: req.body.baseUrl || "",
+      };
+      const baseUrl = baseUrls[provider];
+      if (!baseUrl || !apiKey) {
+        return res.status(400).json({ error: `${provider} not configured` });
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const messages = [
+        { role: "system", content: systemInstruction },
+        ...history.slice(-4).map((h: any) => ({
+          role: h.role === "model" ? "assistant" : "user",
+          content: h.parts?.map((p: any) => p.text).join(" ") || "",
+        })),
+        { role: "user", content: message },
+      ];
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 150 }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      return res.json({ response: data.choices?.[0]?.message?.content || "", provider, model });
+    }
+
+    // Default: Gemini
+    const geminiKey = apiKey || runtimeGeminiApiKey || process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+      return res.status(400).json({ error: "No API key configured" });
+    }
+    const ai = new GoogleGenAI({ apiKey: geminiKey });
+    const contents: any[] = [];
+    if (history) {
+      for (const h of history.slice(-4)) {
+        contents.push(h);
+      }
+    }
+    contents.push({ role: "user", parts: [{ text: message }] });
+    const response = await ai.models.generateContent({
+      model: model || "gemini-2.5-flash",
+      contents,
+      config: { systemInstruction, temperature: 0.7, maxOutputTokens: 150 },
+    });
+    return res.json({ response: response.text || "", provider: "gemini", model });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Chat failed" });
+  }
+});
+
+// API Provider status check
+app.post("/api/providers/test", async (req, res) => {
+  const { provider, apiKey, baseUrl } = req.body;
+  const startTime = Date.now();
+  try {
+    if (provider === "gemini") {
+      const key = apiKey || runtimeGeminiApiKey || process.env.GEMINI_API_KEY;
+      if (!key) return res.json({ status: "UNCONFIGURED", provider });
+      const ai = new GoogleGenAI({ apiKey: key });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: "Say OK",
+        config: { maxOutputTokens: 5 },
+      });
+      return res.json({ status: "ONLINE", provider, latencyMs: Date.now() - startTime, model: "gemini-2.5-flash" });
+    }
+    if (["openrouter", "groq", "deepseek", "xai", "custom"].includes(provider)) {
+      const baseUrls: Record<string, string> = {
+        openrouter: "https://openrouter.ai/api/v1",
+        groq: "https://api.groq.com/openai/v1",
+        deepseek: "https://api.deepseek.com/v1",
+        xai: "https://api.x.ai/v1",
+        custom: baseUrl || "",
+      };
+      if (!apiKey) return res.json({ status: "UNCONFIGURED", provider });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`${baseUrls[provider]}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return res.json({ status: response.ok ? "ONLINE" : "OFFLINE", provider, latencyMs: Date.now() - startTime });
+    }
+    return res.json({ status: "UNKNOWN", provider });
+  } catch (err: any) {
+    return res.json({ status: "OFFLINE", provider, error: err.message, latencyMs: Date.now() - startTime });
+  }
+});
+
 // Update or set runtime Gemini API key
 app.post("/api/gemini/key", (req, res) => {
   const { apiKey } = req.body;
@@ -82,8 +278,8 @@ app.get("/api/gemini/status", (req, res) => {
   res.json({
     configured: isUserKey || isEnvKey,
     source: isUserKey ? "user" : (isEnvKey ? "env" : "none"),
-    model: "gemini-3.6-flash",
-    ttsModel: "gemini-3.1-flash-tts-preview",
+    model: "gemini-2.5-flash",
+    ttsModel: "gemini-2.0-flash-exp",
     voiceName: "Kore",
   });
 });
@@ -107,12 +303,11 @@ function markModelRateLimited(model: string, retryDelaySec = 60) {
   console.info(`[ModelRateLimit] Pausing requests to ${model} for ${Math.round(delay / 1000)}s due to quota limits.`);
 }
 
-// Candidate models for chat & fallback (gemini-3.6-flash & gemini-3.8-flash prioritized for fast response)
+// Candidate models for chat & fallback (current active models as of 2026)
 const CANDIDATE_CHAT_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-3.8-flash",
-  "gemini-3.5-flash",
-  "gemini-flash-latest",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
 ];
 
 async function generateChatContentWithFallback(
