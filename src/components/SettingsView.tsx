@@ -41,6 +41,7 @@ import {
   GripVertical,
 } from 'lucide-react';
 import { audioEngine } from '../services/audioEngine';
+import { ttsManager } from '../services/ttsManager';
 import { GeminiClient } from '../services/geminiClient';
 import { apiKeyManager, ApiKeyEntry } from '../services/apiKeyManager';
 import { aiProviderManager } from '../services/aiProviderManager';
@@ -532,6 +533,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <SettingRow icon={Mic} label="Voice Selection" value={settings.ttsVoice || 'Kore'} />
               <SettingRow icon={Languages} label="Voice Language" value={settings.language || 'Hinglish'} />
               <SettingRow icon={Radio} label="Wake Word" value={settings.wakePhrase || 'Hello VASU'} />
+              <ToggleRow
+                icon={Volume2}
+                label="Auto Speak"
+                enabled={settings.autoSpeak !== false}
+                onChange={(v) => onUpdateSettings({ autoSpeak: v })}
+              />
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#F4F8FF]">Speech Speed</span>
@@ -546,6 +553,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onChange={(e) => onUpdateSettings({ ttsSpeed: parseFloat(e.target.value) })}
                   className="w-full accent-[#008CFF]"
                 />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#F4F8FF]">Voice Volume</span>
+                  <span className="text-xs text-[#008CFF]">{Math.round((settings.ttsVolume ?? 1.0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1.0"
+                  step="0.05"
+                  value={settings.ttsVolume ?? 1.0}
+                  onChange={(e) => onUpdateSettings({ ttsVolume: parseFloat(e.target.value) })}
+                  className="w-full accent-[#008CFF]"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#F4F8FF]">Pitch</span>
+                  <span className="text-xs text-[#008CFF]">{settings.ttsPitch || 1.05}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value={settings.ttsPitch || 1.05}
+                  onChange={(e) => onUpdateSettings({ ttsPitch: parseFloat(e.target.value) })}
+                  className="w-full accent-[#008CFF]"
+                />
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-xs text-[#F4F8FF]">Test Voice</span>
+                <button
+                  onClick={() => {
+                    audioEngine.unlock();
+                    ttsManager.forceSpeak("नमस्ते जी! मैं वासु हूँ, आपकी AI सहायक। आज आपका दिन कैसा चल रहा है?", {
+                      autoSpeak: true,
+                      speed: settings.ttsSpeed,
+                      pitch: settings.ttsPitch,
+                      volume: settings.ttsVolume,
+                      apiKey: settings.geminiApiKey || '',
+                      source: 'replay',
+                    });
+                  }}
+                  className="px-3 py-1.5 bg-[#008CFF]/10 border border-[#008CFF]/20 text-[#008CFF] text-[11px] font-mono rounded-lg hover:bg-[#008CFF]/20 cursor-pointer"
+                >
+                  Play Test
+                </button>
               </div>
               <ToggleRow icon={Wifi} label="Offline Voice Mode" enabled={false} onChange={() => {}} />
               <ToggleRow icon={Mic} label="Continuous Listening" enabled={settings.backgroundListening} onChange={(v) => onUpdateSettings({ backgroundListening: v })} />

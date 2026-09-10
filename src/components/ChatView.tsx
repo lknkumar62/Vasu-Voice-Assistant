@@ -91,6 +91,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
     return unsub;
   }, []);
 
+  // Track which message is currently being spoken (auto-speak)
+  const [autoSpeakingMsgId, setAutoSpeakingMsgId] = useState<string | null>(null);
+  useEffect(() => {
+    const unsub = audioEngine.onStateChange((st) => {
+      if (st !== 'SPEAKING') setAutoSpeakingMsgId(null);
+    });
+    return unsub;
+  }, []);
+
+  // Auto-detect when a new VASU message arrives and mark it as auto-speaking
+  useEffect(() => {
+    if (assistantState === 'SPEAKING' && messages.length > 0) {
+      const lastVasuMsg = [...messages].reverse().find((m) => m.sender === 'vasu');
+      if (lastVasuMsg) {
+        setAutoSpeakingMsgId(lastVasuMsg.id);
+      }
+    }
+  }, [assistantState, messages]);
+
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -141,18 +160,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {/* VASU Profile Header */}
       <div className="mx-4 mb-3 p-3 bg-[#061827] border border-[#008CFF]/10 rounded-2xl flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-[#008CFF]/10 border border-[#008CFF]/30 flex items-center justify-center">
-          <Bot className="w-5 h-5 text-[#008CFF]" />
+        <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${
+          assistantState === 'SPEAKING'
+            ? 'bg-[#008CFF]/20 border-[#008CFF]/50 shadow-lg shadow-[#008CFF]/20'
+            : 'bg-[#008CFF]/10 border-[#008CFF]/30'
+        }`}>
+          <Bot className={`w-5 h-5 transition-colors ${assistantState === 'SPEAKING' ? 'text-[#00C8FF]' : 'text-[#008CFF]'}`} />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-[#F4F8FF] font-bold text-sm">VASU</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span className={`w-2 h-2 rounded-full transition-colors ${
+              assistantState === 'SPEAKING' ? 'bg-[#008CFF] animate-pulse' :
+              assistantState === 'LISTENING' ? 'bg-emerald-400 animate-pulse' :
+              'bg-emerald-400'
+            }`} />
           </div>
-          <p className="text-[10px] text-[#7895B8]">Online • Ready to help</p>
+          <p className="text-[10px] text-[#7895B8]">
+            {assistantState === 'SPEAKING' ? 'Speaking...' :
+             assistantState === 'LISTENING' ? 'Listening...' :
+             assistantState === 'THINKING' ? 'Thinking...' :
+             assistantState === 'EXECUTING' ? 'Executing...' :
+             'Online • Ready to help'}
+          </p>
         </div>
-        <button className="w-8 h-8 rounded-lg bg-[#061827] border border-[#008CFF]/10 flex items-center justify-center text-[#7895B8] hover:text-[#008CFF] transition-colors cursor-pointer">
-          <Volume2 className="w-4 h-4" />
+        <button
+          onClick={() => {
+            if (assistantState === 'SPEAKING') {
+              audioEngine.stop();
+            }
+          }}
+          className="w-8 h-8 rounded-lg bg-[#061827] border border-[#008CFF]/10 flex items-center justify-center text-[#7895B8] hover:text-[#008CFF] transition-colors cursor-pointer"
+        >
+          {assistantState === 'SPEAKING' ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
       </div>
 
@@ -262,6 +302,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                     {!isUser && (
                       <div className="flex items-center gap-3 mt-3 pt-2 border-t border-[#008CFF]/5 text-[#7895B8]">
+                        {/* Speaking indicator */}
+                        {autoSpeakingMsgId === msg.id && assistantState === 'SPEAKING' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-[#008CFF] font-mono animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#008CFF]" />
+                            <span>Speaking...</span>
+                          </span>
+                        )}
                         <button
                           title="Copy text"
                           onClick={() => handleCopy(msg.id, msg.text)}

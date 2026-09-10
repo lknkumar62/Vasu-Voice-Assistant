@@ -24,6 +24,7 @@ import { VoiceView } from './components/VoiceView';
 import { AndroidProjectModal } from './components/AndroidProjectModal';
 
 import { audioEngine } from './services/audioEngine';
+import { ttsManager } from './services/ttsManager';
 import { wakeWordEngine, WakeWordStatus, WakeWordEvent } from './services/wakeWordEngine';
 import { speechRecognizer, SpeechError } from './services/speechRecognizer';
 import { ToolExecutor, ToolExecutionResult } from './services/toolRegistry';
@@ -121,8 +122,10 @@ export default function App() {
       guardianActive: true,
       requireConfirmationForHighRisk: true,
       followUpMode: false,
+      autoSpeak: true,
       torchActive: false,
       volumeLevel: 70,
+      ttsVolume: 1.0,
     };
   });
 
@@ -354,18 +357,22 @@ export default function App() {
       text: string,
       options: {
         source?: 'voice' | 'typed' | 'replay' | 'tool' | 'wake';
+        force?: boolean;
       } = {}
     ) => {
-      const { source = 'typed' } = options;
+      const { source = 'typed', force } = options;
       speechRecognizer.stop();
       wakeWordEngine.pause();
       setAssistantState('SPEAKING');
 
-      await audioEngine.speakAssistantResponse(text, {
-        source,
+      await ttsManager.speak(text, {
+        autoSpeak: settings.autoSpeak,
         speed: settings.ttsSpeed,
         pitch: settings.ttsPitch,
-        apiKey: settings.geminiApiKey || undefined,
+        volume: settings.ttsVolume,
+        apiKey: settings.geminiApiKey || '',
+        source,
+        force,
       });
 
       // Post-speech transition
@@ -382,7 +389,7 @@ export default function App() {
         }
       }
     },
-    [settings.ttsSpeed, settings.ttsPitch, settings.geminiApiKey, settings.followUpMode, settings.wakeWordEnabled]
+    [settings.ttsSpeed, settings.ttsPitch, settings.ttsVolume, settings.autoSpeak, settings.geminiApiKey, settings.followUpMode, settings.wakeWordEnabled]
   );
 
   // Process Natural Language Command (supports text or voice input)
@@ -629,7 +636,7 @@ export default function App() {
 
     // If speaking, interrupt immediately!
     if (assistantState === 'SPEAKING') {
-      audioEngine.stop();
+      ttsManager.stop();
       setAssistantState('IDLE');
       wakeWordEngine.resume();
       return;
@@ -640,7 +647,7 @@ export default function App() {
       setIsContinuousListening(false);
       isContinuousListeningRef.current = false;
       speechRecognizer.stop();
-      audioEngine.stop();
+      ttsManager.stop();
       setAssistantState('IDLE');
       wakeWordEngine.resume();
       return;
@@ -796,11 +803,18 @@ export default function App() {
           badge: 'ALL PERMISSIONS GRANTED',
         },
       ]);
-      await audioEngine.speakLocal(reply, { speed: settings.ttsSpeed, pitch: settings.ttsPitch });
+      await ttsManager.forceSpeak(reply, {
+        autoSpeak: true,
+        speed: settings.ttsSpeed,
+        pitch: settings.ttsPitch,
+        volume: settings.ttsVolume,
+        apiKey: settings.geminiApiKey || '',
+        source: 'system',
+      });
     } catch (err) {
       console.warn("Error enabling all permissions:", err);
     }
-  }, [settings.ttsSpeed, settings.ttsPitch]);
+  }, [settings.ttsSpeed, settings.ttsPitch, settings.ttsVolume, settings.geminiApiKey]);
 
   // Dedicated Read Notifications handler
   const handleReadNotifications = useCallback(async () => {
@@ -823,13 +837,17 @@ export default function App() {
     ]);
     setAssistantState('SPEAKING');
     wakeWordEngine.pause();
-    await audioEngine.speakLocal(result.result, {
+    await ttsManager.forceSpeak(result.result, {
+      autoSpeak: true,
       speed: settings.ttsSpeed,
       pitch: settings.ttsPitch,
+      volume: settings.ttsVolume,
+      apiKey: settings.geminiApiKey || '',
+      source: 'tool',
     });
     wakeWordEngine.resume();
     setAssistantState('IDLE');
-  }, [handleExecuteTool, settings.ttsSpeed, settings.ttsPitch]);
+  }, [handleExecuteTool, settings.ttsSpeed, settings.ttsPitch, settings.ttsVolume, settings.geminiApiKey]);
 
   // Setup Wake Word Engine callbacks (stable ref avoids re-initializing on state updates)
   useEffect(() => {
@@ -936,15 +954,27 @@ export default function App() {
   const handleReplayAudio = useCallback((text: string) => {
     audioEngine.unlock();
     if (assistantStateRef.current === 'SPEAKING') {
-      audioEngine.stop();
+      ttsManager.stop();
       setAssistantState('IDLE');
       if (settings.wakeWordEnabled && wakeStatusRef.current !== 'DISABLED') {
         wakeWordEngine.resume();
       }
       return;
     }
-    speakAssistantResponse(text, { source: 'replay' });
-  }, [speakAssistantResponse, settings.wakeWordEnabled]);
+    ttsManager.forceSpeak(text, {
+      autoSpeak: true,
+      speed: settings.ttsSpeed,
+      pitch: settings.ttsPitch,
+      volume: settings.ttsVolume,
+      apiKey: settings.geminiApiKey || '',
+      source: 'replay',
+    }).then(() => {
+      setAssistantState('IDLE');
+      if (settings.wakeWordEnabled && wakeStatusRef.current !== 'DISABLED') {
+        wakeWordEngine.resume();
+      }
+    });
+  }, [settings.ttsSpeed, settings.ttsPitch, settings.ttsVolume, settings.geminiApiKey, settings.wakeWordEnabled]);
 
   const latestVasuMsg = [...messages].reverse().find((m) => m.sender === 'vasu');
   const latestUserMsg = [...messages].reverse().find((m) => m.sender === 'user');

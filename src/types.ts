@@ -218,8 +218,10 @@ export interface VasuSettings {
   guardianActive: boolean;
   requireConfirmationForHighRisk: boolean;
   followUpMode: boolean;
+  autoSpeak: boolean;
   torchActive: boolean;
   volumeLevel: number;
+  ttsVolume: number;
 }
 
 export interface ApiTestResult {
