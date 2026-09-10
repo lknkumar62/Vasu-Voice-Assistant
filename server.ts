@@ -82,7 +82,7 @@ app.get("/api/gemini/status", (req, res) => {
   res.json({
     configured: isUserKey || isEnvKey,
     source: isUserKey ? "user" : (isEnvKey ? "env" : "none"),
-    model: "gemini-flash-latest",
+    model: "gemini-3.6-flash",
     ttsModel: "gemini-3.1-flash-tts-preview",
     voiceName: "Kore",
   });
@@ -107,11 +107,11 @@ function markModelRateLimited(model: string, retryDelaySec = 60) {
   console.info(`[ModelRateLimit] Pausing requests to ${model} for ${Math.round(delay / 1000)}s due to quota limits.`);
 }
 
-// Candidate models for chat & fallback (gemini-2.5-flash & gemini-2.0-flash prioritized for fast response)
+// Candidate models for chat & fallback (gemini-3.6-flash & gemini-3.8-flash prioritized for fast response)
 const CANDIDATE_CHAT_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash",
+  "gemini-3.5-flash",
   "gemini-flash-latest",
 ];
 
@@ -560,9 +560,9 @@ async function startServer() {
           }
 
           const candidateModels = [
-            "gemini-2.0-flash-exp",
-            "gemini-2.5-flash",
-            "gemini-3.1-flash-live-preview",
+            "gemini-2.5-flash-native-audio-latest",
+            "gemini-2.5-flash-native-audio-preview-09-2025",
+            "gemini-3.5-transcribe-live",
           ];
 
           let connectedModel: string | null = null;

@@ -364,9 +364,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full bg-slate-950 border border-slate-800 hover:border-cyan-500/50 rounded-xl px-2.5 py-2 font-mono text-cyan-300 text-xs outline-none cursor-pointer"
               >
                 <option value="gemini-3.6-flash">gemini-3.6-flash (Authoritative)</option>
-                <option value="gemini-2.5-flash">gemini-2.5-flash (Fast & High Quota)</option>
-                <option value="gemini-2.0-flash">gemini-2.0-flash (Real-Time Live)</option>
-                <option value="gemini-1.5-flash">gemini-1.5-flash (High Limit)</option>
+                <option value="gemini-3.8-flash">gemini-3.8-flash (Ultra-Fast 2026)</option>
+                <option value="gemini-3.5-flash">gemini-3.5-flash (High Throughput)</option>
+                <option value="gemini-flash-latest">gemini-flash-latest (Auto-Optimized)</option>
               </select>
             </div>
             <div>

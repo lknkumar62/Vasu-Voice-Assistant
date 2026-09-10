@@ -39,19 +39,18 @@ CRITICAL SCRIPT & LANGUAGE RULES (MUST FOLLOW STRICTLY):
 - If device tools are requested (torch, camera, volume, alarm, etc.), confirm warmly in Hinglish (e.g. "Haanji, torch on kar di gayi hai!").
 - If the user asks you to remember something ("Yaad rakhna..."), confirm warmly (e.g. "Maine aapki baat pyaar se yaad rakh li hai ji!").`;
 
-// Primary fast models for generation (gemini-2.5-flash & gemini-2.0-flash for ultra-fast response)
+// Primary fast models for generation (gemini-3.6-flash & gemini-3.8-flash for ultra-fast response)
 const CHAT_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
+  'gemini-3.5-flash',
   'gemini-flash-latest',
 ];
 
 // Candidate TTS models
 const TTS_MODELS = [
-  'gemini-2.5-flash-preview-tts',
-  'gemini-2.0-flash-exp',
   'gemini-3.1-flash-tts-preview',
+  'gemini-2.5-flash-preview-tts',
 ];
 
 // In-memory & session rate limit / quota cooldown tracker
