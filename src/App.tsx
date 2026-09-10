@@ -131,6 +131,13 @@ export default function App() {
 
   // 3. Conversation Messages (seeded matching user screenshot in Hinglish)
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem('vasu_messages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
     return [
       {
         id: 'msg_user_1',
@@ -146,6 +153,13 @@ export default function App() {
       },
     ];
   });
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('vasu_messages', JSON.stringify(messages.slice(-100)));
+    }
+  }, [messages]);
 
   // Continuous conversational listening states
   const [isContinuousListening, setIsContinuousListening] = useState<boolean>(false);
@@ -1133,7 +1147,7 @@ export default function App() {
           <ChatView
             messages={messages}
             onSendMessage={(msg) => processUserCommand(msg, false)}
-            onClearChat={() => setMessages([])}
+            onClearChat={() => { setMessages([]); localStorage.removeItem('vasu_messages'); }}
             isLoading={assistantState === 'THINKING' || assistantState === 'EXECUTING'}
             liveVoiceTranscript={liveVoiceTranscript}
             isListening={assistantState === 'LISTENING'}
@@ -1292,7 +1306,7 @@ export default function App() {
             settings={settings}
             onUpdateSettings={(newS) => setSettings((s) => ({ ...s, ...newS }))}
             onClearMemory={() => setMemories([])}
-            onClearChat={() => setMessages([])}
+            onClearChat={() => { setMessages([]); localStorage.removeItem('vasu_messages'); }}
             onSelectTab={setActiveTab}
           />
         )}

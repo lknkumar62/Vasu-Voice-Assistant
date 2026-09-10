@@ -652,7 +652,73 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
 
         {page === "advanced" && (
-          <div className="space-y-2">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <SectionTitle>AI PROVIDER KEYS</SectionTitle>
+              {[
+                { label: "Gemini API Key", key: "geminiApiKey", placeholder: "AIza..." },
+                { label: "OpenRouter API Key", key: "openrouterApiKey", placeholder: "sk-or-..." },
+                { label: "Groq API Key", key: "groqApiKey", placeholder: "gsk_..." },
+                { label: "DeepSeek API Key", key: "deepseekApiKey", placeholder: "sk-..." },
+                { label: "xAI API Key", key: "xaiApiKey", placeholder: "xai-..." },
+                { label: "Tavily Search Key", key: "tavilyApiKey", placeholder: "tvly-..." },
+                { label: "Brave Search Key", key: "braveSearchApiKey", placeholder: "BSA..." },
+              ].map(({ label, key, placeholder }) => (
+                <div key={key} className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
+                  <label className="text-xs font-semibold text-[#7895B8] block mb-1">{label}</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={(settings as any)[key] || ""}
+                      onChange={(e) => onUpdateSettings({ [key]: e.target.value })}
+                      placeholder={placeholder}
+                      className="flex-1 bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#7895B8]/40 outline-none focus:border-[#008CFF]/50"
+                    />
+                    <button type="button" onClick={() => {
+                      const val = (settings as any)[key] || "";
+                      if (val.length > 5) {
+                        navigator.clipboard?.writeText(val);
+                      }
+                    }} className="px-3 py-2 bg-[#008CFF]/10 border border-[#008CFF]/20 text-[#008CFF] text-[10px] rounded-lg hover:bg-[#008CFF]/20 cursor-pointer">
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <SectionTitle>MODEL CONFIGURATION</SectionTitle>
+              <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
+                <label className="text-xs font-semibold text-[#7895B8] block mb-1">Gemini Model</label>
+                <select value={settings.geminiModel || "gemini-2.5-flash"}
+                  onChange={(e) => onUpdateSettings({ geminiModel: e.target.value })}
+                  className="w-full bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                  <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                </select>
+              </div>
+              <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
+                <label className="text-xs font-semibold text-[#7895B8] block mb-1">Language</label>
+                <select value={settings.language || "Hinglish"}
+                  onChange={(e) => onUpdateSettings({ language: e.target.value as any })}
+                  className="w-full bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                  <option value="Hinglish">Hinglish</option>
+                  <option value="Hindi">Hindi</option>
+                  <option value="English">English</option>
+                </select>
+              </div>
+              <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
+                <label className="text-xs font-semibold text-[#7895B8] block mb-1">Smart Mode</label>
+                <select value={settings.smartMode || "NORMAL"}
+                  onChange={(e) => onUpdateSettings({ smartMode: e.target.value as any })}
+                  className="w-full bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                  <option value="NORMAL">Normal</option>
+                  <option value="DRIVING">Driving</option>
+                  <option value="SLEEP">Sleep</option>
+                </select>
+              </div>
+            </div>
             <SettingRow icon={Cpu} label="AI Model" value={settings.geminiModel || "VASU Core"} />
             <SettingRow icon={Share2} label="System Integrations" value="Connect your apps" />
             <SettingRow icon={Code} label="Developer Options" value="Advanced settings" />
