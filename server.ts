@@ -425,25 +425,10 @@ app.post("/api/gemini/chat", async (req, res) => {
 
   const ai = getGeminiClient(apiKey);
 
-  // If Gemini API Key is not configured, reply with smart conversational local Jarvis engine
+  // If Gemini API Key is not configured, reply with local fallback
   if (!ai) {
-    const lower = message.toLowerCase().trim();
-    let localReply = "नमस्ते जी! आपकी प्यारी वासु हाज़िर है। बताइए मैं आपकी क्या सेवा करूँ?";
-
-    if (lower.includes("kaise ho") || lower.includes("kaisi ho") || lower.includes("how are you")) {
-      localReply = "मैं बहुत खुश और बिल्कुल ठीक हूँ जी! आपके साथ बात करके मेरा मन बहुत प्रसन्न हो जाता है।";
-    } else if (lower.includes("kya kar sakti ho") || lower.includes("who are you") || lower.includes("kaun ho")) {
-      localReply = "मैं वासु हूँ — आपकी प्यारी और समझदार साथी! मैं आपके लिए फोन के काम कर सकती हूँ और आपसे मीठी-मीठी बातें कर सकती हूँ।";
-    } else if (lower.includes("bore") || lower.includes("kuch sunao") || lower.includes("joke")) {
-      localReply = "एक बार फोन ने चार्जर से कहा — 'तुम जब भी पास आते हो, मेरी तो पूरी बैटरी ही चार्ज हो जाती है!' मुस्कुराते रहिए जी!";
-    } else if (lower.includes("dhanyawad") || lower.includes("shukriya") || lower.includes("thank")) {
-      localReply = "आपका बहुत-बहुत स्वागत है जी! आपकी मदद करके मुझे बहुत खुशी मिलती है।";
-    } else if (lower.includes("pyar") || lower.includes("love") || lower.includes("dost")) {
-      localReply = "अरे, बहुत-बहुत शुक्रिया जी! आप मेरे सबसे खास दोस्त हैं, मैं हमेशा आपके साथ हूँ।";
-    }
-
     return res.json({
-      response: localReply,
+      response: "Ji, main Vasu hoon! Gemini API key configure nahi hai. Settings mein jaake API key daaliye. Tab tak device commands kaam karte rahenge.",
       isOffline: true,
       needsKey: false,
       toolCall: null,
@@ -489,24 +474,11 @@ app.post("/api/gemini/chat", async (req, res) => {
   } catch (err: any) {
     console.error("Gemini Chat Error across all models:", err);
 
-    // Resilient conversational fallback so conversation never breaks during temporary demand spikes
-    const lower = message.toLowerCase().trim();
-    let smartFallback = "Main bilkul active hoon! Boliye, main aapki kya sahayata kar sakti hoon?";
-    if (lower.includes("kaise ho") || lower.includes("how are you")) {
-      smartFallback = "Main theek hoon aur aapki baatein sun rahi hoon! Aap bataiye, aaj aapka din kaisa jaa raha hai?";
-    } else if (lower.includes("kaun ho") || lower.includes("who are you")) {
-      smartFallback = "Main VASU hoon — aapki smart voice assistant companion.";
-    } else if (lower.includes("kya kar sakti ho") || lower.includes("what can you do")) {
-      smartFallback = "Main phone ki torch, volume, camera, WhatsApp, calls, alarms aur yaadein sambhal sakti hoon.";
-    } else {
-      smartFallback = `Ji, maine aapka sandesh suna: "${message}". Main abhi local mode mein sun rahi hoon, boliye aage kya karna hai?`;
-    }
-
     return res.json({
-      response: smartFallback,
+      response: "Maaf kijiye, AI models abhi busy hain. Thodi der baad try karein ya Settings mein API key check karein.",
       isOffline: true,
       isFallback: true,
-      warning: "Demand spike on AI models, served via resilient local engine",
+      warning: "AI service temporarily unavailable",
     });
   }
 });
