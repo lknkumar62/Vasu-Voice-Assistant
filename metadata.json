@@ -1,0 +1,11 @@
+{
+  "name": "Remix Remix VASU Assistant",
+  "description": "A production-grade AI voice assistant powered by Gemini Live natural Kore voice, Wake Word, Tool Calling, and Android automation.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

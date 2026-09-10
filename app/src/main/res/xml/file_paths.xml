@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-files-path name="vasu_pictures" path="Pictures/Vasu/" />
+    <external-files-path name="vasu_movies" path="Movies/Vasu/" />
+    <cache-path name="cache" path="/" />
+    <external-path name="external_files" path="." />
+</paths>
