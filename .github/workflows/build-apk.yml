@@ -19,7 +19,7 @@ jobs:
           node-version: 22
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Web Application
         run: npm run build
