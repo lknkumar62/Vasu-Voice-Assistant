@@ -1017,7 +1017,8 @@ export default function App() {
         <div className="fixed inset-0 pointer-events-none bg-cyan-100/10 z-40 border-8 border-cyan-400/40 animate-pulse" />
       )}
 
-      {/* Top Header */}
+      {/* Top Header — hidden on HOME tab (HomeView has its own header) */}
+      {activeTab !== 'HOME' && (
       <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md border-b border-slate-900 px-4 py-3 flex items-center justify-between">
         {/* Brand & State */}
         <div
@@ -1112,6 +1113,7 @@ export default function App() {
           </button>
         </div>
       </header>
+      )}
 
       {/* Main Dynamic View Area */}
       <main className="flex-1 flex flex-col items-center justify-between pb-2 w-full">

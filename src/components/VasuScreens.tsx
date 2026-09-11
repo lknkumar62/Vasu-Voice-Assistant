@@ -10,12 +10,12 @@ import {
   Menu, User, Search, Plus, Send, Mic, Paperclip,
   Phone, MessageCircle, Camera, Flashlight, Youtube, MapPin,
   Settings, MoreHorizontal, Sparkles, Volume2, VolumeX,
-  Lightbulb, Copy,   Check, Trash2, Bot, Terminal, AlertCircle, CheckCircle2,
+  Lightbulb, Copy, Check, Trash2, Bot, Terminal, AlertCircle, CheckCircle2,
   ChevronRight, RefreshCw, Play, FileText, Bell, Calendar,
   Calculator, Image as ImageIcon, Music, Video, Users,
   Bluetooth, Wifi, Eye, Languages, QrCode, FolderOpen, Cloud,
   Shield, ShieldCheck, Lock, Database, Cpu, Share2, Code,
-  Info, Palette, Radio, Headphones, WifiOff, ArrowLeft,
+  Info, Palette, Radio, Headphones, WifiOff, ArrowLeft, Home,
 } from "lucide-react";
 
 /* ================================================================
@@ -73,6 +73,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onToggleTorch, onSelectTab,
 }) => {
   const [input, setInput] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const latestVasu = [...messages].reverse().find((m) => m.sender === "vasu");
 
   const send = (e?: React.FormEvent) => {
@@ -102,14 +103,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   return (
-    <main className="min-h-full w-full max-w-2xl mx-auto bg-[#01060D] text-[#F4F8FF] px-4 pb-6">
-      <header className="flex items-center justify-between py-4">
-        <CircleButton><Menu size={22} /></CircleButton>
+    <main className="min-h-full w-full max-w-2xl mx-auto bg-[#01060D] text-[#F4F8FF] px-4 pb-24" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header className="grid grid-cols-[48px_1fr_48px] items-center py-3">
+        <CircleButton onClick={() => setDrawerOpen(true)}><Menu size={22} /></CircleButton>
         <div className="text-center">
           <div className="text-3xl font-black tracking-[.17em] text-white drop-shadow-[0_0_12px_rgba(0,140,255,.45)]">VASU</div>
           <div className="text-[8px] tracking-[.38em] text-[#7895B8]">YOUR AI COMPANION</div>
         </div>
-        <CircleButton><User size={21} /></CircleButton>
+        <CircleButton onClick={() => onSelectTab?.("SETTINGS")}><User size={21} /></CircleButton>
       </header>
 
       <section className="pt-5">
@@ -177,6 +178,46 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
         <ChevronRight size={22} className="text-[#7895B8]" />
       </Card>
+
+      {/* Side Drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
+          <div className="relative w-72 max-w-[80vw] h-full bg-[#030F1B] border-r border-[#008CFF]/20 flex flex-col shadow-2xl">
+            <div className="p-4 border-b border-[#008CFF]/15 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#008CFF]/15 border border-[#008CFF]/50 flex items-center justify-center">
+                <Bot size={20} className="text-[#008CFF]" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-white">VASU</div>
+                <div className="text-[10px] text-[#7895B8]">YOUR AI COMPANION</div>
+              </div>
+            </div>
+            <nav className="flex-1 overflow-y-auto py-2">
+              {[
+                { label: "Home", icon: Home, tab: "HOME" },
+                { label: "Chat", icon: MessageCircle, tab: "CHAT" },
+                { label: "Voice Mode", icon: Mic, tab: "VOICE" },
+                { label: "Tools", icon: Terminal, tab: "TOOLS" },
+                { label: "Memory", icon: Database, tab: "MEMORY" },
+                { label: "Missions", icon: Sparkles, tab: "MISSIONS" },
+                { label: "Guardian", icon: Shield, tab: "GUARDIAN" },
+                { label: "Permissions", icon: Lock, tab: "PERMISSIONS" },
+                { label: "Settings", icon: Settings, tab: "SETTINGS" },
+              ].map(({ label, icon: Icon, tab }) => (
+                <button key={tab} type="button" onClick={() => { onSelectTab?.(tab as any); setDrawerOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[#BBD8F5] hover:bg-[#008CFF]/10 hover:text-[#00C8FF] transition">
+                  <Icon size={18} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="p-4 border-t border-[#008CFF]/15 text-[10px] text-[#7895B8]">
+              VASU Assistant v1.0
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };
