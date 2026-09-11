@@ -239,6 +239,16 @@
             android:name=".core.automation.MicCaptureReceiver"
             android:exported="false" />
 
+        <!-- Driving Mode Receiver — detects car Bluetooth connect/disconnect -->
+        <receiver
+            android:name=".core.driving.DrivingModeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
