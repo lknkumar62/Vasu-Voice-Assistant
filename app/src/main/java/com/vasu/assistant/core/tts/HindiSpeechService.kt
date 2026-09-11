@@ -29,6 +29,7 @@ interface HindiSpeechService {
     val state: StateFlow<TTSState>
     val isSpeaking: StateFlow<Boolean>
     val availableVoices: StateFlow<List<String>>
+    val voiceStatus: StateFlow<VoiceStatus>
 
     fun initialize(profile: VoiceProfile = VoiceProfile.VASU_HINDI, onReady: ((Boolean) -> Unit)? = null)
     fun isAvailable(): Boolean
@@ -62,6 +63,9 @@ class AndroidHindiSpeechService @Inject constructor(
 
     private val _availableVoices = MutableStateFlow<List<String>>(emptyList())
     override val availableVoices: StateFlow<List<String>> = _availableVoices.asStateFlow()
+
+    private val _voiceStatus = MutableStateFlow(VoiceStatus())
+    override val voiceStatus: StateFlow<VoiceStatus> = _voiceStatus.asStateFlow()
 
     private var currentProfile: VoiceProfile = VoiceProfile.VASU_HINDI
     private var lastSpokenText: String = ""
@@ -233,7 +237,10 @@ class AndroidHindiSpeechService @Inject constructor(
 
     private fun selectBestVoice(tts: TextToSpeech, targetLocale: Locale) {
         val voices = runCatching { tts.voices }.getOrNull() ?: emptySet()
-        if (voices.isEmpty()) return
+        if (voices.isEmpty()) {
+            _voiceStatus.value = VoiceStatus(gender = VoiceGender.NO_VOICES)
+            return
+        }
 
         _availableVoices.value = voices.map { it.name }
 
@@ -257,6 +264,15 @@ class AndroidHindiSpeechService @Inject constructor(
 
         if (bestVoice != null) {
             runCatching { tts.voice = bestVoice }
+            val gender = if (isFemaleVoiceName(bestVoice.name)) VoiceGender.FEMALE
+            else if (bestVoice.name.contains("default", ignoreCase = true)) VoiceGender.UNLABELLED
+            else VoiceGender.UNKNOWN
+            _voiceStatus.value = VoiceStatus(
+                gender = gender,
+                voiceName = bestVoice.name,
+                isOffline = !bestVoice.isNetworkConnectionRequired,
+                quality = bestVoice.quality
+            )
             Log.i(TAG, "Selected voice: ${bestVoice.name} (offline=${!bestVoice.isNetworkConnectionRequired})")
         }
     }
@@ -292,5 +308,16 @@ class AndroidHindiSpeechService @Inject constructor(
 
     companion object {
         private const val TAG = "HindiSpeechService"
+
+        private val FEMALE_VOICE_KEYWORDS = listOf(
+            "female", "woman", "girl", "she", "her",
+            "zira", "hazel", "susan", "sarah", "linda",
+            "google-hindi-in-google-hindi-in-1", "google-hindi-in-google-hindi-in-2"
+        )
+
+        fun isFemaleVoiceName(name: String): Boolean {
+            val lower = name.lowercase()
+            return FEMALE_VOICE_KEYWORDS.any { lower.contains(it) }
+        }
     }
 }

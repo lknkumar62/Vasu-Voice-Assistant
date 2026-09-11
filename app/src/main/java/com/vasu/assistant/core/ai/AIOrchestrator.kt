@@ -57,16 +57,16 @@ class AIOrchestrator @Inject constructor(
         val systemPrompt = promptManager.buildPrompt().toString()
 
         try {
-            if (geminiProvider.isConfigured()) {
-                val result = geminiProvider.generateContent(
+            if (geminiProvider.isConfigured) {
+                val result = geminiProvider.generate(
                     prompt = input,
-                    systemInstruction = systemPrompt
+                    systemPrompt = systemPrompt
                 )
 
                 return@withContext when (result) {
                     is AiResult.Text -> normalizer.normalize(result.content)
-                    is AiResult.ToolCall -> "कार्य पूरा किया जा रहा है।"
-                    is AiResult.Error -> {
+                    is AiResult.FunctionCall -> "कार्य पूरा किया जा रहा है।"
+                    is AiResult.Failure -> {
                         Log.w(TAG, "Gemini call failed: ${result.message} (${result.kind})")
                         when (result.kind) {
                             AiErrorKind.NOT_CONFIGURED -> "कृपया सेटिंग्स में अपनी Gemini API Key दर्ज करें।"
@@ -76,15 +76,15 @@ class AIOrchestrator @Inject constructor(
                         }
                     }
                 }
-            } else if (claudeProvider.isConfigured()) {
-                val result = claudeProvider.generateContent(
+            } else if (claudeProvider.isConfigured) {
+                val result = claudeProvider.generate(
                     prompt = input,
-                    systemInstruction = systemPrompt
+                    systemPrompt = systemPrompt
                 )
                 return@withContext when (result) {
                     is AiResult.Text -> normalizer.normalize(result.content)
-                    is AiResult.ToolCall -> "कार्य पूरा किया जा रहा है।"
-                    is AiResult.Error -> "माफ़ कीजिए, उत्तर प्राप्त करने में समस्या आई।"
+                    is AiResult.FunctionCall -> "कार्य पूरा किया जा रहा है।"
+                    is AiResult.Failure -> "माफ़ कीजिए, उत्तर प्राप्त करने में समस्या आई।"
                 }
             } else {
                 return@withContext "कृपया सेटिंग्स में अपनी Gemini API Key दर्ज करें ताकि VASU पूर्णतः कार्य कर सके।"

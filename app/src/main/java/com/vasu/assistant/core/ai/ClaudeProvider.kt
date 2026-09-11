@@ -30,6 +30,8 @@ import javax.inject.Singleton
 class ClaudeProvider @Inject constructor(
     private val keyStore: SecureKeyStore
 ) {
+    val isConfigured: Boolean get() = keyStore.hasClaudeKey()
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
