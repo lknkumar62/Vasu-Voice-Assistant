@@ -16,6 +16,7 @@ import com.vasu.assistant.ui.missions.MissionsScreen
 import com.vasu.assistant.ui.permissions.PermissionsScreen
 import com.vasu.assistant.ui.privacy.PrivacyScreen
 import com.vasu.assistant.ui.settings.SettingsScreen
+import com.vasu.assistant.ui.diagnostics.DiagnosticsScreen
 import com.vasu.assistant.ui.tools.ToolsScreen
 import com.vasu.assistant.ui.voice.VoiceScreen
 
@@ -103,6 +104,10 @@ fun VasuNavGraph(
 
         composable(Screen.Browser.route) {
             BrowserScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Diagnostics.route) {
+            DiagnosticsScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }
