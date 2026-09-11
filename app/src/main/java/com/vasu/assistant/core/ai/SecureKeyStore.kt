@@ -22,37 +22,57 @@ class SecureKeyStore @Inject constructor(
 ) {
     private val prefs: SharedPreferences? by lazy { openEncrypted() }
 
-    private fun openEncrypted(): SharedPreferences? = try {
-        val masterKey = MasterKey.Builder(context, MASTER_KEY_ALIAS)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+    private fun openEncrypted(): SharedPreferences? {
+        // First try EncryptedSharedPreferences
+        val encrypted = try {
+            val masterKey = MasterKey.Builder(context, MASTER_KEY_ALIAS)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
 
-        EncryptedSharedPreferences.create(
-            context,
-            FILE_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    } catch (e: Exception) {
-        // Keystore can fail after a restore-to-new-device or a corrupted keyset.
-        // Surface the failure rather than silently degrading to plaintext storage.
-        Log.e(TAG, "Encrypted preferences unavailable: ${e.javaClass.simpleName}")
-        null
+            EncryptedSharedPreferences.create(
+                context,
+                FILE_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Encrypted preferences unavailable: ${e.javaClass.simpleName}")
+            null
+        }
+
+        if (encrypted != null) return encrypted
+
+        // Fallback to regular SharedPreferences if encrypted fails
+        Log.w(TAG, "Falling back to regular SharedPreferences (keys will not be encrypted)")
+        return context.getSharedPreferences(FILE_NAME_FALLBACK, Context.MODE_PRIVATE)
     }
 
     val isAvailable: Boolean get() = prefs != null
 
     fun getGeminiKey(): String? {
         val saved = prefs?.getString(KEY_GEMINI_API_KEY, null)?.takeIf { it.isNotBlank() }
-        if (saved != null) return saved
-        return System.getenv("GEMINI_API_KEY")?.takeIf { it.isNotBlank() }
+        if (saved != null) {
+            Log.d(TAG, "Gemini key found in prefs (length=${saved.length})")
+            return saved
+        }
+        val envKey = System.getenv("GEMINI_API_KEY")?.takeIf { it.isNotBlank() }
             ?: System.getProperty("GEMINI_API_KEY")?.takeIf { it.isNotBlank() }
+        if (envKey != null) {
+            Log.d(TAG, "Gemini key found in env (length=${envKey.length})")
+        } else {
+            Log.w(TAG, "No Gemini key found (prefs=${prefs != null})")
+        }
+        return envKey
     }
 
     fun setGeminiKey(key: String): Boolean {
-        val store = prefs ?: return false
+        val store = prefs ?: run {
+            Log.e(TAG, "Cannot save Gemini key: prefs is null")
+            return false
+        }
         store.edit().putString(KEY_GEMINI_API_KEY, key.trim()).apply()
+        Log.i(TAG, "Gemini key saved successfully (length=${key.trim().length})")
         return true
     }
 
@@ -161,6 +181,7 @@ class SecureKeyStore @Inject constructor(
     companion object {
         private const val TAG = "SecureKeyStore"
         private const val FILE_NAME = "vasu_secure_prefs"
+        private const val FILE_NAME_FALLBACK = "vasu_prefs_fallback"
         private const val MASTER_KEY_ALIAS = "vasu_master_key"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_GEMINI_MODEL = "gemini_model"
