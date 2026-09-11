@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.vasu.assistant.core.ai.PromptManager
 import com.vasu.assistant.core.ai.SecureKeyStore
+import com.vasu.assistant.core.audio.AudioSessionManager
 import com.vasu.assistant.core.settings.VasuSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -37,7 +38,8 @@ class GeminiLiveVoiceService @Inject constructor(
     private val promptManager: PromptManager,
     private val liveSession: GeminiLiveSession,
     private val audioPlayer: NativeAudioPlayer,
-    private val micRecorder: NativeMicrophoneRecorder
+    private val micRecorder: NativeMicrophoneRecorder,
+    private val audioSessionManager: AudioSessionManager
 ) {
     private val serviceScope = CoroutineScope(Dispatchers.Main)
 
@@ -197,7 +199,7 @@ class GeminiLiveVoiceService @Inject constructor(
 
     /**
      * Starts continuous microphone streaming for natural real-time voice conversation.
-     * Safely waits for the READY state before allowing microphone chunks to stream.
+     * Requests mic from AudioSessionManager before starting NativeMicrophoneRecorder.
      */
     fun startMicrophoneConversation(): Boolean {
         val apiKey = keyStore.getGeminiKey()
@@ -207,20 +209,28 @@ class GeminiLiveVoiceService @Inject constructor(
             return false
         }
 
+        // Request mic from AudioSessionManager
+        if (!audioSessionManager.requestMic(AudioSessionManager.MicOwner.GEMINI_LIVE)) {
+            _voiceState.value = GeminiVoiceState.ERROR
+            Log.w(TAG, "Cannot start microphone conversation: mic not available")
+            return false
+        }
+
         _voiceState.value = GeminiVoiceState.CONNECTING
 
         serviceScope.launch {
             val isReady = ensureConnectedSuspend()
             if (!isReady) {
                 _voiceState.value = GeminiVoiceState.ERROR
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.GEMINI_LIVE)
                 Log.e(TAG, "Cannot start microphone conversation: Gemini Live session not ready")
                 return@launch
             }
 
             _voiceState.value = GeminiVoiceState.LISTENING
+            audioSessionManager.transitionState(AudioSessionManager.SessionState.COMMAND_LISTENING)
 
             val started = micRecorder.startStreaming { pcmChunk ->
-                // Interruption detection: if user speaks while assistant is speaking, halt assistant immediately
                 if (audioPlayer.isPlaying.value) {
                     handleInterruption()
                 }
@@ -231,6 +241,7 @@ class GeminiLiveVoiceService @Inject constructor(
 
             if (!started) {
                 _voiceState.value = GeminiVoiceState.ERROR
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.GEMINI_LIVE)
             }
         }
 
@@ -238,10 +249,11 @@ class GeminiLiveVoiceService @Inject constructor(
     }
 
     /**
-     * Stop microphone streaming.
+     * Stop microphone streaming and release mic from AudioSessionManager.
      */
     fun stopMicrophoneConversation() {
         micRecorder.stopStreaming()
+        audioSessionManager.releaseMic(AudioSessionManager.MicOwner.GEMINI_LIVE)
         if (_voiceState.value == GeminiVoiceState.LISTENING) {
             _voiceState.value = GeminiVoiceState.CONNECTED
         }
@@ -288,6 +300,7 @@ class GeminiLiveVoiceService @Inject constructor(
         stopMicrophoneConversation()
         audioPlayer.stopAndFlush()
         liveSession.disconnect()
+        audioSessionManager.forceReleaseMic("gemini_disconnect")
         _voiceState.value = GeminiVoiceState.DISCONNECTED
     }
 }

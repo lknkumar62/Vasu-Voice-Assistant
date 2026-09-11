@@ -19,6 +19,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.vasu.assistant.MainActivity
 import com.vasu.assistant.core.ai.AIOrchestrator
+import com.vasu.assistant.core.audio.AudioSessionManager
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.voice.GeminiLiveVoiceService
@@ -63,6 +64,9 @@ enum class VasuServiceState {
  * 1. PATH A: UI -> VoiceManager -> Gemini Live Session -> 24kHz Native PCM -> NativeAudioPlayer -> speaker
  * 2. PATH B: Wake word toggle -> Permission -> Native Mic -> VAD -> WakeWordDetector (hello_vasu.tflite) -> ACTIVE
  * 3. PATH C: Wake word -> Command capture -> AIOrchestrator (<50ms native / Gemini) -> Kore response -> speaker -> LISTENING
+ *
+ * Conversation loop:
+ * Hello Vasu → wake detect → release mic → STT/Gemini acquires → listen → process → TTS speaks → mic released → back to LISTENING
  */
 @AndroidEntryPoint
 class VasuForegroundService : Service() {
@@ -74,6 +78,7 @@ class VasuForegroundService : Service() {
     @Inject lateinit var deviceControlManager: DeviceControlManager
     @Inject lateinit var sttManager: STTManager
     @Inject lateinit var ttsManager: TTSManager
+    @Inject lateinit var audioSessionManager: AudioSessionManager
 
     private val channelId = "vasu_service"
     private val notificationId = 1001
@@ -138,7 +143,7 @@ class VasuForegroundService : Service() {
                 "vasu:assistant_wake_lock"
             ).apply {
                 setReferenceCounted(false)
-                acquire(12 * 60 * 60 * 1000L) // 12 hours max
+                acquire(12 * 60 * 60 * 1000L)
             }
             Log.d(TAG, "WakeLock acquired")
         } catch (e: Exception) {
@@ -209,7 +214,7 @@ class VasuForegroundService : Service() {
             // Observe wake word detections
             launch {
                 wakeWordListener.detections.collect {
-                    Log.i(TAG, "Wake word trigger received in VasuForegroundService")
+                    Log.i(TAG, "Wake word trigger received")
                     onWakeWordDetected()
                 }
             }
@@ -220,9 +225,8 @@ class VasuForegroundService : Service() {
                     when (liveState) {
                         GeminiVoiceState.SPEAKING -> {
                             _serviceState.value = VasuServiceState.SPEAKING
-                            // Echo suppression: mute wake-word while speaker is outputting audio
                             wakeWordListener.setMutedForPlayback(true)
-                            notifyNotification("VASU Speaking (Kore)...")
+                            notifyNotification("VASU Speaking...")
                         }
                         GeminiVoiceState.LISTENING -> {
                             _serviceState.value = VasuServiceState.ACTIVE
@@ -230,8 +234,9 @@ class VasuForegroundService : Service() {
                             notifyNotification("Listening to you...")
                         }
                         GeminiVoiceState.CONNECTED, GeminiVoiceState.IDLE -> {
-                            if (_serviceState.value == VasuServiceState.SPEAKING || _serviceState.value == VasuServiceState.ACTIVE) {
-                                // Speaker finished - allow audio to settle before unmuting wake word
+                            if (_serviceState.value == VasuServiceState.SPEAKING ||
+                                _serviceState.value == VasuServiceState.ACTIVE
+                            ) {
                                 delay(350)
                                 wakeWordListener.setMutedForPlayback(false)
                                 wakeWordListener.resumeAfterSpeechRecognition()
@@ -247,6 +252,30 @@ class VasuForegroundService : Service() {
                     }
                 }
             }
+
+            // Observe AudioSessionManager mic ownership changes
+            launch {
+                audioSessionManager.currentOwner.collect { owner ->
+                    Log.d(TAG, "AudioSessionManager mic owner: ${owner.label}")
+                }
+            }
+
+            // Observe TTS state — resume listening after TTS finishes
+            launch {
+                ttsManager.state.collect { ttsState ->
+                    if (ttsState == com.vasu.assistant.core.tts.TTSState.IDLE &&
+                        _serviceState.value == VasuServiceState.SPEAKING
+                    ) {
+                        // TTS finished — release mic and go back to listening
+                        delay(300) // audio settle time
+                        audioSessionManager.releaseAudioFocus()
+                        wakeWordListener.setMutedForPlayback(false)
+                        wakeWordListener.resumeAfterSpeechRecognition()
+                        _serviceState.value = VasuServiceState.LISTENING
+                        notifyNotification("Listening for \"Hello Vasu\"")
+                    }
+                }
+            }
         }
     }
 
@@ -254,7 +283,6 @@ class VasuForegroundService : Service() {
         _serviceState.value = VasuServiceState.ACTIVATING
         notifyNotification("Heard \"Hello Vasu\" - Activating...")
 
-        // Launch UI overlay for immediate visual and interactive feedback
         AssistantOverlayActivity.launch(this)
 
         scope.launch {
@@ -263,14 +291,19 @@ class VasuForegroundService : Service() {
         }
     }
 
+    /**
+     * Start active voice session after wake word detection.
+     * WakeWordDetector has already released mic via AudioSessionManager.
+     * Now STT or Gemini Live can acquire it cleanly.
+     */
     private fun triggerActiveVoiceSession() {
         _serviceState.value = VasuServiceState.ACTIVE
         wakeWordListener.pauseForSpeechRecognition()
 
-        // Start real-time microphone stream with Gemini Live
+        // Try Gemini Live first — it manages its own mic via NativeMicrophoneRecorder
         val liveStarted = geminiLiveVoiceService.startMicrophoneConversation()
         if (!liveStarted) {
-            // If Gemini Live connection fails, use local STT fallback
+            // Fallback: use STTManager which requests mic from AudioSessionManager
             sttManager.startListening()
         }
     }
@@ -302,6 +335,7 @@ class VasuForegroundService : Service() {
         geminiLiveVoiceService.stopSpeaking()
         sttManager.stopListening()
         ttsManager.stop()
+        audioSessionManager.forceReleaseMic("service_shutdown")
         releaseWakeLock()
 
         stopForeground(STOP_FOREGROUND_REMOVE)

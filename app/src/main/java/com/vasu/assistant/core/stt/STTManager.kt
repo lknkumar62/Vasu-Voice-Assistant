@@ -15,6 +15,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.vasu.assistant.core.audio.AudioSessionManager
 import com.vasu.assistant.core.wakeword.WakeWordDetector
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -32,46 +33,43 @@ import javax.inject.Singleton
  *
  * Capabilities:
  * - Thread safety: All calls guaranteed on the Main Looper.
- * - Anti-collision: Automatically pauses and resumes [WakeWordDetector] to avoid mic lock contention.
+ * - Anti-collision: Coordinates mic ownership via AudioSessionManager.
  * - Lifecycle recovery: Cleans up and recreates recognizer instances on error/busy states.
+ * - Error recovery: Retries with backoff on ERROR_RECOGNIZER_BUSY and ERROR_CLIENT.
  * - Offline speech recognition: Uses on-device speech recognizer on API 33+ when network is absent.
- * - Comprehensive technical diagnostics logged to Logcat with user-friendly error taxonomy.
  */
 @Singleton
 class STTManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val wakeWordDetectorProvider: Provider<WakeWordDetector>
+    private val wakeWordDetectorProvider: Provider<WakeWordDetector>,
+    private val audioSessionManager: AudioSessionManager
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var speechRecognizer: SpeechRecognizer? = null
     private var isInitialized = false
 
-    // State
     private val _state = MutableStateFlow(STTState.IDLE)
     val state: StateFlow<STTState> = _state.asStateFlow()
 
-    // Partial results (streaming) - replay=0 ensures no stale speech results are delivered to new screens
     private val _partialResults = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
     val partialResults: SharedFlow<String> = _partialResults.asSharedFlow()
 
-    // Final results - replay=0 ensures one speech input delivers exactly one result event
     private val _results = MutableSharedFlow<RecognitionResult>(replay = 0, extraBufferCapacity = 1)
     val results: SharedFlow<RecognitionResult> = _results.asSharedFlow()
 
-    // RMS level for visualizer
     private val _rmsLevel = MutableStateFlow(0f)
     val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
 
-    // Errors
     private val _errors = MutableSharedFlow<SttError>(replay = 0, extraBufferCapacity = 1)
     val errors: SharedFlow<SttError> = _errors.asSharedFlow()
 
-    // Config
     private var config = STTConfig()
 
-    /**
-     * Initialize the speech recognizer
-     */
+    // Retry state for mic contention errors
+    private var retryCount = 0
+    private var maxRetries = 3
+    private var retryBaseDelayMs = 500L
+
     fun initialize(sttConfig: STTConfig = STTConfig()) {
         config = sttConfig
 
@@ -79,9 +77,9 @@ class STTManager @Inject constructor(
             if (isInitialized && speechRecognizer != null) return@runOnMainThread
 
             if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                Log.e(TAG, "SpeechRecognizer.isRecognitionAvailable returned false. Check Manifest <queries> and Google Speech Services.")
+                Log.e(TAG, "SpeechRecognizer.isRecognitionAvailable returned false")
                 _state.value = STTState.ERROR
-                _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "No speech recognition service available on this device"))
+                _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "No speech recognition service available"))
                 return@runOnMainThread
             }
 
@@ -117,20 +115,27 @@ class STTManager @Inject constructor(
     }
 
     /**
-     * Start listening for speech
+     * Start listening for speech. Requests mic from AudioSessionManager first.
      */
     fun startListening() {
         runOnMainThread {
             if (!hasRecordAudioPermission()) {
                 Log.e(TAG, "[MIC_ERROR] Cannot start listening: RECORD_AUDIO permission not granted")
                 _state.value = STTState.ERROR
-                _errors.tryEmit(SttError(SttErrorKind.MIC_PERMISSION_DENIED, "Microphone permission denied - grant it in Settings"))
+                _errors.tryEmit(SttError(SttErrorKind.MIC_PERMISSION_DENIED, "Microphone permission denied"))
                 return@runOnMainThread
             }
 
             Log.i(TAG, "[MIC_START] Starting microphone listening, lang=${config.language}")
 
-            // Pause WakeWordDetector to prevent microphone contention
+            // Request mic from AudioSessionManager
+            if (!audioSessionManager.requestMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)) {
+                Log.w(TAG, "[MIC_ERROR] Cannot start listening: mic not available")
+                _state.value = STTState.ERROR
+                _errors.tryEmit(SttError(SttErrorKind.MIC_BUSY, "Microphone is busy - another component is using it"))
+                return@runOnMainThread
+            }
+
             pauseWakeWordMic()
 
             if (!isInitialized || speechRecognizer == null) {
@@ -142,6 +147,7 @@ class STTManager @Inject constructor(
                 Log.e(TAG, "[MIC_ERROR] Speech recognizer not initialized")
                 _state.value = STTState.ERROR
                 _errors.tryEmit(SttError(SttErrorKind.SERVICE_UNAVAILABLE, "Speech recognizer not initialized"))
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
                 resumeWakeWordMic()
                 return@runOnMainThread
             }
@@ -149,22 +155,22 @@ class STTManager @Inject constructor(
             try {
                 recognizer.cancel()
                 _state.value = STTState.LISTENING
+                audioSessionManager.transitionState(AudioSessionManager.SessionState.COMMAND_LISTENING)
 
                 val intent = createRecognizerIntent()
-                Log.i(TAG, "[STT_START] Speech recognition session started with intent")
+                Log.i(TAG, "[STT_START] Speech recognition session started")
                 recognizer.startListening(intent)
+                retryCount = 0
             } catch (e: Exception) {
                 Log.e(TAG, "[MIC_ERROR] Exception starting SpeechRecognizer: ${e.message}", e)
                 _state.value = STTState.ERROR
                 _errors.tryEmit(SttError(SttErrorKind.RECOGNITION_ERROR, "Could not start microphone: ${e.message}"))
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
                 resumeWakeWordMic()
             }
         }
     }
 
-    /**
-     * Stop listening
-     */
     fun stopListening() {
         runOnMainThread {
             Log.i(TAG, "[MIC_STOP] Stopping microphone listening")
@@ -174,14 +180,12 @@ class STTManager @Inject constructor(
                 Log.w(TAG, "Error stopping speech recognition", e)
             } finally {
                 _state.value = STTState.IDLE
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
                 resumeWakeWordMic()
             }
         }
     }
 
-    /**
-     * Cancel recognition
-     */
     fun cancel() {
         runOnMainThread {
             try {
@@ -190,19 +194,14 @@ class STTManager @Inject constructor(
                 Log.w(TAG, "Error cancelling speech recognition", e)
             } finally {
                 _state.value = STTState.IDLE
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
                 resumeWakeWordMic()
             }
         }
     }
 
-    /**
-     * Check if recognition is available
-     */
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
-    /**
-     * Cleanup resources
-     */
     fun destroy() {
         runOnMainThread {
             try {
@@ -213,8 +212,51 @@ class STTManager @Inject constructor(
             speechRecognizer = null
             isInitialized = false
             _state.value = STTState.IDLE
+            audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
             resumeWakeWordMic()
         }
+    }
+
+    /**
+     * Retry starting recognition with exponential backoff after mic contention errors.
+     */
+    private fun retryWithBackoff() {
+        if (retryCount >= maxRetries) {
+            Log.e(TAG, "Max retries ($maxRetries) reached, giving up")
+            _state.value = STTState.ERROR
+            _errors.tryEmit(SttError(SttErrorKind.MIC_BUSY, "Microphone is busy after multiple retries"))
+            audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
+            resumeWakeWordMic()
+            retryCount = 0
+            return
+        }
+
+        retryCount++
+        val delayMs = retryBaseDelayMs * (1L shl (retryCount - 1))
+        Log.w(TAG, "Retrying speech recognition in ${delayMs}ms (attempt $retryCount/$maxRetries)")
+
+        mainHandler.postDelayed({
+            // Destroy and recreate the recognizer
+            speechRecognizer?.destroy()
+            speechRecognizer = null
+            isInitialized = false
+
+            createInternalRecognizer()
+
+            val recognizer = speechRecognizer
+            if (recognizer != null) {
+                try {
+                    recognizer.cancel()
+                    _state.value = STTState.LISTENING
+                    recognizer.startListening(createRecognizerIntent())
+                } catch (e: Exception) {
+                    Log.e(TAG, "Retry failed: ${e.message}", e)
+                    retryWithBackoff()
+                }
+            } else {
+                retryWithBackoff()
+            }
+        }, delayMs)
     }
 
     private fun createRecognizerIntent(): Intent {
@@ -255,7 +297,6 @@ class STTManager @Inject constructor(
         }
 
         override fun onBufferReceived(buffer: ByteArray?) {
-            // Audio buffer received
         }
 
         override fun onEndOfSpeech() {
@@ -264,20 +305,28 @@ class STTManager @Inject constructor(
 
         override fun onError(error: Int) {
             val diagnostic = explainErrorCode(error)
-            Log.e(TAG, "[STT_ERROR] RecognitionListener.onError: code=$error ($diagnostic), permissionGranted=${hasRecordAudioPermission()}, online=${isNetworkAvailable()}")
-            if (error == SpeechRecognizer.ERROR_AUDIO) {
-                Log.e(TAG, "[MIC_ERROR] Audio recording error detected")
+            Log.e(TAG, "[STT_ERROR] onError: code=$error ($diagnostic)")
+
+            // Handle mic contention errors with retry
+            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                error == SpeechRecognizer.ERROR_CLIENT ||
+                error == SpeechRecognizer.ERROR_AUDIO
+            ) {
+                Log.w(TAG, "[MIC_CONTENTION] Error code $error — retrying with backoff")
+                retryWithBackoff()
+                return
             }
 
             val sttError = toSttError(error)
             _state.value = STTState.ERROR
             _errors.tryEmit(sttError)
 
+            audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
             resumeWakeWordMic()
 
-            // Reset recognizer instance on critical/busy errors so it never stays permanently broken
-            if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-                Log.w(TAG, "Resetting SpeechRecognizer instance due to error code $error")
+            // Reset recognizer on client errors
+            if (error == SpeechRecognizer.ERROR_CLIENT) {
+                Log.w(TAG, "Resetting SpeechRecognizer instance")
                 speechRecognizer?.destroy()
                 speechRecognizer = null
                 isInitialized = false
@@ -289,6 +338,7 @@ class STTManager @Inject constructor(
         override fun onResults(results: Bundle?) {
             _state.value = STTState.RESULT_READY
             processResults(results, isFinal = true)
+            audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
             resumeWakeWordMic()
             _state.value = STTState.IDLE
         }
@@ -298,7 +348,6 @@ class STTManager @Inject constructor(
         }
 
         override fun onEvent(eventType: Int, params: Bundle?) {
-            // Additional events
         }
     }
 
@@ -310,7 +359,7 @@ class STTManager @Inject constructor(
             val primaryText = matches[0]
             val primaryConfidence = confidences?.getOrNull(0) ?: 0f
 
-            Log.i(TAG, "[STT_RESULT] Result received: text=\"$primaryText\", final=$isFinal, confidence=$primaryConfidence")
+            Log.i(TAG, "[STT_RESULT] text=\"$primaryText\", final=$isFinal, confidence=$primaryConfidence")
 
             val alternatives = matches.drop(1).mapIndexed { index, text ->
                 RecognitionResult.AlternativeResult(
@@ -355,7 +404,7 @@ class STTManager @Inject constructor(
             SttErrorKind.TIMEOUT -> "Speech recognition timed out"
             SttErrorKind.NETWORK_ERROR -> "Speech recognition needs a network connection"
             SttErrorKind.RECOGNITION_ERROR -> "Could not process the audio - try again"
-            SttErrorKind.SERVICE_UNAVAILABLE -> "No speech recognition service available on this device"
+            SttErrorKind.SERVICE_UNAVAILABLE -> "No speech recognition service available"
             SttErrorKind.LANGUAGE_UNAVAILABLE -> "Selected language pack is not installed"
             SttErrorKind.AUDIO_ERROR -> "Microphone capture failed"
             SttErrorKind.RATE_LIMITED -> "Too many recognition requests - wait a moment"
@@ -366,12 +415,12 @@ class STTManager @Inject constructor(
     }
 
     private fun mapApi33Error(error: Int): SttErrorKind = when (error) {
-        10 -> SttErrorKind.RATE_LIMITED           // ERROR_TOO_MANY_REQUESTS
-        11 -> SttErrorKind.SERVICE_UNAVAILABLE    // ERROR_SERVER_DISCONNECTED
-        12 -> SttErrorKind.LANGUAGE_UNAVAILABLE   // ERROR_LANGUAGE_NOT_SUPPORTED
-        13 -> SttErrorKind.LANGUAGE_UNAVAILABLE   // ERROR_LANGUAGE_UNAVAILABLE
-        14 -> SttErrorKind.SERVICE_UNAVAILABLE    // ERROR_CANNOT_CHECK_SUPPORT
-        15 -> SttErrorKind.SERVICE_UNAVAILABLE    // ERROR_CANNOT_LISTEN_TO_DOWNLOADED_MODEL
+        10 -> SttErrorKind.RATE_LIMITED
+        11 -> SttErrorKind.SERVICE_UNAVAILABLE
+        12 -> SttErrorKind.LANGUAGE_UNAVAILABLE
+        13 -> SttErrorKind.LANGUAGE_UNAVAILABLE
+        14 -> SttErrorKind.SERVICE_UNAVAILABLE
+        15 -> SttErrorKind.SERVICE_UNAVAILABLE
         else -> SttErrorKind.UNKNOWN
     }
 
