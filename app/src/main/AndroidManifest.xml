@@ -249,6 +249,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Social Alarm Receiver — daily stories + queued social posts -->
+        <receiver
+            android:name=".core.social.SocialAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.vasu.assistant.social.DAILY_STORY" />
+                <action android:name="com.vasu.assistant.social.QUEUED_POST" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
