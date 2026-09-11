@@ -225,6 +225,20 @@
             android:name=".core.automation.ReminderReceiver"
             android:exported="false" />
 
+        <!-- Phone State Receiver — detects incoming/outgoing calls -->
+        <receiver
+            android:name=".core.automation.PhoneStateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Mic Capture Receiver — triggers mic recording from broadcast -->
+        <receiver
+            android:name=".core.automation.MicCaptureReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>
