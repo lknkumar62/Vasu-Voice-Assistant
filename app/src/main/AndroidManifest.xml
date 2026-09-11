@@ -273,6 +273,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Termux Result Receiver — receives shell command results from Termux -->
+        <receiver
+            android:name=".core.termux.TermuxResultReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.vasu.assistant.termux.RESULT" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
