@@ -248,8 +248,45 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [copied, setCopied] = useState<string | null>(null);
   const [playingMsgId, setPlayingMsgId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isUserNearBottomRef = useRef<boolean>(true);
+  const lastMessageCountRef = useRef<number>(messages.length);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading, liveVoiceTranscript]);
+  // Intelligent scroll: only auto-scroll if user is near bottom
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const isNearBottom = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      // User is near bottom if within 150px of the bottom
+      return scrollHeight - scrollTop - clientHeight < 150;
+    };
+
+    const handleScroll = () => {
+      isUserNearBottomRef.current = isNearBottom();
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll only when user is near bottom and new message arrives
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const newMessageAdded = messages.length > lastMessageCountRef.current;
+    lastMessageCountRef.current = messages.length;
+
+    // Only auto-scroll if user was already near bottom AND a new message was added
+    if (isUserNearBottomRef.current && newMessageAdded) {
+      // Use requestAnimationFrame for smooth scroll without jank
+      requestAnimationFrame(() => {
+        endRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    }
+  }, [messages]);
 
   useEffect(() => {
     const unsub = audioEngine.onStateChange((st) => { if (st !== "SPEAKING") setPlayingMsgId(null); });
@@ -347,7 +384,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 && !isListening && !liveVoiceTranscript && (
               <div className="py-6 text-center">
                 <div className="w-16 h-16 mx-auto rounded-full bg-[#008CFF]/10 border border-[#008CFF]/30 flex items-center justify-center"><Bot size={31} className="text-[#008CFF]" /></div>
@@ -621,6 +658,93 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [page, setPage] = useState<"main" | "voice" | "security" | "advanced">("main");
   const [animations, setAnimations] = useState(true);
   const [privacy, setPrivacy] = useState(false);
+  const [saveStates, setSaveStates] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
+
+  // Save API key handler with validation and state management
+  const saveApiKey = async (key: string, value: string) => {
+    if (!value.trim()) {
+      setSaveStates(prev => ({ ...prev, [key]: 'error' }));
+      setTimeout(() => setSaveStates(prev => ({ ...prev, [key]: 'idle' })), 2000);
+      return;
+    }
+
+    setSaveStates(prev => ({ ...prev, [key]: 'saving' }));
+
+    try {
+      // Validate API key format based on provider
+      const isValid = validateApiKey(key, value);
+      if (!isValid) {
+        setSaveStates(prev => ({ ...prev, [key]: 'error' }));
+        setTimeout(() => setSaveStates(prev => ({ ...prev, [key]: 'idle' })), 2000);
+        return;
+      }
+
+      // Save to settings (this persists to localStorage via App.tsx useEffect)
+      onUpdateSettings({ [key]: value });
+
+      // Small delay to show saving state
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      setSaveStates(prev => ({ ...prev, [key]: 'saved' }));
+      setTimeout(() => setSaveStates(prev => ({ ...prev, [key]: 'idle' })), 2000);
+    } catch (error) {
+      setSaveStates(prev => ({ ...prev, [key]: 'error' }));
+      setTimeout(() => setSaveStates(prev => ({ ...prev, [key]: 'idle' })), 2000);
+    }
+  };
+
+  // Validate API key format
+  const validateApiKey = (key: string, value: string): boolean => {
+    switch (key) {
+      case 'geminiApiKey':
+        return value.startsWith('AIza') && value.length > 20;
+      case 'openrouterApiKey':
+        return value.startsWith('sk-or-') && value.length > 20;
+      case 'groqApiKey':
+        return value.startsWith('gsk_') && value.length > 20;
+      case 'deepseekApiKey':
+        return value.startsWith('sk-') && value.length > 20;
+      case 'xaiApiKey':
+        return value.startsWith('xai-') && value.length > 10;
+      case 'tavilyApiKey':
+        return value.startsWith('tvly-') && value.length > 10;
+      case 'braveSearchApiKey':
+        return value.length > 10;
+      default:
+        return value.length > 5;
+    }
+  };
+
+  // Get save button text based on state
+  const getSaveButtonText = (key: string) => {
+    const state = saveStates[key] || 'idle';
+    switch (state) {
+      case 'saving':
+        return 'Saving...';
+      case 'saved':
+        return 'Saved ✓';
+      case 'error':
+        return 'Save failed';
+      default:
+        return 'Save';
+    }
+  };
+
+  // Get save button class based on state
+  const getSaveButtonClass = (key: string) => {
+    const state = saveStates[key] || 'idle';
+    const baseClass = "px-3 py-2 text-[10px] rounded-lg cursor-pointer transition-colors";
+    switch (state) {
+      case 'saving':
+        return `${baseClass} bg-[#008CFF]/20 text-[#7895B8] border border-[#008CFF]/20 cursor-wait`;
+      case 'saved':
+        return `${baseClass} bg-emerald-500/20 text-emerald-400 border border-emerald-500/30`;
+      case 'error':
+        return `${baseClass} bg-rose-500/20 text-rose-400 border border-rose-500/30`;
+      default:
+        return `${baseClass} bg-[#008CFF]/10 border border-[#008CFF]/20 text-[#008CFF] hover:bg-[#008CFF]/20`;
+    }
+  };
 
   if (page !== "main") {
     const titles: Record<string, string> = { voice: "Voice & Language", security: "Privacy & Security", advanced: "Advanced" };
@@ -715,13 +839,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       placeholder={placeholder}
                       className="flex-1 bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#7895B8]/40 outline-none focus:border-[#008CFF]/50"
                     />
-                    <button type="button" onClick={() => {
-                      const val = (settings as any)[key] || "";
-                      if (val.length > 5) {
-                        navigator.clipboard?.writeText(val);
-                      }
-                    }} className="px-3 py-2 bg-[#008CFF]/10 border border-[#008CFF]/20 text-[#008CFF] text-[10px] rounded-lg hover:bg-[#008CFF]/20 cursor-pointer">
-                      Copy
+                    <button
+                      type="button"
+                      onClick={() => saveApiKey(key, (settings as any)[key] || "")}
+                      disabled={saveStates[key] === 'saving'}
+                      className={getSaveButtonClass(key)}
+                    >
+                      {getSaveButtonText(key)}
                     </button>
                   </div>
                 </div>
