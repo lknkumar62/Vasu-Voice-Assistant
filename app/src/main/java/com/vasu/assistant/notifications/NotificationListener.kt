@@ -14,6 +14,8 @@ class NotificationListener : NotificationListenerService() {
     @Inject lateinit var actionManager: NotificationActionManager
 
     private val listeners = mutableListOf<NotificationCallback>()
+    lateinit var autoReplyManager: NotificationAutoReplyManager
+        private set
 
     interface NotificationCallback {
         fun onNotificationReceived(notification: ParsedNotification)
@@ -50,6 +52,7 @@ class NotificationListener : NotificationListenerService() {
         super.onListenerConnected()
         instance = this
         isListening = true
+        autoReplyManager = NotificationAutoReplyManager(this, this)
         Log.d(TAG, "Notification listener connected")
         processActiveNotifications()
     }
@@ -78,6 +81,13 @@ class NotificationListener : NotificationListenerService() {
         if (parsed != null) {
             detectCallNotification(sbn, parsed)
             listeners.forEach { it.onNotificationReceived(parsed) }
+        }
+
+        // Auto-reply for message notifications
+        try {
+            autoReplyManager.processNotification(sbn)
+        } catch (e: Exception) {
+            Log.e(TAG, "Auto-reply error: ${e.message}")
         }
     }
 
