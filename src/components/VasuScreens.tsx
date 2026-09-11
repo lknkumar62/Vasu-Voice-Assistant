@@ -4,6 +4,7 @@ import { VasuOrb } from "./VasuOrb";
 import { REGISTERED_TOOLS, ToolExecutionResult } from "../services/toolRegistry";
 import { audioEngine } from "../services/audioEngine";
 import { ttsManager } from "../services/ttsManager";
+import { apiKeyManager } from "../services/apiKeyManager";
 import { ScreenTab } from "./QuickActions";
 
 import {
@@ -659,9 +660,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [animations, setAnimations] = useState(true);
   const [privacy, setPrivacy] = useState(false);
   const [saveStates, setSaveStates] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
+  const [tempKeys, setTempKeys] = useState<Record<string, string>>({});
 
   // Save API key handler with validation and state management
-  const saveApiKey = async (key: string, value: string) => {
+  const saveApiKey = async (key: string) => {
+    const value = tempKeys[key] ?? (settings as any)[key] ?? "";
     if (!value.trim()) {
       setSaveStates(prev => ({ ...prev, [key]: 'error' }));
       setTimeout(() => setSaveStates(prev => ({ ...prev, [key]: 'idle' })), 2000);
@@ -679,8 +682,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         return;
       }
 
-      // Save to settings (this persists to localStorage via App.tsx useEffect)
+      // Save to settings (persists to localStorage via App.tsx useEffect)
       onUpdateSettings({ [key]: value });
+
+      // Also update apiKeyManager so aiProviderManager gets configured
+      const apiKeyMap: Record<string, string> = {
+        geminiApiKey: 'gemini',
+        openrouterApiKey: 'openrouter',
+        groqApiKey: 'groq',
+        deepseekApiKey: 'deepseek',
+        xaiApiKey: 'xai',
+        tavilyApiKey: 'tavily',
+        braveSearchApiKey: 'brave',
+      };
+      const providerId = apiKeyMap[key];
+      if (providerId) {
+        try { apiKeyManager.setKey(providerId, value); } catch (_) {}
+      }
+
+      // Clear temp state
+      setTempKeys(prev => { const n = { ...prev }; delete n[key]; return n; });
 
       // Small delay to show saving state
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -693,26 +714,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  // Validate API key format
+  // Validate API key format (relaxed — just check reasonable length)
   const validateApiKey = (key: string, value: string): boolean => {
-    switch (key) {
-      case 'geminiApiKey':
-        return value.startsWith('AIza') && value.length > 20;
-      case 'openrouterApiKey':
-        return value.startsWith('sk-or-') && value.length > 20;
-      case 'groqApiKey':
-        return value.startsWith('gsk_') && value.length > 20;
-      case 'deepseekApiKey':
-        return value.startsWith('sk-') && value.length > 20;
-      case 'xaiApiKey':
-        return value.startsWith('xai-') && value.length > 10;
-      case 'tavilyApiKey':
-        return value.startsWith('tvly-') && value.length > 10;
-      case 'braveSearchApiKey':
-        return value.length > 10;
-      default:
-        return value.length > 5;
-    }
+    return value.trim().length >= 8;
   };
 
   // Get save button text based on state
@@ -834,14 +838,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="flex gap-2">
                     <input
                       type="password"
-                      value={(settings as any)[key] || ""}
-                      onChange={(e) => onUpdateSettings({ [key]: e.target.value })}
+                      value={tempKeys[key] !== undefined ? tempKeys[key] : ((settings as any)[key] || "")}
+                      onChange={(e) => setTempKeys(prev => ({ ...prev, [key]: e.target.value }))}
                       placeholder={placeholder}
                       className="flex-1 bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#7895B8]/40 outline-none focus:border-[#008CFF]/50"
                     />
                     <button
                       type="button"
-                      onClick={() => saveApiKey(key, (settings as any)[key] || "")}
+                      onClick={() => saveApiKey(key)}
                       disabled={saveStates[key] === 'saving'}
                       className={getSaveButtonClass(key)}
                     >
