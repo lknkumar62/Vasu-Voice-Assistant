@@ -2,15 +2,28 @@ package com.vasu.assistant.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Rect
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.DisplayMetrics
 import android.util.Log
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import com.vasu.assistant.core.automation.ActionResult
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
+import java.io.FileOutputStream
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -29,6 +42,9 @@ class VasuAccessibilityService : AccessibilityService() {
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
+
+        var foregroundPackage: String? = null
+            private set
     }
 
     override fun onServiceConnected() {
@@ -56,14 +72,26 @@ class VasuAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event?.let {
+            val pkg = it.packageName?.toString()
+            val ignoredPackages = listOf(
+                "com.android.systemui",
+                "com.vasu.assistant",
+                "com.miui.home",
+                "com.android.launcher",
+                "com.android.inputmethod.latin"
+            )
+
             when (it.eventType) {
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                    Log.d(TAG, "Window changed: ${it.packageName}")
+                    if (pkg != null && !pkg.startsWith("inputmethod") && pkg !in ignoredPackages) {
+                        foregroundPackage = pkg
+                        Log.d(TAG, "Foreground app: $pkg")
+                    }
                 }
                 AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                     Log.d(TAG, "View clicked: ${it.text}")
                 }
-                else -> { /* ignore other event types */ }
+                else -> { /* ignore */ }
             }
         }
     }
@@ -121,5 +149,61 @@ class VasuAccessibilityService : AccessibilityService() {
 
     fun getInteractionManager(): ScreenInteractionManager {
         return interactionManager
+    }
+
+    fun takeScreenshot(callback: (Bitmap?) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            callback(null)
+            return
+        }
+        try {
+            takeScreenshot(
+                DISPLAY_ID_DEFAULT,
+                mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(result: ScreenshotResult) {
+                        val bitmap = Bitmap.wrapHardwareBuffer(
+                            result.hardwareBuffer,
+                            result.colorSpace
+                        )
+                        result.hardwareBuffer?.close()
+                        callback(bitmap)
+                    }
+                    override fun onFailure(errorCode: Int) {
+                        Log.e(TAG, "Screenshot failed: $errorCode")
+                        callback(null)
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Screenshot error: ${e.message}")
+            callback(null)
+        }
+    }
+
+    fun getScreenDimensions(): Pair<Int, Int> {
+        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        wm.defaultDisplay.getRealMetrics(metrics)
+        return Pair(metrics.widthPixels, metrics.heightPixels)
+    }
+
+    fun getVisibleWindows(): List<AccessibilityWindowInfo> {
+        return try {
+            windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun getNodeLabel(node: AccessibilityNodeInfo): String {
+        val text = node.text?.toString()?.trim()
+        val desc = node.contentDescription?.toString()?.trim()
+        return when {
+            !text.isNullOrEmpty() -> text
+            !desc.isNullOrEmpty() -> desc
+            else -> "(no label)"
+        }
     }
 }

@@ -1,7 +1,9 @@
 package com.vasu.assistant.notifications
 
+import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -18,22 +20,55 @@ class NotificationListener : NotificationListenerService() {
     }
 
     companion object {
+        private const val TAG = "VasuNotificationListener"
+
         var instance: NotificationListener? = null
             private set
+
+        var isListening = false
+            private set
+
+        var lastCallNotification: ParsedNotification? = null
+            private set
+
+        private val callPackages = setOf(
+            "com.google.android.dialer",
+            "com.android.dialer",
+            "com.samsung.android.dialer",
+            "com.whatsapp",
+            "com.whatsapp.w4b",
+            "org.telegram.messenger"
+        )
+
+        private val callKeywords = listOf(
+            "incoming call", "ongoing call", "call in progress",
+            "calling", "missed call", "dialing", "voice call", "video call"
+        )
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = this
+        isListening = true
+        Log.d(TAG, "Notification listener connected")
+        processActiveNotifications()
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        isListening = false
         if (instance == this) instance = null
+        Log.d(TAG, "Notification listener disconnected, requesting rebind")
+        try {
+            requestRebind(ComponentName(this, NotificationListener::class.java))
+        } catch (e: Exception) {
+            Log.e(TAG, "Rebind failed: ${e.message}")
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        isListening = false
         if (instance == this) instance = null
     }
 
@@ -41,12 +76,46 @@ class NotificationListener : NotificationListenerService() {
         if (shouldIgnore(sbn)) return
         val parsed = notificationParser.parse(sbn)
         if (parsed != null) {
+            detectCallNotification(sbn, parsed)
             listeners.forEach { it.onNotificationReceived(parsed) }
         }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        // Notification dismissed
+        val pkg = sbn.packageName
+        if (pkg in callPackages) {
+            lastCallNotification = null
+            Log.d(TAG, "Call notification removed: $pkg")
+        }
+    }
+
+    private fun detectCallNotification(sbn: StatusBarNotification, parsed: ParsedNotification) {
+        val pkg = sbn.packageName
+        if (pkg in callPackages) {
+            val text = sbn.notification.extras.getString("android.text")?.lowercase() ?: ""
+            val title = sbn.notification.extras.getString("android.title")?.lowercase() ?: ""
+            val isCall = callKeywords.any { keyword ->
+                text.contains(keyword) || title.contains(keyword)
+            }
+            if (isCall) {
+                lastCallNotification = parsed
+                Log.d(TAG, "Call notification detected from $pkg")
+            }
+        }
+    }
+
+    private fun processActiveNotifications() {
+        try {
+            val notifications = activeNotifications ?: return
+            for (sbn in notifications) {
+                if (shouldIgnore(sbn)) continue
+                val parsed = notificationParser.parse(sbn) ?: continue
+                detectCallNotification(sbn, parsed)
+                listeners.forEach { it.onNotificationReceived(parsed) }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing active notifications: ${e.message}")
+        }
     }
 
     fun addCallback(callback: NotificationCallback) { listeners.add(callback) }
