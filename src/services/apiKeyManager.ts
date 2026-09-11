@@ -109,8 +109,23 @@ export class ApiKeyManager {
   }
 
   setKey(id: string, key: string) {
-    const entry = this.keys.get(id);
-    if (!entry) return;
+    let entry = this.keys.get(id);
+    if (!entry) entry = this.keys.get(`ai_${id}`);
+    if (!entry) {
+      const isAI = ['gemini', 'openrouter', 'groq', 'deepseek', 'xai', 'custom'].includes(id);
+      const entryId = isAI ? `ai_${id}` : `search_${id}`;
+      entry = {
+        id: entryId,
+        provider: id as AIProviderType,
+        providerType: isAI ? 'ai' : 'search',
+        name: id.charAt(0).toUpperCase() + id.slice(1),
+        key,
+        enabled: key.length > 5,
+        tier: 'FREE',
+        priority: isAI ? 1 : 2,
+      };
+      this.keys.set(entryId, entry);
+    }
     entry.key = key;
     entry.enabled = key.length > 5;
 

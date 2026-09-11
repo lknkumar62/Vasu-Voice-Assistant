@@ -158,11 +158,12 @@ export class GeminiClient {
     // Fallback to direct Gemini if configured
     const trimmedKey = (params.apiKey || '').trim();
     if (trimmedKey && trimmedKey.length > 8) {
+      const sysInstruction = `You are VASU, an affectionate Indian female AI companion. Speak in conversational Hinglish. Keep replies concise (1-3 sentences). Never output Devanagari script.`;
       for (const model of CHAT_MODELS) {
         if (isClientModelCooledDown(model)) continue;
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2600);
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
           const contents: any[] = [];
           if (params.history) {
@@ -176,6 +177,7 @@ export class GeminiClient {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents,
+              systemInstruction: { parts: [{ text: sysInstruction }] },
               generationConfig: { temperature: 0.7, maxOutputTokens: 150 },
             }),
             signal: controller.signal,
@@ -187,9 +189,13 @@ export class GeminiClient {
             const cleaned = cleanAssistantText(text || '');
             if (cleaned) return { replyText: cleaned, source: 'gemini_direct', modelUsed: model };
           } else {
+            console.warn(`[GeminiClient] ${model} returned ${response.status}`);
             if (response.status === 429) recordClientModelCooldown(model, 60);
           }
-        } catch (_) { continue; }
+        } catch (e) {
+          console.warn(`[GeminiClient] ${model} failed:`, e);
+          continue;
+        }
       }
     }
 
