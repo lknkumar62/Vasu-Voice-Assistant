@@ -155,6 +155,8 @@ export class GeminiClient {
       };
     }
 
+    console.warn('[GeminiClient] aiProviderManager returned local_jarvis, trying direct Gemini fallback');
+
     // Fallback to direct Gemini if configured
     const trimmedKey = (params.apiKey || '').trim();
     if (trimmedKey && trimmedKey.length > 8) {
@@ -199,7 +201,8 @@ export class GeminiClient {
       }
     }
 
-    // Local Jarvis fallback
+    // Local Jarvis fallback — both provider system and direct Gemini failed
+    console.error('[GeminiClient] ALL AI providers failed — showing offline message. apiKey present:', !!trimmedKey, 'length:', trimmedKey.length);
     return {
       replyText: cleanAssistantText(
         'Ji, main Vasu hoon! Offline mode mein limited commands available hain. ' +
@@ -220,34 +223,37 @@ export class GeminiClient {
     if (!cleanText) return null;
     if (isClientModelCooledDown('tts')) return null;
 
-    try {
-      const serverController = new AbortController();
-      const serverTimer = setTimeout(() => serverController.abort(), 2500);
-      const serverResponse = await fetch('/api/gemini/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanText, apiKey: trimmedKey }),
-        signal: serverController.signal,
-      });
-      clearTimeout(serverTimer);
-      if (serverResponse.ok) {
-        const contentType = serverResponse.headers.get('content-type') || '';
-        if (contentType.includes('audio/') || contentType.includes('wav')) {
-          const audioBlob = await serverResponse.blob();
-          if (audioBlob && audioBlob.size > 200) return URL.createObjectURL(audioBlob);
-        } else {
-          recordClientModelCooldown('tts', 120);
-          return null;
+    // Try server TTS first (non-standalone mode only)
+    if (!isStandaloneApk()) {
+      try {
+        const serverController = new AbortController();
+        const serverTimer = setTimeout(() => serverController.abort(), 8000);
+        const serverResponse = await fetch('/api/gemini/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: cleanText, apiKey: trimmedKey }),
+          signal: serverController.signal,
+        });
+        clearTimeout(serverTimer);
+        if (serverResponse.ok) {
+          const contentType = serverResponse.headers.get('content-type') || '';
+          if (contentType.includes('audio/') || contentType.includes('wav')) {
+            const audioBlob = await serverResponse.blob();
+            if (audioBlob && audioBlob.size > 200) return URL.createObjectURL(audioBlob);
+          }
         }
+      } catch (e) {
+        console.warn('[GeminiClient] Server TTS failed, trying direct:', e);
       }
-    } catch {}
+    }
 
+    // Direct Gemini TTS (works in standalone APK + web)
     if (trimmedKey && trimmedKey.length > 8) {
       for (const model of TTS_MODELS) {
         if (isClientModelCooledDown(model)) continue;
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
           const response = await fetch(url, {
             method: 'POST',
@@ -275,13 +281,17 @@ export class GeminiClient {
               return URL.createObjectURL(blob);
             }
           } else {
+            console.warn(`[GeminiClient] TTS ${model} returned ${response.status}`);
             if (response.status === 429) {
               recordClientModelCooldown('tts', 15);
               recordClientModelCooldown(model, 15);
               break;
             }
           }
-        } catch { continue; }
+        } catch (e) {
+          console.warn(`[GeminiClient] TTS ${model} failed:`, e);
+          continue;
+        }
       }
     }
     return null;
@@ -310,19 +320,25 @@ export class GeminiClient {
         } catch (_) {}
       }
 
-      try {
-        const response = await fetch('/api/gemini/transcribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ audioBase64: base64Audio, mimeType: audioBlob.type || 'audio/webm', apiKey: effectiveKey || undefined }),
-          signal: AbortSignal.timeout(6000),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          return (data.text || '').trim();
+      // Server transcribe (non-standalone only)
+      if (!isStandaloneApk()) {
+        try {
+          const response = await fetch('/api/gemini/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audioBase64: base64Audio, mimeType: audioBlob.type || 'audio/webm', apiKey: effectiveKey || undefined }),
+            signal: AbortSignal.timeout(8000),
+          });
+          if (response.ok) {
+            const data = await response.json();
+            return (data.text || '').trim();
+          }
+        } catch (e) {
+          console.warn('[GeminiClient] Server transcribe failed, trying direct:', e);
         }
-      } catch {}
+      }
 
+      // Direct Gemini transcribe
       if (effectiveKey && effectiveKey.length > 5) {
         const transcribeModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
         for (const model of transcribeModels) {
@@ -341,7 +357,7 @@ export class GeminiClient {
                     ],
                   }],
                 }),
-                signal: AbortSignal.timeout(6000),
+                signal: AbortSignal.timeout(10000),
               }
             );
             if (directResp.ok) {
@@ -351,10 +367,14 @@ export class GeminiClient {
             } else if (directResp.status === 429) {
               recordClientModelCooldown(model, 60);
             }
-          } catch {}
+          } catch (e) {
+            console.warn(`[GeminiClient] Direct transcribe ${model} failed:`, e);
+          }
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error('[GeminiClient] transcribeAudio error:', e);
+    }
     return '';
   }
 }

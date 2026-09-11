@@ -250,6 +250,7 @@ export class AIProviderManager {
       } catch (err: any) {
         const config = this.providers.get(providerType)!;
         const errorClass = classifyError(0, err.message || '');
+        console.warn(`[AIProviderManager] ${providerType} failed:`, err.message, 'class:', errorClass);
         config.totalRequests++;
         config.failedRequests++;
         config.lastError = err.message;
@@ -359,6 +360,7 @@ export class AIProviderManager {
         }
       }
 
+      console.log(`[AIProviderManager] Calling ${type}: ${url.slice(0, 80)}...`);
       const response = await fetch(url, {
         method: 'POST',
         headers,
