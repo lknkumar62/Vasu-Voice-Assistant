@@ -6,6 +6,8 @@ import android.net.NetworkCapabilities
 import android.util.Log
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.settings.VasuSettings
+import com.vasu.assistant.core.wakeword.WakeWordDetector
+import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,9 @@ enum class ActiveVoiceSource(val displayName: String) {
  * 1. ONLINE: Gemini TTS (Kore female assistant voice)
  * 2. OFFLINE: Local TTS (custom assets / offline neural voice)
  * 3. LAST RESORT: Android Fallback TTS (only if explicitly enabled by user)
+ *
+ * Wake word echo protection: Mutes the wake word detector during ALL TTS
+ * playback paths to prevent VASU's own voice from triggering a re-listen cycle.
  */
 @Singleton
 class VoiceRouter @Inject constructor(
@@ -38,7 +43,8 @@ class VoiceRouter @Inject constructor(
     private val keyStore: SecureKeyStore,
     private val geminiTtsEngine: GeminiTtsEngine,
     private val localTtsEngine: LocalTtsEngine,
-    private val androidFallbackTtsEngine: AndroidFallbackTtsEngine
+    private val androidFallbackTtsEngine: AndroidFallbackTtsEngine,
+    private val wakeWordDetector: Lazy<WakeWordDetector>
 ) {
     private val _currentSource = MutableStateFlow(ActiveVoiceSource.LOCAL_OFFLINE)
     val currentSource: StateFlow<ActiveVoiceSource> = _currentSource.asStateFlow()
@@ -49,6 +55,9 @@ class VoiceRouter @Inject constructor(
 
     /**
      * Synthesize and speak text following the strict online -> offline -> emergency fallback priority.
+     *
+     * Wake word is muted before TTS starts and unmuted after it finishes to prevent
+     * VASU's own voice from being picked up as a new wake-word command.
      */
     suspend fun speak(
         text: String,
@@ -56,6 +65,18 @@ class VoiceRouter @Inject constructor(
         onDone: (() -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ): Boolean {
+        // Mute wake word detector during ALL TTS playback
+        muteWakeWord(true)
+
+        val wrappedOnDone: () -> Unit = {
+            muteWakeWord(false)
+            onDone?.invoke()
+        }
+        val wrappedOnError: (String) -> Unit = { error ->
+            muteWakeWord(false)
+            onError?.invoke(error)
+        }
+
         // Fast-path connectivity check
         val online = isOnline() && !settings.offlineOnly.value
         val geminiConfigured = keyStore.hasGeminiKey()
@@ -68,10 +89,10 @@ class VoiceRouter @Inject constructor(
             val geminiSuccess = geminiTtsEngine.speak(
                 text = text,
                 onStart = onStart,
-                onDone = onDone,
+                onDone = wrappedOnDone,
                 onError = { geminiError ->
                     Log.w(TAG, "Gemini TTS failed ($geminiError); falling back to LocalTtsEngine")
-                    fallbackToLocal(text, onStart, onDone, onError)
+                    fallbackToLocal(text, onStart, wrappedOnDone, wrappedOnError)
                 }
             )
 
@@ -84,14 +105,14 @@ class VoiceRouter @Inject constructor(
         val localSuccess = localTtsEngine.speak(
             text = text,
             onStart = onStart,
-            onDone = onDone,
+            onDone = wrappedOnDone,
             onError = { localError ->
                 Log.w(TAG, "LocalTtsEngine failed: $localError")
                 if (settings.androidFallbackTtsEnabled.value) {
-                    fallbackToAndroidSystem(text, onStart, onDone, onError)
+                    fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
                 } else {
                     _currentSource.value = ActiveVoiceSource.MUTED
-                    onError?.invoke(localError)
+                    wrappedOnError(localError)
                 }
             }
         )
@@ -100,13 +121,13 @@ class VoiceRouter @Inject constructor(
 
         // 3. Emergency Android system fallback (only if user explicitly enabled it)
         if (settings.androidFallbackTtsEnabled.value) {
-            return fallbackToAndroidSystem(text, onStart, onDone, onError)
+            return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
         }
 
         _currentSource.value = ActiveVoiceSource.MUTED
         val err = "No voice playback available (Gemini offline/unconfigured, Local TTS unavailable, Android fallback disabled)"
         Log.w(TAG, err)
-        onError?.invoke(err)
+        wrappedOnError(err)
         return false
     }
 
@@ -156,6 +177,19 @@ class VoiceRouter @Inject constructor(
         geminiTtsEngine.stop()
         localTtsEngine.stop()
         androidFallbackTtsEngine.stop()
+        muteWakeWord(false)
+    }
+
+    /**
+     * Mute or unmute the wake word detector to prevent echo during TTS playback.
+     */
+    private fun muteWakeWord(mute: Boolean) {
+        try {
+            wakeWordDetector.get().setMutedForPlayback(mute)
+            Log.d(TAG, "Wake word detector muted=$mute during TTS")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not mute/unmute wake word detector: ${e.message}")
+        }
     }
 
     private fun isOnline(): Boolean {

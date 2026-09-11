@@ -205,11 +205,22 @@ class VoiceViewModel @Inject constructor(
         }
     }
 
+    /** Tracks last processed command to prevent duplicate processing. */
+    private var lastProcessedCommand: String? = null
+
+    /** Tracks last spoken response ID to prevent duplicate TTS. */
+    private var lastSpokenResponseId: String? = null
+
     fun toggleListening() {
         if (_uiState.value.isListening) {
             geminiLiveVoiceService.stopMicrophoneConversation()
             sttManager.stopListening()
         } else {
+            // IMPORTANT: Stop any current TTS before starting to listen
+            // Prevents VASU's own voice from being picked up by the microphone
+            ttsManager.stop()
+            geminiLiveVoiceService.stopSpeaking()
+
             val liveStarted = geminiLiveVoiceService.startMicrophoneConversation()
             if (!liveStarted) {
                 sttManager.startListening()
@@ -238,6 +249,12 @@ class VoiceViewModel @Inject constructor(
         val trimmed = command.trim()
         if (trimmed.isEmpty()) return
 
+        // De-duplication: skip if same command was just processed
+        if (trimmed == lastProcessedCommand) {
+            return
+        }
+        lastProcessedCommand = trimmed
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isThinking = true,
@@ -253,8 +270,12 @@ class VoiceViewModel @Inject constructor(
                 lastResponse = response
             )
 
-            // Speak response via VoiceRouter
-            ttsManager.speakQueued(response)
+            // Speak response — only once per response
+            val responseId = "${trimmed.hashCode()}_${response.hashCode()}"
+            if (lastSpokenResponseId != responseId) {
+                lastSpokenResponseId = responseId
+                ttsManager.speakQueued(response)
+            }
         }
     }
 

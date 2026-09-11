@@ -1,5 +1,6 @@
 package com.vasu.assistant.core.tts
 
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -8,13 +9,18 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * SpeechQueue - Manages sequential TTS playback.
+ * SpeechQueue - Manages sequential TTS playback with de-duplication.
  *
  * Queues multiple speech items and plays them in order.
  * Supports interruption and priority messages.
+ * De-duplicates identical consecutive items to prevent repeated TTS.
  */
 @Singleton
 class SpeechQueue @Inject constructor() {
+
+    companion object {
+        private const val TAG = "SpeechQueue"
+    }
 
     private val queue = ConcurrentLinkedQueue<SpeechItem>()
 
@@ -27,14 +33,28 @@ class SpeechQueue @Inject constructor() {
     private val _queueSize = MutableStateFlow(0)
     val queueSize: StateFlow<Int> = _queueSize.asStateFlow()
 
+    /** Tracks the last enqueued text to prevent duplicate consecutive enqueue. */
+    private var lastEnqueuedText: String? = null
+
     /**
-     * Add text to speech queue
+     * Add text to speech queue. De-duplicates if same text is enqueued consecutively.
      */
     fun enqueue(text: String, priority: Boolean = false) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+
+        // De-duplication: skip if same text was just enqueued
+        if (!priority && trimmed == lastEnqueuedText) {
+            Log.d(TAG, "De-duplicated TTS request: \"$trimmed\"")
+            return
+        }
+
         val item = SpeechItem(
-            text = text,
+            text = trimmed,
             priority = priority
         )
+
+        lastEnqueuedText = trimmed
 
         if (priority) {
             // Priority items go to front
@@ -76,6 +96,7 @@ class SpeechQueue @Inject constructor() {
         queue.clear()
         _currentItem.value = null
         _queueSize.value = 0
+        lastEnqueuedText = null
     }
 
     /**

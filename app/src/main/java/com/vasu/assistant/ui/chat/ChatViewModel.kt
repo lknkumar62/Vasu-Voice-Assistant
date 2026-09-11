@@ -1,5 +1,6 @@
 package com.vasu.assistant.ui.chat
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vasu.assistant.core.ai.AIOrchestrator
@@ -31,6 +32,15 @@ data class ChatUiState(
     val partialTranscript: String = ""
 )
 
+/**
+ * ChatViewModel - Manages chat message flow with strict event-based TTS control.
+ *
+ * RULES:
+ * - TTS is triggered ONLY from sendMessage() for NEW user-submitted messages
+ * - STT results auto-send is DISABLED (user must explicitly press Send or Mic)
+ * - Each response has a unique ID; TTS is spoken exactly once per response
+ * - No TTS on chat open, history load, scroll, recomposition, or tab switch
+ */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val sttManager: STTManager,
@@ -39,6 +49,10 @@ class ChatViewModel @Inject constructor(
     private val conversationDao: com.vasu.assistant.database.ConversationDao
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "ChatViewModel"
+    }
+
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
@@ -46,10 +60,13 @@ class ChatViewModel @Inject constructor(
 
     private val sendMutex = kotlinx.coroutines.sync.Mutex()
 
+    /** Tracks the last response ID that was sent to TTS to prevent duplicate speaking. */
+    private var lastSpokenResponseId: String? = null
+
     init {
         ttsManager.initialize()
 
-        // Load chat history
+        // Load chat history — does NOT trigger TTS
         loadConversationHistory()
 
         viewModelScope.launch {
@@ -66,12 +83,15 @@ class ChatViewModel @Inject constructor(
             }
         }
 
+        // STT final results — do NOT auto-send. User must explicitly press Send or Mic.
+        // Only update the input field so user can review before sending.
         viewModelScope.launch {
             sttManager.results.collect { result ->
                 if (result.isFinal && result.text.isNotBlank()) {
+                    Log.d(TAG, "STT final result: ${result.text}")
                     _uiState.value = _uiState.value.copy(partialTranscript = "")
+                    // Just fill the input field — do NOT auto-send
                     updateInput(result.text)
-                    sendMessage()
                 }
             }
         }
@@ -99,9 +119,18 @@ class ChatViewModel @Inject constructor(
                 addMessage(ChatMessage(content = text, isUser = true))
 
                 val response = aiOrchestrator.processInput(text)
-                addMessage(ChatMessage(content = response, isUser = false))
+                val responseMsg = ChatMessage(content = response, isUser = false)
+                addMessage(responseMsg)
                 _uiState.value = _uiState.value.copy(isLoading = false)
-                ttsManager.speakQueued(response)
+
+                // TTS: Speak exactly once for this specific response
+                if (lastSpokenResponseId != responseMsg.id) {
+                    lastSpokenResponseId = responseMsg.id
+                    Log.d(TAG, "Speaking response ${responseMsg.id}")
+                    ttsManager.speakQueued(response)
+                } else {
+                    Log.d(TAG, "Response ${responseMsg.id} already spoken, skipping TTS")
+                }
             } finally {
                 sendMutex.unlock()
             }
