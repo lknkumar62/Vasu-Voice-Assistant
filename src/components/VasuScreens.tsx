@@ -330,7 +330,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   ] as const;
 
   return (
-    <main className="h-full min-h-0 w-full max-w-6xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 flex flex-col">
+    <main className="h-full min-h-0 w-full max-w-6xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-24 flex flex-col">
       <header className="flex items-center justify-between py-4">
         <CircleButton><Menu size={20} /></CircleButton>
         <div className="text-center">
@@ -527,7 +527,7 @@ export const ToolsView: React.FC<ToolsViewProps> = ({ onExecuteTool }) => {
   };
 
   return (
-    <main className="min-h-full w-full max-w-6xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-6">
+    <main className="min-h-full w-full max-w-6xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-24">
       <header className="flex items-center justify-between py-4">
         <CircleButton><Menu size={20} /></CircleButton>
         <div className="text-center">
@@ -749,7 +749,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   if (page !== "main") {
     const titles: Record<string, string> = { voice: "Voice & Language", security: "Privacy & Security", advanced: "Advanced" };
     return (
-      <main className="min-h-full w-full max-w-3xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-6">
+      <main className="min-h-full w-full max-w-3xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-24">
         <header className="flex items-center gap-3 py-4">
           <CircleButton onClick={() => setPage("main")}><ArrowLeft size={20} /></CircleButton>
           <h1 className="text-xl font-bold">{titles[page]}</h1>
@@ -896,7 +896,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   }
 
   return (
-    <main className="min-h-full w-full max-w-3xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-6">
+    <main className="min-h-full w-full max-w-3xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-24">
       <header className="flex items-center justify-between py-4">
         <CircleButton><Menu size={20} /></CircleButton>
         <div className="text-center">
