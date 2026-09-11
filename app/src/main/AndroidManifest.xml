@@ -137,6 +137,41 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- Voice Interaction Service — registers VASU as the system digital assistant -->
+        <service
+            android:name=".core.assistant.VasuVoiceInteractionService"
+            android:exported="true"
+            android:label="VASU Assistant"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voiceinteraction"
+                android:resource="@xml/voice_interaction_service_metadata" />
+        </service>
+
+        <!-- Voice Interaction Session Service — manages individual voice sessions -->
+        <service
+            android:name=".core.assistant.VasuVoiceInteractionSessionServiceImpl"
+            android:exported="true"
+            android:label="VASU Session"
+            android:permission="android.permission.BIND_VOICE_INTERACTION_SESSION" />
+
+        <!-- Recognition Service — intercepts system STT and redirects to VASU -->
+        <service
+            android:name=".core.assistant.VasuRecognitionService"
+            android:exported="true"
+            android:label="VASU Speech"
+            android:permission="android.permission.BIND_RECOGNITION_SERVICE">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service_config" />
+        </service>
+
         <!-- Accessibility Service -->
         <service
             android:name=".accessibility.VasuAccessibilityService"
