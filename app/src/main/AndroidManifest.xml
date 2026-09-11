@@ -208,6 +208,23 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- Boot Receiver — restarts services after device reboot -->
+        <receiver
+            android:name=".core.automation.BootReceiver"
+            android:exported="true"
+            android:enabled="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Reminder Receiver — fires scheduled reminders -->
+        <receiver
+            android:name=".core.automation.ReminderReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>
