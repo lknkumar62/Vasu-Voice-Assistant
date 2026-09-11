@@ -39,7 +39,7 @@ fun ChatScreen(
                 },
                 actions = {
                     if (uiState.isListening) {
-                        IconButton(onClick = viewModel::stopListening) {
+                        IconButton(onClick = viewModel::toggleListening) {
                             Icon(Icons.Default.Stop, contentDescription = "Stop", tint = VasuError)
                         }
                     }

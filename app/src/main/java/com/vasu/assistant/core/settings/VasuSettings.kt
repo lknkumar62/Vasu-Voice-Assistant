@@ -1,7 +1,8 @@
-package com.vasu.assistant.core.ai
+package com.vasu.assistant.core.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.vasu.assistant.core.tts.VoiceProfile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
