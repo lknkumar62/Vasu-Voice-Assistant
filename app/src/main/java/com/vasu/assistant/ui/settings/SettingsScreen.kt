@@ -471,6 +471,142 @@ fun SettingsScreen(
                 )
             }
 
+            // Live Chat / WebSocket API Key
+            SettingsSection(title = "LIVE CHAT") {
+                var chatServerInput by remember { mutableStateOf(state.chatServerUrl) }
+                var chatKeyInput by remember { mutableStateOf("") }
+                var showChatKey by remember { mutableStateOf(false) }
+
+                SettingsCard {
+                    Text("WebSocket Server URL", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = chatServerInput,
+                        onValueChange = { chatServerInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("wss://chat.vasu.app/ws", color = VasuTextMuted) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                        )
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    Text("API Key (optional)", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = chatKeyInput,
+                        onValueChange = { chatKeyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Server API key (if required)", color = VasuTextMuted) },
+                        singleLine = true,
+                        visualTransformation = if (showChatKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        trailingIcon = {
+                            IconButton(onClick = { showChatKey = !showChatKey }) {
+                                Icon(if (showChatKey) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null, tint = VasuTextSecondary)
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                        )
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { viewModel.saveChatConfig(chatServerInput, chatKeyInput) },
+                        enabled = chatServerInput.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = VasuCyan, contentColor = VasuDarkBg)
+                    ) { Text("Save") }
+                }
+            }
+
+            // OAuth / Connectors API Keys
+            SettingsSection(title = "CONNECTORS") {
+                var googleClientId by remember { mutableStateOf(state.googleClientId) }
+                var githubClientId by remember { mutableStateOf(state.githubClientId) }
+                var githubClientSecret by remember { mutableStateOf("") }
+                var showGithubSecret by remember { mutableStateOf(false) }
+                var discordClientId by remember { mutableStateOf(state.discordClientId) }
+
+                SettingsCard {
+                    Text("Google Client ID", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = googleClientId,
+                        onValueChange = { googleClientId = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("xxx.apps.googleusercontent.com", color = VasuTextMuted) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                        )
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    Text("GitHub Client ID", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = githubClientId,
+                        onValueChange = { githubClientId = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Iv1.xxxxxxxx", color = VasuTextMuted) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                        )
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("GitHub Client Secret", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = githubClientSecret,
+                        onValueChange = { githubClientSecret = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("xxxxxxxxxxxxxxxx", color = VasuTextMuted) },
+                        singleLine = true,
+                        visualTransformation = if (showGithubSecret) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                        trailingIcon = {
+                            IconButton(onClick = { showGithubSecret = !showGithubSecret }) {
+                                Icon(if (showGithubSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null, tint = VasuTextSecondary)
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                        )
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    Text("Discord Client ID", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = discordClientId,
+                        onValueChange = { discordClientId = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("1234567890", color = VasuTextMuted) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                        )
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { viewModel.saveOAuthConfig(googleClientId, githubClientId, githubClientSecret, discordClientId) },
+                        colors = ButtonDefaults.buttonColors(containerColor = VasuCyan, contentColor = VasuDarkBg)
+                    ) { Text("Save") }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }

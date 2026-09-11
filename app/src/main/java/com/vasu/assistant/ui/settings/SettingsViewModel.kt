@@ -76,7 +76,17 @@ data class SettingsUiState(
     val wakeWordReason: String? = null,
 
     val voiceGuardEnabled: Boolean = false,
-    val autoAllowEnabled: Boolean = true
+    val autoAllowEnabled: Boolean = true,
+
+    // Live Chat / WebSocket
+    val chatServerUrl: String = "",
+    val chatApiKey: String = "",
+
+    // OAuth / Connectors
+    val googleClientId: String = "",
+    val githubClientId: String = "",
+    val githubClientSecret: String = "",
+    val discordClientId: String = ""
 ) {
     /** Cloud AI can only work when it is switched on, keyed, and reachable. */
     val cloudUsable: Boolean
@@ -168,7 +178,21 @@ class SettingsViewModel @Inject constructor(
             androidFallbackTtsEnabled = settings.androidFallbackTtsEnabled.value,
             geminiTtsVoice = settings.geminiTtsVoice.value,
             geminiTtsModel = settings.geminiTtsModel.value,
-            network = networkMonitor.state.value
+            network = networkMonitor.state.value,
+            // Live Chat config
+            chatServerUrl = context.getSharedPreferences("vasu_chat_config", Context.MODE_PRIVATE)
+                .getString("chat_server_url", "") ?: "",
+            chatApiKey = context.getSharedPreferences("vasu_chat_config", Context.MODE_PRIVATE)
+                .getString("chat_api_key", "") ?: "",
+            // OAuth config
+            googleClientId = context.getSharedPreferences("vasu_oauth_config", Context.MODE_PRIVATE)
+                .getString("google_client_id", "") ?: "",
+            githubClientId = context.getSharedPreferences("vasu_oauth_config", Context.MODE_PRIVATE)
+                .getString("github_client_id", "") ?: "",
+            githubClientSecret = context.getSharedPreferences("vasu_oauth_config", Context.MODE_PRIVATE)
+                .getString("github_client_secret", "") ?: "",
+            discordClientId = context.getSharedPreferences("vasu_oauth_config", Context.MODE_PRIVATE)
+                .getString("discord_client_id", "") ?: ""
         )
     }
 
@@ -405,6 +429,33 @@ class SettingsViewModel @Inject constructor(
                 connectionMessage = "This device has no screen for $action."
             )
         }
+    }
+
+    // Live Chat config
+    fun saveChatConfig(serverUrl: String, apiKey: String) {
+        val prefs = context.getSharedPreferences("vasu_chat_config", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("chat_server_url", serverUrl.trim())
+            .putString("chat_api_key", apiKey.trim())
+            .apply()
+        _uiState.value = _uiState.value.copy(chatServerUrl = serverUrl.trim(), chatApiKey = apiKey.trim())
+    }
+
+    // OAuth config
+    fun saveOAuthConfig(googleClientId: String, githubClientId: String, githubClientSecret: String, discordClientId: String) {
+        val prefs = context.getSharedPreferences("vasu_oauth_config", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("google_client_id", googleClientId.trim())
+            .putString("github_client_id", githubClientId.trim())
+            .putString("github_client_secret", githubClientSecret.trim())
+            .putString("discord_client_id", discordClientId.trim())
+            .apply()
+        _uiState.value = _uiState.value.copy(
+            googleClientId = googleClientId.trim(),
+            githubClientId = githubClientId.trim(),
+            githubClientSecret = githubClientSecret.trim(),
+            discordClientId = discordClientId.trim()
+        )
     }
 
     override fun onCleared() {
