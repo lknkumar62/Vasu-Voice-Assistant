@@ -301,6 +301,13 @@
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Unlock Activity — dismisses lock screen for assistant actions -->
+        <activity
+            android:name=".ui.biometric.UnlockActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" />
+
     </application>
 
 </manifest>
