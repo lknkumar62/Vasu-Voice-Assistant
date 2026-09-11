@@ -259,6 +259,20 @@
             </intent-filter>
         </receiver>
 
+        <!-- OAuth Redirect Activity — handles OAuth callbacks from providers -->
+        <activity
+            android:name=".core.connectors.OAuthRedirectActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vasu" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 </manifest>
