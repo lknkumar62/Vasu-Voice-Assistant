@@ -109,6 +109,7 @@ export class ApiKeyManager {
   }
 
   setKey(id: string, key: string) {
+    console.log(`[ApiKeyManager] setKey called: id=${id}, key=${key ? key.substring(0,8) + '...' : 'EMPTY'}, length=${key?.length || 0}`);
     let entry = this.keys.get(id);
     if (!entry) entry = this.keys.get(`ai_${id}`);
     if (!entry) {
@@ -125,11 +126,13 @@ export class ApiKeyManager {
         priority: isAI ? 1 : 2,
       };
       this.keys.set(entryId, entry);
+      console.log(`[ApiKeyManager] Created new entry: ${entryId}`);
     }
     entry.key = key;
     entry.enabled = key.length > 5;
 
     if (entry.providerType === 'ai') {
+      console.log(`[ApiKeyManager] Calling aiProviderManager.configure for ${entry.provider}`);
       aiProviderManager.configure(entry.provider as AIProviderType, {
         apiKey: key,
         enabled: key.length > 5,

@@ -31,6 +31,7 @@ import { ToolExecutor, ToolExecutionResult } from './services/toolRegistry';
 import { LocalCommandEngine } from './services/localCommandEngine';
 import { GeminiClient } from './services/geminiClient';
 import { apiKeyManager } from './services/apiKeyManager';
+import { aiProviderManager } from './services/aiProviderManager';
 
 import {
   ShieldAlert,
@@ -262,14 +263,33 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('vasu_settings', JSON.stringify(settings));
     audioEngine.setApiKey(settings.geminiApiKey || '');
+    // Always keep aiProviderManager in sync with settings
+    if (settings.geminiApiKey) {
+      try {
+        aiProviderManager.configure('gemini', { apiKey: settings.geminiApiKey, enabled: true });
+      } catch (_) {}
+    }
   }, [settings]);
 
   // Sync apiKey to server on boot if already stored
   useEffect(() => {
+    console.log('[App] Boot sync running, geminiApiKey:', settings.geminiApiKey ? settings.geminiApiKey.substring(0,8) + '...' : 'EMPTY');
     if (settings.geminiApiKey) {
       audioEngine.setApiKey(settings.geminiApiKey);
-      // Ensure aiProviderManager is configured with the saved API key
-      try { apiKeyManager.setKey('gemini', settings.geminiApiKey); } catch (_) {}
+      // Direct configure aiProviderManager (in case apiKeyManager fails silently)
+      try {
+        aiProviderManager.configure('gemini', { apiKey: settings.geminiApiKey, enabled: true });
+        console.log('[App] Direct aiProviderManager.configure done');
+      } catch (e) {
+        console.error('[App] aiProviderManager.configure failed:', e);
+      }
+      // Also try via apiKeyManager
+      try {
+        apiKeyManager.setKey('gemini', settings.geminiApiKey);
+        console.log('[App] apiKeyManager.setKey completed');
+      } catch (e) {
+        console.error('[App] apiKeyManager.setKey failed:', e);
+      }
       fetch('/api/gemini/key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -106,7 +106,7 @@ function pcmToWav(pcmData: Uint8Array, sampleRate = 24000, numChannels = 1): Arr
 export class GeminiClient {
   public static async testConnection(apiKey?: string): Promise<GeminiTestResult> {
     const trimmedKey = (apiKey || '').trim();
-    if (trimmedKey && trimmedKey.length > 8) {
+    if (trimmedKey && trimmedKey.length > 5) {
       for (const model of CHAT_MODELS) {
         const startTime = Date.now();
         try {
@@ -147,8 +147,10 @@ export class GeminiClient {
   }
 
   public static async chat(params: ChatParams): Promise<ChatResponse> {
+    console.log('[GeminiClient] chat called, apiKey from params:', params.apiKey ? params.apiKey.substring(0,8) + '...' : 'EMPTY');
     // Try multi-provider system first
     const providerResponse = await aiProviderManager.chat(params);
+    console.log('[GeminiClient] aiProviderManager response source:', providerResponse.source);
     if (providerResponse.source !== 'local_jarvis') {
       return {
         replyText: cleanAssistantText(providerResponse.replyText),
@@ -161,7 +163,8 @@ export class GeminiClient {
 
     // Fallback to direct Gemini if configured
     const trimmedKey = (params.apiKey || '').trim();
-    if (trimmedKey && trimmedKey.length > 8) {
+    console.log('[GeminiClient] trimmedKey length:', trimmedKey.length, 'present:', !!trimmedKey);
+    if (trimmedKey && trimmedKey.length > 5) {
       const sysInstruction = `You are VASU, an affectionate Indian female AI companion. Speak in conversational Hinglish. Keep replies concise (1-3 sentences). Never output Devanagari script.`;
       for (const model of CHAT_MODELS) {
         if (isClientModelCooledDown(model)) continue;
@@ -250,7 +253,7 @@ export class GeminiClient {
     }
 
     // Direct Gemini TTS (works in standalone APK + web)
-    if (trimmedKey && trimmedKey.length > 8) {
+    if (trimmedKey && trimmedKey.length > 5) {
       for (const model of TTS_MODELS) {
         if (isClientModelCooledDown(model)) continue;
         try {

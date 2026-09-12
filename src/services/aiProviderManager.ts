@@ -78,13 +78,18 @@ export class AIProviderManager {
   private loadFromStorage() {
     try {
       const saved = localStorage.getItem('vasu_provider_configs');
+      console.log('[AIProviderManager] loadFromStorage, raw data:', saved ? saved.substring(0, 200) : 'NULL');
       if (saved) {
         const configs = JSON.parse(saved);
         for (const [type, config] of Object.entries(configs)) {
+          console.log(`[AIProviderManager] Loading provider ${type}: apiKey=${(config as any).apiKey ? (config as any).apiKey.substring(0,8) + '...' : 'EMPTY'}`);
           this.providers.set(type as AIProviderType, config as ProviderConfig);
         }
       }
-    } catch (_) {}
+      console.log('[AIProviderManager] loadFromStorage complete, providers count:', this.providers.size);
+    } catch (e) {
+      console.error('[AIProviderManager] loadFromStorage error:', e);
+    }
   }
 
   private saveToStorage() {
@@ -98,8 +103,10 @@ export class AIProviderManager {
   }
 
   configure(type: AIProviderType, config: Partial<ProviderConfig>) {
+    console.log(`[AIProviderManager] configure called for ${type}:`, JSON.stringify({ apiKey: config.apiKey ? config.apiKey.substring(0,8) + '...' : 'EMPTY', enabled: config.enabled }));
     const existing = this.providers.get(type) || this.getDefaultConfig(type);
     this.providers.set(type, { ...existing, ...config });
+    console.log(`[AIProviderManager] After configure, providers map size: ${this.providers.size}`);
     this.saveToStorage();
   }
 
@@ -151,7 +158,9 @@ export class AIProviderManager {
 
   getEnabledProviders(): AIProviderType[] {
     const providers: AIProviderType[] = [];
+    console.log('[AIProviderManager] getEnabledProviders called, providers map size:', this.providers.size);
     this.providers.forEach((config, type) => {
+      console.log(`[AIProviderManager] Provider ${type}: enabled=${config.enabled}, apiKey=${config.apiKey ? config.apiKey.substring(0,8) + '...' : 'EMPTY'}, length=${config.apiKey?.length || 0}`);
       if (config.enabled && config.apiKey && config.apiKey.length > 5) {
         providers.push(type);
       }
@@ -218,7 +227,20 @@ export class AIProviderManager {
 
   async chat(params: ChatParams): Promise<AIProviderResponse> {
     const enabledProviders = this.getEnabledProviders();
+    console.log('[AIProviderManager] chat called, enabledProviders count:', enabledProviders.length, 'providers:', enabledProviders, 'params.apiKey:', params.apiKey ? params.apiKey.substring(0,8) + '...' : 'EMPTY');
     if (enabledProviders.length === 0) {
+      // Fallback: if params has apiKey, configure gemini on-the-fly
+      const fallbackKey = (params.apiKey || '').trim();
+      if (fallbackKey && fallbackKey.length > 5) {
+        console.log('[AIProviderManager] No providers configured but params.apiKey present, configuring gemini on-the-fly');
+        this.configure('gemini', { apiKey: fallbackKey, enabled: true });
+        // Retry with the now-configured provider
+        const retryProviders = this.getEnabledProviders();
+        if (retryProviders.length > 0) {
+          return this.chat(params);
+        }
+      }
+      console.warn('[AIProviderManager] NO enabled providers! Returning local_jarvis');
       return {
         replyText: this.getLocalJarvisResponse(params.message),
         source: 'local_jarvis',
