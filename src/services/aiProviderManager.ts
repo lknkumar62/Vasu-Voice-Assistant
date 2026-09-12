@@ -263,8 +263,11 @@ export class AIProviderManager {
 
         if (errorClass === 'RATE_LIMITED') {
           this.setCooldown(providerType, 60);
+          // On rate limit, don't retry other providers — return local immediately
+          break;
         } else if (errorClass === 'QUOTA_EXCEEDED') {
           this.setCooldown(providerType, 300);
+          break;
         } else if (errorClass === 'INVALID_API_KEY') {
           this.setCooldown(providerType, 3600);
         }
@@ -296,7 +299,7 @@ export class AIProviderManager {
     if (!config || !config.apiKey) throw new Error(`${type} not configured`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
       let url = '';

@@ -122,7 +122,7 @@ export default function App() {
       smartMode: 'NORMAL',
       guardianActive: true,
       requireConfirmationForHighRisk: true,
-      followUpMode: false,
+      followUpMode: true,
       autoSpeak: true,
       torchActive: false,
       volumeLevel: 70,
@@ -652,6 +652,11 @@ export default function App() {
             }
             return curr;
           });
+        },
+        onSilenceTimeout: () => {
+          setLiveVoiceTranscript('');
+          setAssistantState('IDLE');
+          wakeWordEngine.resume();
         },
       },
       settings.language,

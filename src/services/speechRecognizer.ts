@@ -40,6 +40,7 @@ export interface SpeechRecognizerCallbacks {
   onError: (error: SpeechError) => void;
   onEnd: () => void;
   onAudioLevel?: (level: number) => void;
+  onSilenceTimeout?: () => void;
 }
 
 export class VasuSpeechRecognizer {
@@ -48,6 +49,7 @@ export class VasuSpeechRecognizer {
   private continuousMode = true;
   private manuallyStopped = false;
   private silenceTimer: any = null;
+  private totalSilenceTimer: any = null;
   private watchdogTimer: any = null;
   private visualizerTimer: any = null;
   private currentLanguage: 'Hindi' | 'Hinglish' | 'English' = 'Hinglish';
@@ -141,10 +143,18 @@ export class VasuSpeechRecognizer {
         let finalTranscript = '';
         let interimTranscript = '';
         let hasSpoken = false;
+        let lastConfidence = 0;
 
         const finalizeSpeech = (text: string) => {
           const cleanText = text.trim();
           if (!cleanText || !this.isListening) return;
+          // Reject very low confidence garbage (e.g., random Hindi chars like "ऐसा है क्या")
+          if (lastConfidence > 0 && lastConfidence < 0.35 && cleanText.length < 10) {
+            console.warn('[SpeechRecognizer] Low confidence (' + lastConfidence + ') short text, skipping:', cleanText);
+            finalTranscript = '';
+            this.capturedTranscript = '';
+            return;
+          }
           this.manuallyStopped = true;
           this.cleanup();
           callbacks.onFinalResult(cleanText);
@@ -168,15 +178,19 @@ export class VasuSpeechRecognizer {
 
           let curFinal = '';
           let curInterim = '';
+          let bestConfidence = 0;
 
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             const res = event.results[i];
+            const conf = res[0].confidence || 0;
+            if (conf > bestConfidence) bestConfidence = conf;
             if (res.isFinal) {
               curFinal += res[0].transcript;
             } else {
               curInterim += res[0].transcript;
             }
           }
+          lastConfidence = bestConfidence;
 
           if (curFinal) {
             finalTranscript = (finalTranscript + ' ' + curFinal).trim();
@@ -190,19 +204,28 @@ export class VasuSpeechRecognizer {
             callbacks.onAudioLevel?.(0.7 + Math.random() * 0.3);
           }
 
-          // Ultra-responsive silence detector for instant voice recognition (<1s total pipeline)
+          // Silence detector — wait long enough for user to finish speaking
           const activeText = (finalTranscript || this.capturedTranscript || displayText).trim();
           if (activeText.length > 0) {
             clearTimeout(this.silenceTimer);
-            // If final piece arrived, 200ms of silence is enough to commit.
-            // If interim piece arrived, 400ms of silence commits the phrase immediately!
-            const debounceMs = curFinal ? 200 : 400;
+            // 1.5s after final result, 2s after interim — gives user time to continue
+            const debounceMs = curFinal ? 1500 : 2000;
             this.silenceTimer = setTimeout(() => {
               if (this.isListening) {
                 finalizeSpeech(activeText);
               }
             }, debounceMs);
           }
+
+          // Total silence timeout — if no speech at all for 12s, stop listening
+          clearTimeout(this.totalSilenceTimer);
+          this.totalSilenceTimer = setTimeout(() => {
+            if (this.isListening && !finalTranscript && !this.capturedTranscript) {
+              console.log('[SpeechRecognizer] Total silence timeout — stopping');
+              this.stop();
+              callbacks.onSilenceTimeout?.();
+            }
+          }, 12000);
         };
 
         recognition.onerror = (event: any) => {
@@ -407,6 +430,7 @@ export class VasuSpeechRecognizer {
     this.isListening = false;
     audioEngine.setIdleState();
     clearTimeout(this.silenceTimer);
+    clearTimeout(this.totalSilenceTimer);
     clearTimeout(this.watchdogTimer);
     if (this.visualizerTimer) {
       clearInterval(this.visualizerTimer);
