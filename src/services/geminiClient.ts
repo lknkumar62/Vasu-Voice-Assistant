@@ -229,20 +229,28 @@ export class GeminiClient {
   public static async generateTTSAudio(text: string, apiKey?: string): Promise<string | null> {
     const trimmedKey = (apiKey || '').trim();
     const cleanText = text.replace(/[*_~`#]/g, '').trim().slice(0, 450);
-    if (!cleanText) return null;
+    if (!cleanText) {
+      console.warn('[GeminiClient] TTS: empty text after cleaning');
+      return null;
+    }
     if (isClientModelCooledDown('tts')) {
       console.warn('[GeminiClient] TTS in cooldown, skipping');
       return null;
     }
 
+    console.log(`[GeminiClient] generateTTSAudio called, key present: ${!!trimmedKey}, key length: ${trimmedKey.length}, text length: ${cleanText.length}`);
+
     // Direct Gemini TTS (works in standalone APK + web)
     if (trimmedKey && trimmedKey.length > 5) {
       for (const model of TTS_MODELS) {
-        if (isClientModelCooledDown(model)) continue;
+        if (isClientModelCooledDown(model)) {
+          console.log(`[GeminiClient] TTS model ${model} in cooldown, skipping`);
+          continue;
+        }
         try {
-          console.log(`[GeminiClient] Trying TTS with model: ${model}`);
+          console.log(`[GeminiClient] Trying TTS with model: ${model}, key prefix: ${trimmedKey.substring(0, 10)}...`);
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
           const response = await fetch(url, {
             method: 'POST',
@@ -257,6 +265,7 @@ export class GeminiClient {
             signal: controller.signal,
           });
           clearTimeout(timeoutId);
+          console.log(`[GeminiClient] TTS ${model} response status: ${response.status}`);
           if (response.ok) {
             const data = await response.json();
             const part = data?.candidates?.[0]?.content?.parts?.[0];
@@ -267,25 +276,32 @@ export class GeminiClient {
               for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
               const wavBuffer = pcmToWav(bytes, 24000, 1);
               const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-              console.log('[GeminiClient] TTS audio generated successfully');
-              return URL.createObjectURL(blob);
+              const audioUrl = URL.createObjectURL(blob);
+              console.log(`[GeminiClient] TTS audio generated successfully, blob URL: ${audioUrl.substring(0, 50)}...`);
+              return audioUrl;
+            } else {
+              console.warn(`[GeminiClient] TTS ${model} returned OK but no audio data. Response structure:`, JSON.stringify(data).substring(0, 200));
             }
           } else {
-            console.warn(`[GeminiClient] TTS ${model} returned ${response.status}`);
+            const errorText = await response.text().catch(() => 'Could not read error body');
+            console.warn(`[GeminiClient] TTS ${model} returned ${response.status}: ${errorText.substring(0, 200)}`);
             if (response.status === 429) {
-              recordClientModelCooldown('tts', 3);
-              recordClientModelCooldown(model, 3);
-              break;
+              recordClientModelCooldown('tts', 5);
+              recordClientModelCooldown(model, 5);
+              // Don't break — try next model
+              continue;
             }
           }
-        } catch (e) {
-          console.warn(`[GeminiClient] TTS ${model} failed:`, e);
+        } catch (e: any) {
+          const errMsg = e?.name === 'AbortError' ? 'Timeout after 5s' : e?.message || String(e);
+          console.warn(`[GeminiClient] TTS ${model} failed: ${errMsg}`);
           continue;
         }
       }
     } else {
-      console.warn('[GeminiClient] No valid API key for TTS, key length:', trimmedKey.length);
+      console.warn(`[GeminiClient] No valid API key for TTS. Key present: ${!!trimmedKey}, length: ${trimmedKey.length}`);
     }
+    console.warn('[GeminiClient] All TTS models exhausted, returning null');
     return null;
   }
 

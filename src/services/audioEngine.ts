@@ -1,5 +1,6 @@
 import { GeminiClient } from './geminiClient';
 import { GeminiLiveVoiceService } from './geminiLiveVoiceService';
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
 /**
  * Translates/transliterates Hindi Devanagari text into natural phonetic Hinglish.
@@ -1089,10 +1090,19 @@ class AudioEngine {
       }
     }
 
-    // Offline Fallback: Browser / Android Web Speech API
-    // If speechSynthesis unavailable (Android WebView), play a notification chime
+    // Offline Fallback: Try Capacitor Native TTS first (works on Android even without speechSynthesis)
+    const capacitorSuccess = await this.speakWithCapacitorTTS(cleanText, {
+      speed: options.speed,
+      pitch: options.pitch,
+      volume: options.volume,
+      onStart: options.onStart,
+      onEnd: options.onEnd,
+    });
+    if (capacitorSuccess) return;
+
+    // Final Fallback: Browser Web Speech API (only works in browsers, not Android WebView)
     if (!this.synth) {
-      console.warn('[AudioEngine] No speechSynthesis available — playing chime as voice indicator');
+      console.warn('[AudioEngine] All TTS methods failed — playing chime as last resort');
       this.transitionTo('SPEAKING');
       options.onStart?.();
       try { await this.playSuccessChime(); } catch (_) {}
@@ -1327,10 +1337,65 @@ class AudioEngine {
   }
 
   /**
+   * Speak using Capacitor native TTS (Android TextToSpeech plugin)
+   * This is the ULTIMATE fallback when Gemini TTS and browser TTS both fail.
+   */
+  private async speakWithCapacitorTTS(
+    text: string,
+    options: {
+      speed?: number;
+      pitch?: number;
+      volume?: number;
+      onStart?: () => void;
+      onEnd?: () => void;
+    } = {}
+  ): Promise<boolean> {
+    try {
+      const isCapacitor = typeof (window as any).Capacitor !== 'undefined' &&
+        typeof (window as any).Capacitor.isNativePlatform === 'function' &&
+        (window as any).Capacitor.isNativePlatform();
+
+      if (!isCapacitor) {
+        console.warn('[AudioEngine] Not on native platform, skipping Capacitor TTS');
+        return false;
+      }
+
+      console.log('[AudioEngine] Attempting Capacitor native TTS...');
+
+      // Convert Hinglish text to phonetic for Android TTS engines
+      const textToSpeak = toPhoneticHinglish(text);
+
+      await TextToSpeech.speak({
+        text: textToSpeak,
+        lang: 'hi-IN',
+        rate: options.speed || 1.0,
+        pitch: options.pitch || 1.0,
+        volume: options.volume || 1.0,
+        voice: 0, // Use first available voice (usually female on most devices)
+      });
+
+      console.log('[AudioEngine] Capacitor TTS completed successfully');
+      return true;
+    } catch (e) {
+      console.warn('[AudioEngine] Capacitor TTS failed:', e);
+      return false;
+    }
+  }
+
+  /**
    * Instantly stops any current speech or audio (Interruption capability)
    */
-  public stop() {
+  public async stop() {
     this.stopPreviousOperations();
+    // Also stop Capacitor TTS if it's running
+    try {
+      const isCapacitor = typeof (window as any).Capacitor !== 'undefined' &&
+        typeof (window as any).Capacitor.isNativePlatform === 'function' &&
+        (window as any).Capacitor.isNativePlatform();
+      if (isCapacitor) {
+        await TextToSpeech.stop();
+      }
+    } catch (_) {}
   }
 }
 
