@@ -3,6 +3,8 @@
  * Centralized multi-provider AI system with intelligent fallback
  */
 
+import { toPhoneticHinglish } from './audioEngine';
+
 import {
   AIProviderType,
   AIProviderResponse,
@@ -241,8 +243,11 @@ export class AIProviderManager {
         config.lastSuccessfulRequest = Date.now();
         this.saveToStorage();
 
+        // Apply cleanAssistantText to convert Devanagari to phonetic Hinglish
+        const cleaned = toPhoneticHinglish(response).replace(/VASU/gi, 'Vasu');
+
         return {
-          replyText: response,
+          replyText: cleaned,
           source: providerType,
           modelUsed: config.model,
           latencyMs: Date.now(),

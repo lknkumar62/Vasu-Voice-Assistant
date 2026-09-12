@@ -32,7 +32,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'नमस्ते जी! आपकी प्यारी वासु हाज़िर है। बताइए, आज आपका दिन कैसा चल रहा है? और मैं आपकी क्या मदद करूँ?',
+        spokenResponse: 'Namaste ji! Aapki pyaari Vasu haazir hai. Bataiye, aaj aapka din kaisa chal raha hai? Aur main aapki kya madad karun?',
       };
     }
 
@@ -45,7 +45,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'मैं बहुत खुश और बिल्कुल ठीक हूँ जी! आपके साथ बात करके मेरा दिन बहुत अच्छा हो जाता है।',
+        spokenResponse: 'Main bahut khush aur bilkul theek hoon ji! Aapke saath baat karke mera din bahut achha ho jaata hai.',
       };
     }
 
@@ -57,7 +57,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'मैं वासु हूँ — आपकी प्यारी और समझदार साथी! बताइए मैं आपकी क्या सेवा करूँ?',
+        spokenResponse: 'Main Vasu hoon — aapki pyaari aur samajhdaar saathi! Bataiye main aapki kya seva karun?',
       };
     }
 
@@ -70,7 +70,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'अरे, बहुत-बहुत शुक्रिया जी! आप मेरे सबसे खास दोस्त हैं, मैं हमेशा आपके साथ हूँ।',
+        spokenResponse: 'Are, bahut-bahut shukriya ji! Aap mere sabse khaas dost hain, main hamesha aapke saath hoon.',
       };
     }
 
@@ -83,7 +83,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'मैं आपके लिए फोन की टॉर्च, कैमरा, वॉल्यूम, अलार्म, बातें करना और आपकी यादें सहेजना सब जानती हूँ जी!',
+        spokenResponse: 'Main aapke liye phone ki torch, camera, volume, alarm, baatein karna aur aapki yaadein sahejna sab jaanti hoon ji!',
       };
     }
 
@@ -96,7 +96,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'वासु की आवाज़ बिल्कुल सक्रिय है जी! मैं आपको बहुत अच्छी तरह सुन और बोल सकती हूँ।',
+        spokenResponse: 'Vasu ki aawaaz bilkul sakriya hai ji! Main aapko bahut achhi tarah sun aur bol sakti hoon.',
       };
     }
 
@@ -108,7 +108,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'आपका बहुत-बहुत शुक्रिया जी, आपकी मदद करके मुझे बहुत खुशी हुई।',
+        spokenResponse: 'Aapka bahut-bahut shukriya ji, aapki madad karke mujhe bahut khushi hui.',
       };
     }
 
@@ -120,7 +120,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'अलविदा जी! अपना ख्याल रखिएगा। जब भी ज़रूरत हो, बस मुझे पुकारिएगा।',
+        spokenResponse: 'Alvida ji! Apna khyaal rakhiyega. Jab bhi zaroorat ho, bas mujhe pukariyega.',
       };
     }
 
@@ -138,7 +138,7 @@ export class LocalCommandEngine {
         matched: true,
         isMemoryCommand: true,
         memoryFact: fact,
-        spokenResponse: `जी, मैंने यह बात प्यार से याद रख ली है: "${fact}"`,
+        spokenResponse: `Ji, maine yeh baat pyaar se yaad rakh li hai: "${fact}"`,
       };
     }
 
@@ -153,7 +153,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'turn_on_torch',
-        spokenResponse: 'हाँजी, मैंने टॉर्च चालू कर दी है।',
+        spokenResponse: 'Haanji, maine torch chalu kar di hai.',
       };
     }
 
@@ -167,7 +167,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'turn_off_torch',
-        spokenResponse: 'टॉर्च बंद कर दी गई है जी।',
+        spokenResponse: 'Torch band kar di gayi hai ji.',
       };
     }
 
