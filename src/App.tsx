@@ -385,7 +385,8 @@ export default function App() {
       wakeWordEngine.pause();
       setAssistantState('SPEAKING');
 
-      await ttsManager.speak(text, {
+      // Fire TTS in background — don't block mic restart
+      ttsManager.speak(text, {
         autoSpeak: settings.autoSpeak,
         speed: settings.ttsSpeed,
         pitch: settings.ttsPitch,
@@ -393,15 +394,28 @@ export default function App() {
         apiKey: settings.geminiApiKey || '',
         source,
         force,
+      }).catch(() => {}).finally(() => {
+        // When TTS finishes (or fails), clean up state
+        setAssistantState((curr) => {
+          if (curr === 'SPEAKING') return 'IDLE';
+          return curr;
+        });
       });
 
-      // Post-speech transition
-      if (source === 'voice' && (settings.followUpMode || isContinuousListeningRef.current)) {
-        setTimeout(() => {
-          if (assistantStateRef.current === 'IDLE' || assistantStateRef.current === 'SPEAKING') {
-            startListeningRef.current?.();
+      // Restart mic IMMEDIATELY — don't wait for TTS
+      if (source === 'voice' || source === 'wake') {
+        if (settings.followUpMode || isContinuousListeningRef.current) {
+          setTimeout(() => {
+            if (assistantStateRef.current === 'IDLE' || assistantStateRef.current === 'SPEAKING') {
+              startListeningRef.current?.();
+            }
+          }, 500);
+        } else {
+          setAssistantState('IDLE');
+          if (settings.wakeWordEnabled && wakeStatusRef.current !== 'DISABLED') {
+            wakeWordEngine.resume();
           }
-        }, 300);
+        }
       } else {
         setAssistantState('IDLE');
         if (settings.wakeWordEnabled && wakeStatusRef.current !== 'DISABLED') {
@@ -586,15 +600,20 @@ export default function App() {
 
   // Start Microphone Listening Session
   const handleStartListening = useCallback(async () => {
-    // If speaking, thinking, or audio engine is active or in settle delay, strictly block listening
+    // If thinking or audio engine is settling, block listening
     if (
-      assistantStateRef.current === 'SPEAKING' ||
       assistantStateRef.current === 'THINKING' ||
-      audioEngine.isSpeaking() ||
       audioEngine.isInSettleDelay()
     ) {
-      console.log("[handleStartListening] Blocked because assistant is active or settling");
+      console.log("[handleStartListening] Blocked because assistant is thinking or settling");
       return;
+    }
+
+    // If TTS is playing, STOP it so user can speak
+    if (assistantStateRef.current === 'SPEAKING' || audioEngine.isSpeaking()) {
+      console.log("[handleStartListening] Stopping TTS to allow user speech");
+      audioEngine.stop();
+      ttsManager.stop();
     }
 
     audioEngine.unlock();
@@ -771,13 +790,13 @@ export default function App() {
         language: settings.language,
       });
 
-      // 3. Resume wake word engine after greeting settles (don't auto-start listening)
+      // 3. Start listening after greeting settles
       setTimeout(() => {
         if (assistantStateRef.current === 'IDLE' || assistantStateRef.current === 'SPEAKING') {
           setAssistantState('IDLE');
-          wakeWordEngine.resume();
+          startListeningRef.current?.();
         }
-      }, 2000);
+      }, 1500);
     }
   };
 

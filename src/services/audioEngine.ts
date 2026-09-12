@@ -991,7 +991,11 @@ class AudioEngine {
     if (!options.preferLocal) {
       try {
         const activeKey = options.apiKey || this.getApiKey();
-        const audioUrl = await GeminiClient.generateTTSAudio(cleanText, activeKey);
+        // 5-second timeout for TTS — don't block user for 30s
+        const audioUrl = await Promise.race([
+          GeminiClient.generateTTSAudio(cleanText, activeKey),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
+        ]);
 
         if (audioUrl) {
           const ctx = this.getAudioContext();
