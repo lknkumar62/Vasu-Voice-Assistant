@@ -170,7 +170,7 @@ export class GeminiClient {
         if (isClientModelCooledDown(model)) continue;
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
           const contents: any[] = [];
           if (params.history) {
@@ -185,7 +185,7 @@ export class GeminiClient {
             body: JSON.stringify({
               contents,
               systemInstruction: { parts: [{ text: sysInstruction }] },
-              generationConfig: { temperature: 0.7, maxOutputTokens: 2000 },
+              generationConfig: { temperature: 0.7, maxOutputTokens: 250 },
             }),
             signal: controller.signal,
           });
@@ -226,30 +226,9 @@ export class GeminiClient {
     const trimmedKey = (apiKey || '').trim();
     const cleanText = text.replace(/[*_~`#]/g, '').trim().slice(0, 450);
     if (!cleanText) return null;
-    if (isClientModelCooledDown('tts')) return null;
-
-    // Try server TTS first (non-standalone mode only)
-    if (!isStandaloneApk()) {
-      try {
-        const serverController = new AbortController();
-        const serverTimer = setTimeout(() => serverController.abort(), 8000);
-        const serverResponse = await fetch('/api/gemini/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: cleanText, apiKey: trimmedKey }),
-          signal: serverController.signal,
-        });
-        clearTimeout(serverTimer);
-        if (serverResponse.ok) {
-          const contentType = serverResponse.headers.get('content-type') || '';
-          if (contentType.includes('audio/') || contentType.includes('wav')) {
-            const audioBlob = await serverResponse.blob();
-            if (audioBlob && audioBlob.size > 200) return URL.createObjectURL(audioBlob);
-          }
-        }
-      } catch (e) {
-        console.warn('[GeminiClient] Server TTS failed, trying direct:', e);
-      }
+    if (isClientModelCooledDown('tts')) {
+      console.warn('[GeminiClient] TTS in cooldown, skipping');
+      return null;
     }
 
     // Direct Gemini TTS (works in standalone APK + web)
@@ -257,8 +236,9 @@ export class GeminiClient {
       for (const model of TTS_MODELS) {
         if (isClientModelCooledDown(model)) continue;
         try {
+          console.log(`[GeminiClient] Trying TTS with model: ${model}`);
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
           const response = await fetch(url, {
             method: 'POST',
@@ -283,13 +263,14 @@ export class GeminiClient {
               for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
               const wavBuffer = pcmToWav(bytes, 24000, 1);
               const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+              console.log('[GeminiClient] TTS audio generated successfully');
               return URL.createObjectURL(blob);
             }
           } else {
             console.warn(`[GeminiClient] TTS ${model} returned ${response.status}`);
             if (response.status === 429) {
-              recordClientModelCooldown('tts', 5);
-              recordClientModelCooldown(model, 5);
+              recordClientModelCooldown('tts', 3);
+              recordClientModelCooldown(model, 3);
               break;
             }
           }
@@ -298,6 +279,8 @@ export class GeminiClient {
           continue;
         }
       }
+    } else {
+      console.warn('[GeminiClient] No valid API key for TTS, key length:', trimmedKey.length);
     }
     return null;
   }

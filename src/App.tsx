@@ -417,7 +417,7 @@ export default function App() {
             source,
             force,
           }),
-          new Promise<void>((resolve) => setTimeout(() => resolve(), 12000))
+          new Promise<void>((resolve) => setTimeout(() => resolve(), 5000))
         ]);
       } catch (_) {}
 

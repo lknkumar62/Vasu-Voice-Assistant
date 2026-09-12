@@ -321,7 +321,7 @@ export class AIProviderManager {
     if (!config || !config.apiKey) throw new Error(`${type} not configured`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     try {
       let url = '';
@@ -351,7 +351,7 @@ export class AIProviderManager {
             systemInstruction: { parts: [{ text: sysInstruction }] },
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: options.maxTokens || 2000,
+              maxOutputTokens: options.maxTokens || 250,
             },
           };
           break;
