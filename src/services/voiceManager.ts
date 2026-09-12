@@ -18,6 +18,9 @@ import { wakeWordEngine, WakeWordStatus } from './wakeWordEngine';
 import { speechRecognizer } from './speechRecognizer';
 import { LocalCommandEngine, LocalCommandMatch } from './localCommandEngine';
 import { executeToolCall } from './toolRegistry';
+import { geminiLiveWebSocket } from './geminiLiveWebSocket';
+import { pcmAudioPlayer } from './pcmAudioPlayer';
+import { microphoneStreamer } from './microphoneStreamer';
 
 export type VasuVoiceState =
   | 'OFF'
@@ -91,9 +94,9 @@ export class VoiceManager {
       selectedVoice: this.selectedVoice,
       voiceMode: this.voiceMode,
       isWakeWordActive: wakeWordEngine.getStatus() === 'LISTENING',
-      isListening: this.state === 'LISTENING' || this.state === 'ACTIVE',
-      isSpeaking: this.state === 'SPEAKING' || audioEngine.isSpeaking() || this.liveService.getIsSpeaking(),
-      isLiveConnected: this.liveService.getIsConnected(),
+      isListening: this.state === 'LISTENING' || this.state === 'ACTIVE' || microphoneStreamer.isStreaming(),
+      isSpeaking: this.state === 'SPEAKING' || audioEngine.isSpeaking() || this.liveService.getIsSpeaking() || pcmAudioPlayer.isActive(),
+      isLiveConnected: geminiLiveWebSocket.isConnected() || this.liveService.getIsConnected(),
       errorMessage: this.errorMessage,
       audioLevel: this.audioLevel,
     };
@@ -231,12 +234,44 @@ export class VoiceManager {
   }
 
   /**
-   * Speak an assistant response using the centralized audio pipeline
+   * Speak an assistant response — Maya-style pipeline:
+   * 1. If Gemini Live WebSocket connected → send text for streaming TTS
+   * 2. Otherwise → fallback to audioEngine TTS chain
    */
   public async speak(text: string, options?: { apiKey?: string; onStart?: () => void; onEnd?: () => void }): Promise<void> {
     this.setState('SPEAKING');
     wakeWordEngine.pause();
 
+    // Try Maya-style WebSocket TTS first (streaming PCM)
+    if (geminiLiveWebSocket.isConnected()) {
+      try {
+        pcmAudioPlayer.init();
+        geminiLiveWebSocket.sendText(text);
+        console.log('[VoiceManager] Sent text via Gemini Live WebSocket TTS');
+        // Wait for audio to drain
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(resolve, 15000);
+          pcmAudioPlayer.onDrained(() => {
+            clearTimeout(timeout);
+            resolve();
+          });
+        });
+        options?.onEnd?.();
+        setTimeout(() => {
+          if (wakeWordEngine.getStatus() === 'PAUSED' || wakeWordEngine.getStatus() === 'LISTENING') {
+            wakeWordEngine.resume();
+            this.setState('LISTENING');
+          } else {
+            this.setState('OFF');
+          }
+        }, 350);
+        return;
+      } catch (e) {
+        console.warn('[VoiceManager] WebSocket TTS failed, falling back:', e);
+      }
+    }
+
+    // Fallback to audioEngine TTS chain
     try {
       await audioEngine.speakAssistantResponse(text, {
         apiKey: options?.apiKey || this.getApiKey(),
@@ -254,7 +289,7 @@ export class VoiceManager {
             } else {
               this.setState('OFF');
             }
-          }, 350); // 350ms speaker hardware settle delay
+          }, 350);
         },
       });
     } catch (err: any) {
@@ -346,9 +381,10 @@ export class VoiceManager {
   }
 
   /**
-   * Interrupt ongoing speech or listening
+   * Interrupt ongoing speech or listening — Maya-style: flush AudioTrack + clear queue
    */
   public interrupt(): void {
+    try { pcmAudioPlayer.flush(); } catch (_) {}
     this.liveService.interrupt();
     audioEngine.stop();
     this.setState(wakeWordEngine.getStatus() === 'LISTENING' ? 'LISTENING' : 'OFF');

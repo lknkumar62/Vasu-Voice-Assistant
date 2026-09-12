@@ -1,6 +1,9 @@
 import { GeminiClient } from './geminiClient';
 import { GeminiLiveVoiceService } from './geminiLiveVoiceService';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
+import { geminiLiveWebSocket } from './geminiLiveWebSocket';
+import { pcmAudioPlayer } from './pcmAudioPlayer';
+import { microphoneStreamer } from './microphoneStreamer';
 
 /**
  * Translates/transliterates Hindi Devanagari text into natural phonetic Hinglish.
@@ -270,12 +273,14 @@ class AudioEngine {
       }
     }
 
-    // 2. Interrupt Gemini Live service if running
-    try {
-      GeminiLiveVoiceService.getInstance().interrupt();
-    } catch (_) {}
+    // 2. Flush PCM audio player and interrupt Gemini Live
+    try { pcmAudioPlayer.flush(); } catch (_) {}
+    try { GeminiLiveVoiceService.getInstance().interrupt(); } catch (_) {}
 
-    // 3. Stop and disconnect Web Audio buffer source
+    // 3. Stop microphone streamer
+    try { microphoneStreamer.stop(); } catch (_) {}
+
+    // 4. Stop and disconnect Web Audio buffer source
     if (this.currentBufferSource) {
       try {
         this.currentBufferSource.stop();
@@ -988,7 +993,46 @@ class AudioEngine {
       return;
     }
 
-    // Attempt dynamic Gemini native audio (Kore prebuilt voice) first for conversational speech
+    // ═══ MAYA-STYLE: Gemini Live WebSocket TTS (primary path) ═══
+    // Send text directly to Gemini BidiGenerateContent WebSocket,
+    // receive streaming 24kHz PCM chunks → play via pcmAudioPlayer
+    if (!options.preferLocal) {
+      try {
+        const activeKey = options.apiKey || this.getApiKey();
+        if (activeKey && activeKey.length > 5 && geminiLiveWebSocket.isConnected()) {
+          console.log('[AudioEngine] Using Gemini Live WebSocket TTS');
+          this.transitionTo('SPEAKING');
+          options.onStart?.();
+
+          await new Promise<void>((resolve) => {
+            let resolved = false;
+            const finish = () => {
+              if (resolved) return;
+              resolved = true;
+              pcmAudioPlayer.flush();
+              this.transitionTo('IDLE');
+              options.onEnd?.();
+              resolve();
+            };
+
+            // Set up PCM player to play incoming chunks
+            pcmAudioPlayer.init();
+            pcmAudioPlayer.onDrained(finish);
+
+            // Send text to Gemini via WebSocket
+            geminiLiveWebSocket.sendText(cleanText);
+
+            // Timeout (15s max)
+            setTimeout(() => { if (!resolved) finish(); }, 15000);
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn('[AudioEngine] Gemini Live WebSocket TTS failed, falling through:', e);
+      }
+    }
+
+    // ═══ FALLBACK: Gemini REST TTS (request/response) ═══
     if (!options.preferLocal) {
       try {
         const activeKey = options.apiKey || this.getApiKey();

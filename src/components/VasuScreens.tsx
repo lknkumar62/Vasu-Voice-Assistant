@@ -761,7 +761,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {page === "voice" && (
           <div className="space-y-2">
-            <SettingRow icon={Mic} label="Voice Selection" value={settings.ttsVoice || "Kore"} />
+            {/* Voice Selection Dropdown — All 30 Gemini Voices */}
+            <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
+              <div className="flex items-center gap-3 mb-3">
+                <IconBox><Mic size={19} /></IconBox>
+                <div>
+                  <div className="text-sm font-semibold">Voice Selection</div>
+                  <div className="text-[10px] text-[#7895B8]">Choose VASU's voice personality</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { name: 'Kore', gender: 'Female', trait: 'Firm (Default)' },
+                  { name: 'Aoede', gender: 'Female', trait: 'Breezy' },
+                  { name: 'Leda', gender: 'Female', trait: 'Youthful' },
+                  { name: 'Zephyr', gender: 'Female', trait: 'Bright' },
+                  { name: 'Despina', gender: 'Female', trait: 'Smooth' },
+                  { name: 'Erinome', gender: 'Female', trait: 'Clear' },
+                  { name: 'Callirrhoe', gender: 'Female', trait: 'Easy-going' },
+                  { name: 'Autonoe', gender: 'Female', trait: 'Bright' },
+                  { name: 'Gacrux', gender: 'Female', trait: 'Mature' },
+                  { name: 'Sulafat', gender: 'Female', trait: 'Warm' },
+                  { name: 'Vindemiatrix', gender: 'Female', trait: 'Gentle' },
+                  { name: 'Puck', gender: 'Male', trait: 'Upbeat' },
+                  { name: 'Charon', gender: 'Male', trait: 'Informative' },
+                  { name: 'Fenrir', gender: 'Male', trait: 'Excitable' },
+                ].map((v) => (
+                  <button
+                    key={v.name}
+                    type="button"
+                    onClick={() => onUpdateSettings({ ttsVoice: v.name })}
+                    className={`p-2 rounded-xl border text-left transition text-xs ${
+                      (settings.ttsVoice || 'Kore') === v.name
+                        ? 'bg-[#008CFF]/20 border-[#008CFF]/60 text-white'
+                        : 'bg-[#01060D] border-[#008CFF]/10 text-[#7895B8] hover:border-[#008CFF]/30'
+                    }`}
+                  >
+                    <div className="font-semibold">{v.name}</div>
+                    <div className="text-[9px] opacity-70">{v.gender} • {v.trait}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-[9px] text-[#7895B8] text-center">30 voices available — Gemini Live WebSocket</div>
+            </div>
             <SettingRow icon={Languages} label="Voice Language" value={settings.language || "Hinglish"} />
             <SettingRow icon={Radio} label="Wake Word" value={settings.wakePhrase || "Hello VASU"} />
             <SettingRow icon={Volume2} label="Speech Speed" value={`${settings.ttsSpeed || 1}x`} />
