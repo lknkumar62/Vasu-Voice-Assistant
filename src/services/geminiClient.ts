@@ -54,6 +54,7 @@ const CHAT_MODELS = [
 
 const TTS_MODELS = [
   'gemini-2.5-flash-preview-tts',
+  'gemini-2.0-flash-live-001',
 ];
 
 const clientModelCooldowns = new Map<string, number>();
@@ -79,8 +80,11 @@ function isClientModelCooledDown(model: string): boolean {
 function recordClientModelCooldown(model: string, seconds = 15) {
   const until = Date.now() + seconds * 1000;
   clientModelCooldowns.set(model, until);
-  clientModelCooldowns.set('tts', until);
-  try { sessionStorage.setItem('vasu_tts_cooldown_until', String(until)); } catch (_) {}
+  // Only cool down TTS if the TTS model itself is rate-limited, not chat models
+  if (model === 'tts' || model.includes('tts')) {
+    clientModelCooldowns.set('tts', until);
+    try { sessionStorage.setItem('vasu_tts_cooldown_until', String(until)); } catch (_) {}
+  }
 }
 
 function pcmToWav(pcmData: Uint8Array, sampleRate = 24000, numChannels = 1): ArrayBuffer {
@@ -197,7 +201,7 @@ export class GeminiClient {
             if (cleaned) return { replyText: cleaned, source: 'gemini_direct', modelUsed: model };
           } else {
             console.warn(`[GeminiClient] ${model} returned ${response.status}`);
-            if (response.status === 429) recordClientModelCooldown(model, 60);
+            if (response.status === 429) recordClientModelCooldown(model, 10);
           }
         } catch (e) {
           console.warn(`[GeminiClient] ${model} failed:`, e);

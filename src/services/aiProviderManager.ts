@@ -48,10 +48,10 @@ function isStandaloneApk(): boolean {
 function classifyError(status: number, message: string): ErrorClass {
   if (message.includes('NETWORK') || message.includes('fetch failed') || message.includes('ENOTFOUND')) return 'NETWORK_ERROR';
   if (message.includes('timeout') || message.includes('TIMEOUT') || message.includes('AbortError')) return 'TIMEOUT';
-  if (status === 401 || message.includes('API_KEY_INVALID') || message.includes('invalid')) return 'INVALID_API_KEY';
-  if (status === 429 || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota') || message.includes('rate')) return 'RATE_LIMITED';
+  if (status === 429 || message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('rate') || message.includes('RATE_LIMITED')) return 'RATE_LIMITED';
+  if (status === 401 || message.includes('API_KEY_INVALID') || message.includes('API_KEY_INVALID')) return 'INVALID_API_KEY';
   if (status === 403 || message.includes('forbidden')) return 'AUTH_ERROR';
-  if (status === 404 || message.includes('model') && message.includes('not found')) return 'MODEL_NOT_FOUND';
+  if (status === 404 || (message.includes('model') && message.includes('not found'))) return 'MODEL_NOT_FOUND';
   if (status >= 500) return 'SERVER_ERROR';
   return 'UNKNOWN_ERROR';
 }
@@ -276,22 +276,26 @@ export class AIProviderManager {
         };
       } catch (err: any) {
         const config = this.providers.get(providerType)!;
-        const errorClass = classifyError(0, err.message || '');
-        console.warn(`[AIProviderManager] ${providerType} failed:`, err.message, 'class:', errorClass);
+        const errMsg = err.message || '';
+        // Extract actual HTTP status from error message like "HTTP 429: ..."
+        const statusMatch = errMsg.match(/HTTP (\d{3})/);
+        const actualStatus = statusMatch ? parseInt(statusMatch[1]) : 0;
+        const errorClass = classifyError(actualStatus, errMsg);
+        console.warn(`[AIProviderManager] ${providerType} failed:`, errMsg, 'status:', actualStatus, 'class:', errorClass);
         config.totalRequests++;
         config.failedRequests++;
         config.lastError = err.message;
         config.lastErrorTime = Date.now();
 
         if (errorClass === 'RATE_LIMITED') {
-          this.setCooldown(providerType, 60);
-          // On rate limit, don't retry other providers — return local immediately
-          break;
+          this.setCooldown(providerType, 10);
+          console.warn(`[AIProviderManager] ${providerType} rate limited, 10s cooldown`);
+          continue;
         } else if (errorClass === 'QUOTA_EXCEEDED') {
-          this.setCooldown(providerType, 300);
-          break;
+          this.setCooldown(providerType, 60);
+          continue;
         } else if (errorClass === 'INVALID_API_KEY') {
-          this.setCooldown(providerType, 3600);
+          this.setCooldown(providerType, 300);
         }
 
         this.saveToStorage();
