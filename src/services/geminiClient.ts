@@ -5,6 +5,7 @@
 
 import { aiProviderManager } from './aiProviderManager';
 import { webSearchManager } from './webSearchManager';
+import { toPhoneticHinglish } from './audioEngine';
 import { AIProviderResponse, ChatParams, SearchResult } from '../types';
 
 export interface GeminiTestResult {
@@ -31,6 +32,8 @@ function cleanAssistantText(rawText: string): string {
     .replace(/\{.*?\}/g, '')
     .replace(/[*_~`#]/g, '')
     .trim();
+  // Convert any Devanagari to phonetic Hinglish (Gemini sometimes ignores the no-Devanagari instruction)
+  cleaned = toPhoneticHinglish(cleaned);
   return cleaned;
 }
 
@@ -181,7 +184,7 @@ export class GeminiClient {
             body: JSON.stringify({
               contents,
               systemInstruction: { parts: [{ text: sysInstruction }] },
-              generationConfig: { temperature: 0.7, maxOutputTokens: 150 },
+              generationConfig: { temperature: 0.7, maxOutputTokens: 2000 },
             }),
             signal: controller.signal,
           });

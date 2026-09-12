@@ -105,7 +105,7 @@ export default function App() {
       freeOnlyMode: false,
       costProtection: {
         maxRequestsPerDay: 500,
-        maxTokensPerRequest: 150,
+        maxTokensPerRequest: 2000,
         maxSearchRequestsPerDay: 100,
         maxProviderRetries: 3,
         allowPaidProvider: true,

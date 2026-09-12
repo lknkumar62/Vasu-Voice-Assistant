@@ -321,7 +321,7 @@ export class AIProviderManager {
             systemInstruction: { parts: [{ text: sysInstruction }] },
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: options.maxTokens || 150,
+              maxOutputTokens: options.maxTokens || 2000,
             },
           };
           break;
