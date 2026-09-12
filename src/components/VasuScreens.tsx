@@ -8,7 +8,7 @@ import { apiKeyManager } from "../services/apiKeyManager";
 import { ScreenTab } from "./QuickActions";
 
 import {
-  Menu, User, Search, Plus, Send, Mic, Paperclip,
+  Menu, User, Search, Send, Mic, Paperclip,
   Phone, MessageCircle, Camera, Flashlight, Youtube, MapPin,
   Settings, MoreHorizontal, Sparkles, Volume2, VolumeX,
   Lightbulb, Copy, Check, Trash2, Bot, Terminal, AlertCircle, CheckCircle2,
@@ -16,7 +16,7 @@ import {
   Calculator, Image as ImageIcon, Music, Video, Users,
   Bluetooth, Wifi, Eye, Languages, QrCode, FolderOpen, Cloud,
   Shield, ShieldCheck, Lock, Database, Cpu, Share2, Code,
-  Info, Palette, Radio, Headphones, WifiOff, ArrowLeft, Home,
+  Info, Radio, Headphones, ArrowLeft, Home,
 } from "lucide-react";
 
 /* ================================================================
@@ -151,7 +151,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
       )}
 
       <form onSubmit={send} className="flex items-center gap-2 p-2 mb-4 rounded-[18px] bg-[#061827] border border-[#008CFF]/35 shadow-[0_0_18px_rgba(0,140,255,.08)]">
-        <button type="button" className="w-10 h-10 rounded-xl flex items-center justify-center text-[#7895B8]"><Paperclip size={19} /></button>
         <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask VASU anything..." className="flex-1 min-w-0 bg-transparent outline-none text-sm text-white placeholder:text-[#7895B8]/60" />
         <button type="submit" disabled={!input.trim()} className="w-11 h-11 rounded-full bg-[#008CFF] flex items-center justify-center disabled:opacity-30 shadow-[0_0_20px_rgba(0,140,255,.45)]"><Send size={18} /></button>
       </form>
@@ -332,15 +331,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <main className="h-full min-h-0 w-full max-w-6xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-24 flex flex-col">
-      <header className="flex items-center justify-between py-4">
-        <CircleButton><Menu size={20} /></CircleButton>
+      <header className="flex items-center justify-center py-4">
         <div className="text-center">
           <div className="text-2xl font-black tracking-[.18em]">VASU</div>
           <div className="text-[8px] tracking-[.3em] text-[#7895B8]">YOUR AI COMPANION</div>
-        </div>
-        <div className="flex gap-2">
-          <CircleButton><Search size={18} /></CircleButton>
-          <CircleButton><Plus size={18} /></CircleButton>
         </div>
       </header>
 
@@ -355,14 +349,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <Search size={16} className="text-[#7895B8]" />
             <input placeholder="Search conversations..." className="bg-transparent outline-none text-xs w-full" />
           </div>
-          <button type="button" className="bg-[#008CFF] rounded-xl py-3 font-semibold mb-3">
-            <Plus size={17} className="inline mr-2" />New Chat
-          </button>
-          {["New Chat", "Phone Control", "Study Help", "Image Generation", "YouTube Ideas", "App Development", "Travel Plan", "Document Help", "Motivation"].map((chat) => (
-            <button key={chat} type="button" className="text-left p-3 rounded-lg hover:bg-[#008CFF]/10 border-b border-white/5 text-sm">
-              {chat}<span className="block text-[10px] text-[#7895B8] mt-1">Conversation</span>
-            </button>
-          ))}
+
           <button type="button" onClick={onClearChat} className="mt-auto p-3 rounded-xl border border-rose-500/20 text-rose-300 text-sm">
             <Trash2 size={16} className="inline mr-2" />Clear All Chats
           </button>
@@ -529,13 +516,11 @@ export const ToolsView: React.FC<ToolsViewProps> = ({ onExecuteTool }) => {
 
   return (
     <main className="min-h-full w-full max-w-6xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-24">
-      <header className="flex items-center justify-between py-4">
-        <CircleButton><Menu size={20} /></CircleButton>
+      <header className="flex items-center justify-center py-4">
         <div className="text-center">
           <div className="text-2xl font-black tracking-[.18em]">VASU</div>
           <div className="text-[8px] tracking-[.3em] text-[#7895B8]">YOUR AI COMPANION</div>
         </div>
-        <CircleButton><Search size={18} /></CircleButton>
       </header>
 
       <h1 className="text-3xl font-bold">Tools</h1>
@@ -804,9 +789,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               <div className="mt-2 text-[9px] text-[#7895B8] text-center">30 voices available — Gemini Live WebSocket</div>
             </div>
-            <SettingRow icon={Languages} label="Voice Language" value={settings.language || "Hinglish"} />
-            <SettingRow icon={Radio} label="Wake Word" value={settings.wakePhrase || "Hello VASU"} />
-            <SettingRow icon={Volume2} label="Speech Speed" value={`${settings.ttsSpeed || 1}x`} />
+
             <SettingRow icon={Volume2} label="Auto Speak" toggle enabled={settings.autoSpeak !== false}
               onChange={(v) => onUpdateSettings({ autoSpeak: v })} />
             <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20 space-y-2">
@@ -839,7 +822,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Play Test
               </button>
             </div>
-            <SettingRow icon={WifiOff} label="Offline Voice Mode" value="Work without internet" toggle enabled />
+
             <SettingRow icon={Headphones} label="Continuous Listening" value="Listen in background" toggle enabled={!!settings.backgroundListening}
               onChange={(v) => onUpdateSettings({ backgroundListening: v })} />
           </div>
@@ -847,8 +830,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {page === "security" && (
           <div className="space-y-2">
-            <SettingRow icon={Lock} label="App Lock" value="PIN / Fingerprint / Face" />
-            <SettingRow icon={Database} label="Data & Storage" value="Manage cache & files" />
+
             <SettingRow icon={Shield} label="Permissions" value="Camera, Mic, Contacts, etc."
               onClick={() => onSelectTab?.("PERMISSIONS")} />
             <SettingRow icon={ShieldCheck} label="Privacy Mode" value="Hide sensitive content" toggle enabled={privacy}
@@ -930,11 +912,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </select>
               </div>
             </div>
-            <SettingRow icon={Cpu} label="AI Model" value={settings.geminiModel || "VASU Core"} />
-            <SettingRow icon={Share2} label="System Integrations" value="Connect your apps" />
-            <SettingRow icon={Code} label="Developer Options" value="Advanced settings" />
-            <SettingRow icon={Info} label="About VASU" value="Version 1.0.0" />
-            <SettingRow icon={Cloud} label="Backup & Sync" value="Keep settings safe across devices" />
+
           </div>
         )}
       </main>
@@ -943,13 +921,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <main className="min-h-full w-full max-w-3xl mx-auto bg-[#01060D] text-[#F4F8FF] px-3 pb-24">
-      <header className="flex items-center justify-between py-4">
-        <CircleButton><Menu size={20} /></CircleButton>
+      <header className="flex items-center justify-center py-4">
         <div className="text-center">
           <div className="text-2xl font-black tracking-[.18em]">VASU</div>
           <div className="text-[8px] tracking-[.3em] text-[#7895B8]">YOUR AI COMPANION</div>
         </div>
-        <div className="w-11" />
       </header>
 
       <h1 className="text-3xl font-bold">Settings</h1>
@@ -967,9 +943,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <SectionTitle>APPEARANCE</SectionTitle>
       <div className="grid md:grid-cols-2 gap-2">
-        <SettingRow icon={Palette} label="Theme" value="Dark / Light / System" />
-        <SettingRow icon={Sparkles} label="Orb Style" value="Classic / Energy / Neon / Matrix" />
-        <SettingRow icon={Languages} label="UI Language" value="English / हिन्दी / More" />
+
         <SettingRow icon={Sparkles} label="Animations" value="Toggle UI animations" toggle enabled={animations} onChange={(v) => setAnimations(v)} />
       </div>
 
