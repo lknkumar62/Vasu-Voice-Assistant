@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+apks.zip
+
+# Audio and voice assets
+android/app/src/main/assets/public/audio/
+android/app/src/main/assets/public/assets/voices/

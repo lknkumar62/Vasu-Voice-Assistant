@@ -30,6 +30,7 @@ import { speechRecognizer, SpeechError } from './services/speechRecognizer';
 import { ToolExecutor, ToolExecutionResult } from './services/toolRegistry';
 import { LocalCommandEngine } from './services/localCommandEngine';
 import { GeminiClient } from './services/geminiClient';
+import { apiKeyManager } from './services/apiKeyManager';
 
 import {
   ShieldAlert,
@@ -85,7 +86,7 @@ export default function App() {
     }
     return {
       geminiApiKey: '',
-      geminiModel: 'gemini-2.5-flash',
+      geminiModel: 'gemini-3.6-flash',
       openrouterApiKey: '',
       openrouterModel: 'openrouter/free',
       groqApiKey: '',
@@ -267,6 +268,8 @@ export default function App() {
   useEffect(() => {
     if (settings.geminiApiKey) {
       audioEngine.setApiKey(settings.geminiApiKey);
+      // Ensure aiProviderManager is configured with the saved API key
+      try { apiKeyManager.setKey('gemini', settings.geminiApiKey); } catch (_) {}
       fetch('/api/gemini/key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

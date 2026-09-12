@@ -44,14 +44,14 @@ function isStandaloneApk(): boolean {
 }
 
 const CHAT_MODELS = [
-  'gemini-2.5-flash',
+  'gemini-3.6-flash',
+  'gemini-2.5-flash-preview-05-20',
   'gemini-2.0-flash',
-  'gemini-1.5-flash',
 ];
 
 const TTS_MODELS = [
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-flash',
+  'gemini-3.6-flash',
+  'gemini-2.5-flash-preview-05-20',
 ];
 
 const clientModelCooldowns = new Map<string, number>();
@@ -340,7 +340,7 @@ export class GeminiClient {
 
       // Direct Gemini transcribe
       if (effectiveKey && effectiveKey.length > 5) {
-        const transcribeModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+        const transcribeModels = ['gemini-3.6-flash', 'gemini-2.5-flash-preview-05-20'];
         for (const model of transcribeModels) {
           if (isClientModelCooledDown(model)) continue;
           try {
