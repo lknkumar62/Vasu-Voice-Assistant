@@ -385,39 +385,35 @@ export default function App() {
       wakeWordEngine.pause();
       setAssistantState('SPEAKING');
 
-      // Fire TTS in background — don't block mic restart
-      ttsManager.speak(text, {
-        autoSpeak: settings.autoSpeak,
-        speed: settings.ttsSpeed,
-        pitch: settings.ttsPitch,
-        volume: settings.ttsVolume,
-        apiKey: settings.geminiApiKey || '',
-        source,
-        force,
-      }).catch(() => {}).finally(() => {
-        // When TTS finishes (or fails), clean up state
-        setAssistantState((curr) => {
-          if (curr === 'SPEAKING') return 'IDLE';
-          return curr;
-        });
-      });
+      // Play TTS — with max 12s timeout so it never blocks forever
+      try {
+        await Promise.race([
+          ttsManager.speak(text, {
+            autoSpeak: settings.autoSpeak,
+            speed: settings.ttsSpeed,
+            pitch: settings.ttsPitch,
+            volume: settings.ttsVolume,
+            apiKey: settings.geminiApiKey || '',
+            source,
+            force,
+          }),
+          new Promise<void>((resolve) => setTimeout(() => resolve(), 12000))
+        ]);
+      } catch (_) {}
 
-      // Restart mic IMMEDIATELY — don't wait for TTS
+      // After TTS (or timeout), restart mic for continuous conversation
+      setAssistantState('IDLE');
       if (source === 'voice' || source === 'wake') {
         if (settings.followUpMode || isContinuousListeningRef.current) {
           setTimeout(() => {
-            if (assistantStateRef.current === 'IDLE' || assistantStateRef.current === 'SPEAKING') {
+            if (assistantStateRef.current === 'IDLE') {
               startListeningRef.current?.();
             }
-          }, 500);
-        } else {
-          setAssistantState('IDLE');
-          if (settings.wakeWordEnabled && wakeStatusRef.current !== 'DISABLED') {
-            wakeWordEngine.resume();
-          }
+          }, 300);
+        } else if (settings.wakeWordEnabled && wakeStatusRef.current !== 'DISABLED') {
+          wakeWordEngine.resume();
         }
       } else {
-        setAssistantState('IDLE');
         if (settings.wakeWordEnabled && wakeStatusRef.current !== 'DISABLED') {
           wakeWordEngine.resume();
         }

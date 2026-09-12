@@ -54,8 +54,6 @@ const CHAT_MODELS = [
 
 const TTS_MODELS = [
   'gemini-2.5-flash-preview-tts',
-  'gemini-3.6-flash',
-  'gemini-flash-latest',
 ];
 
 const clientModelCooldowns = new Map<string, number>();
@@ -257,7 +255,7 @@ export class GeminiClient {
         if (isClientModelCooledDown(model)) continue;
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
           const response = await fetch(url, {
             method: 'POST',
