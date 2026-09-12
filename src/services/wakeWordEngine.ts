@@ -34,6 +34,8 @@ class WakeWordEngine {
   private lastTriggerTime = 0;
   private restartTimer: any = null;
   private idlePulseTimer: any = null;
+  private errorCount: number = 0;
+  private maxBackoffMs: number = 10000;
 
   public setCallbacks(
     onWake: (event: WakeWordEvent) => void,
@@ -138,13 +140,21 @@ class WakeWordEngine {
         if (now - this.lastTriggerTime < 2500) return;
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
+          // Only accept FINAL results to prevent false triggers from interim/garbage results
+          if (!event.results[i].isFinal) continue;
+
           const rawTranscript = (event.results[i][0].transcript || '').trim();
+          const confidence = event.results[i][0].confidence || 0;
           const transcript = rawTranscript.toLowerCase();
+
+          // Require minimum confidence to avoid false positives
+          if (confidence < 0.3 && rawTranscript.length < 5) continue;
 
           const hasMatch = WAKE_PATTERN.test(transcript) || HINDI_WAKE_PATTERN.test(rawTranscript);
 
           if (hasMatch) {
             this.lastTriggerTime = now;
+            this.errorCount = 0; // Reset backoff on successful detection
             this.pause(); // Immediately pause to avoid conflicts with active speech
 
             // Extract any command spoken right after wake phrase
@@ -154,7 +164,7 @@ class WakeWordEngine {
               .replace(/^[,.\s]+/, '')
               .trim();
 
-            console.log("[WakeWordEngine] Wake word heard, pausing engine:", { rawTranscript, command });
+            console.log("[WakeWordEngine] Wake word heard, pausing engine:", { rawTranscript, command, confidence });
 
             this.onWakeWordDetected?.({
               transcript: rawTranscript,
@@ -170,12 +180,28 @@ class WakeWordEngine {
         const err = e.error || '';
         if (err === 'not-allowed') {
           this.status = 'PERMISSION_REQUIRED';
+        } else if (err === 'network') {
+          // Network error: apply exponential backoff to avoid rapid restart loop
+          this.errorCount++;
+          const backoffMs = Math.min(1000 * Math.pow(1.5, this.errorCount - 1), this.maxBackoffMs);
+          console.log("[WakeWordEngine] Network error, backing off", backoffMs, "ms (attempt", this.errorCount, ")");
+          clearTimeout(this.restartTimer);
+          if (this.isListeningForWake && this.status === 'LISTENING') {
+            this.restartTimer = setTimeout(() => {
+              if (this.isListeningForWake && this.status === 'LISTENING') {
+                this.startPhraseRecognition();
+              }
+            }, backoffMs);
+          }
+          return; // Don't trigger onend, we handled restart ourselves
         } else if (err !== 'no-speech' && err !== 'aborted') {
           console.log("[WakeWordEngine] Recognition event:", err);
         }
       };
 
       this.recognition.onend = () => {
+        // Reset error count on successful end (no error = recognition worked)
+        this.errorCount = 0;
         // Safe continuous restart
         clearTimeout(this.restartTimer);
         if (this.isListeningForWake && this.status === 'LISTENING') {

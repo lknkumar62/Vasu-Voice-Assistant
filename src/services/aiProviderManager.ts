@@ -26,7 +26,7 @@ CRITICAL SCRIPT & LANGUAGE RULES (MUST FOLLOW STRICTLY):
 - If the user asks you to remember something, confirm warmly.`;
 
 const CANDIDATE_MODELS: Record<AIProviderType, string[]> = {
-  gemini: ['gemini-3.6-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-2.0-flash'],
+  gemini: ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3-flash-preview'],
   openrouter: ['openrouter/free', 'meta-llama/llama-3.1-8b-instruct:free', 'google/gemma-2-9b-it:free'],
   groq: ['llama-3.1-8b-instant', 'llama3-8b-8192', 'gemma2-9b-it'],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],

@@ -863,8 +863,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onChange={(e) => onUpdateSettings({ geminiModel: e.target.value })}
                   className="w-full bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white outline-none">
                   <option value="gemini-3.6-flash">gemini-3.6-flash</option>
-                  <option value="gemini-2.5-flash-preview-05-20">gemini-2.5-flash-preview</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                  <option value="gemini-flash-latest">gemini-flash-latest</option>
+                  <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
                 </select>
               </div>
               <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
