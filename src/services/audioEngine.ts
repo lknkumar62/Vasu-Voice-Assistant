@@ -1090,6 +1090,16 @@ class AudioEngine {
     }
 
     // Offline Fallback: Browser / Android Web Speech API
+    // If speechSynthesis unavailable (Android WebView), play a notification chime
+    if (!this.synth) {
+      console.warn('[AudioEngine] No speechSynthesis available — playing chime as voice indicator');
+      this.transitionTo('SPEAKING');
+      options.onStart?.();
+      try { await this.playSuccessChime(); } catch (_) {}
+      this.transitionTo('IDLE');
+      options.onEnd?.();
+      return;
+    }
     await this.speakNative(cleanText, options);
   }
 

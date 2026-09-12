@@ -137,7 +137,8 @@ class WakeWordEngine {
 
       this.recognition.onresult = (event: any) => {
         const now = Date.now();
-        if (now - this.lastTriggerTime < 2500) return;
+        // 8 second cooldown after trigger to prevent re-detection during conversation
+        if (now - this.lastTriggerTime < 8000) return;
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           // Only accept FINAL results to prevent false triggers from interim/garbage results
@@ -244,13 +245,14 @@ class WakeWordEngine {
     if (this.isListeningForWake) {
       this.status = 'LISTENING';
       clearTimeout(this.restartTimer);
+      // 2 second delay after resume to avoid re-triggering from residual audio
       this.restartTimer = setTimeout(() => {
         if (this.isListeningForWake && this.status === 'LISTENING') {
           if (!audioEngine.isSpeaking() && !audioEngine.isInSettleDelay() && !speechRecognizer.getIsListening()) {
             this.startPhraseRecognition();
           }
         }
-      }, 350);
+      }, 2000);
     }
   }
 

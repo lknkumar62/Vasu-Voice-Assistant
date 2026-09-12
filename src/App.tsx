@@ -766,12 +766,13 @@ export default function App() {
         language: settings.language,
       });
 
-      // 3. 350ms settle delay ensures speaker hardware audio buffer drains completely
+      // 3. Resume wake word engine after greeting settles (don't auto-start listening)
       setTimeout(() => {
         if (assistantStateRef.current === 'IDLE' || assistantStateRef.current === 'SPEAKING') {
-          handleStartListening();
+          setAssistantState('IDLE');
+          wakeWordEngine.resume();
         }
-      }, 350);
+      }, 2000);
     }
   };
 
@@ -892,11 +893,16 @@ export default function App() {
 
     let isMounted = true;
     if (settings.wakeWordEnabled) {
-      wakeWordEngine.start().then((st) => {
+      // Delay wake word start to avoid detecting app startup audio/greeting
+      setTimeout(() => {
         if (isMounted) {
-          setWakeStatus(st);
+          wakeWordEngine.start().then((st) => {
+            if (isMounted) {
+              setWakeStatus(st);
+            }
+          });
         }
-      });
+      }, 3000);
     } else {
       wakeWordEngine.stop();
       setWakeStatus('DISABLED');

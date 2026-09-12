@@ -287,8 +287,8 @@ export class GeminiClient {
           } else {
             console.warn(`[GeminiClient] TTS ${model} returned ${response.status}`);
             if (response.status === 429) {
-              recordClientModelCooldown('tts', 15);
-              recordClientModelCooldown(model, 15);
+              recordClientModelCooldown('tts', 5);
+              recordClientModelCooldown(model, 5);
               break;
             }
           }
