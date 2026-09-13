@@ -5,11 +5,11 @@ package com.vasu.assistant.core.voice
  */
 enum class GeminiVoiceState {
     IDLE,
-    CONNECTING,
-    CONNECTED,
-    LISTENING,
-    THINKING,
+    BACKGROUND_LISTENING,
+    WAKE_DETECTED,
+    COMMAND_LISTENING,
+    PROCESSING,
     SPEAKING,
-    DISCONNECTED,
+    STOPPING,
     ERROR
 }

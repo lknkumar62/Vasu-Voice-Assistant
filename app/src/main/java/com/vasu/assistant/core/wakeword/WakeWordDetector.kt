@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.vasu.assistant.core.voice.GeminiVoiceState
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,7 +52,9 @@ import kotlin.math.sqrt
 @Singleton
 class WakeWordDetector @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val audioSessionManager: AudioSessionManager
+    private val audioSessionManager: AudioSessionManager,
+    private val voiceStateManager: com.vasu.assistant.core.voice.VoiceStateManager,
+    private val voiceGuardian: com.vasu.assistant.core.guardian.VoiceGuardian
 ) {
     companion object {
         private const val TAG = "WakeWordDetector"
@@ -243,17 +246,33 @@ class WakeWordDetector @Inject constructor(
                             lastDetectionTimestamp = now
                             Log.i(TAG, ">>> [WAKE WORD DETECTED] \"Hello Vasu\" heard with confidence $confidence")
 
+                            // 1. Transition to WAKE_DETECTED
+                            voiceStateManager.transitionTo(GeminiVoiceState.WAKE_DETECTED)
                             _state.value = WakeWordState.DETECTED
-                            _detections.emit(Unit)
 
-                            rollingBufferFilled = 0
-                            java.util.Arrays.fill(rollingBuffer, 0f)
+                            // 2. Verify Owner
+                            val isOwner = voiceGuardian.verifyOwner(rollingBuffer)
+                            
+                            if (isOwner) {
+                                Log.i(TAG, ">>> [VOICE GUARDIAN] Owner verified. Proceeding to command listening.")
+                                
+                                // 3. Transition to COMMAND_LISTENING and emit event
+                                voiceStateManager.transitionTo(GeminiVoiceState.COMMAND_LISTENING)
+                                _detections.emit(Unit)
 
-                            // CRITICAL: Release mic immediately so STT/Gemini can acquire it
-                            releaseMicForCommand()
+                                rollingBufferFilled = 0
+                                java.util.Arrays.fill(rollingBuffer, 0f)
 
-                            delay(MIC_RELEASE_DELAY_MS)
-                            if (_state.value == WakeWordState.DETECTED) {
+                                // CRITICAL: Release mic immediately so STT/Gemini can acquire it
+                                releaseMicForCommand()
+
+                                delay(MIC_RELEASE_DELAY_MS)
+                                if (_state.value == WakeWordState.DETECTED) {
+                                    _state.value = WakeWordState.LISTENING
+                                }
+                            } else {
+                                Log.w(TAG, ">>> [VOICE GUARDIAN] Owner verification failed. Ignoring wake word.")
+                                voiceStateManager.transitionTo(GeminiVoiceState.BACKGROUND_LISTENING)
                                 _state.value = WakeWordState.LISTENING
                             }
                         }

@@ -9,9 +9,13 @@ import android.media.AudioTrack
 import android.os.Build
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -25,7 +29,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class NativeAudioPlayer @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val voiceStateManager: VoiceStateManager
 ) {
     companion object {
         private const val TAG = "NativeAudioPlayer"
@@ -49,6 +54,8 @@ class NativeAudioPlayer @Inject constructor(
     private var totalFramesWritten: Long = 0
     private var audioFocusRequest: AudioFocusRequest? = null
 
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     init {
         initAudioTrack()
     }
@@ -62,7 +69,7 @@ class NativeAudioPlayer @Inject constructor(
         }
 
         val minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
-        val bufferSize = maxOf(minBufferSize * 4, 16384)
+        val bufferSize = maxOf(minBufferSize * 4, 32768)
 
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ASSISTANT)
@@ -127,9 +134,12 @@ class NativeAudioPlayer @Inject constructor(
                 }
 
                 audioTrack?.let { track ->
-                    if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
-                        track.play()
-                    }
+                        if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                            scope.launch {
+                                voiceStateManager.transitionTo(GeminiVoiceState.SPEAKING)
+                            }
+                            track.play()
+                        }
                 }
 
                 while (!isInterrupted.get()) {
@@ -188,9 +198,14 @@ class NativeAudioPlayer @Inject constructor(
      * Stop speech playback immediately and discard buffered audio.
      */
     fun stopAndFlush() {
+        playbackThread?.interrupt()
         isInterrupted.set(true)
         isDraining.set(false)
         audioQueue.clear()
+
+        scope.launch {
+            voiceStateManager.transitionTo(GeminiVoiceState.IDLE)
+        }
 
         try {
             audioTrack?.let { track ->
@@ -212,7 +227,7 @@ class NativeAudioPlayer @Inject constructor(
     private fun requestAudioFocus() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
                     .setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_ASSISTANT)
@@ -232,7 +247,7 @@ class NativeAudioPlayer @Inject constructor(
                 audioManager?.requestAudioFocus(
                     null,
                     AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
                 )
             }
         } catch (e: Exception) {

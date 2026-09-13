@@ -366,8 +366,7 @@ class GeminiTtsEngine @Inject constructor(
         onError: ((String) -> Unit)?
     ): Boolean = withContext(Dispatchers.IO) {
         stopLocked()
-        _ttsState.value = GeminiTtsState.PLAYING
-
+        
         Log.i(TAG, "SAMPLE_RATE=$sampleRate")
         Log.i(TAG, "CHANNELS=1")
         Log.i(TAG, "PCM_16BIT ttsId=$ttsId bytes=${pcmBytes.size}")
@@ -423,6 +422,7 @@ class GeminiTtsEngine @Inject constructor(
         Log.i(TAG, "AUDIOTRACK_INITIALIZED ttsId=$ttsId rate=$sampleRate buffer=$bufferSize mode=MODE_STREAM")
 
         try {
+            _ttsState.value = GeminiTtsState.PLAYING
             track.play()
         } catch (e: Exception) {
             Log.e(TAG, "AudioTrack.play failed", e)
@@ -439,15 +439,7 @@ class GeminiTtsEngine @Inject constructor(
         // Stream the complete PCM; write() blocks until the hardware drains,
         // so returning from the loop means the audio actually finished.
         var offset = 0
-        var failed = false
         while (offset < pcmBytes.size) {
-            // Stop requested (new turn / user interrupt): abort cleanly.
-            synchronized(audioOwnerLock) {
-                if (activeTrack !== track) {
-                    failed = true
-                }
-            }
-            if (failed) break
             val chunk = minOf(4096, pcmBytes.size - offset)
             val written = try {
                 track.write(pcmBytes, offset, chunk)
@@ -457,13 +449,12 @@ class GeminiTtsEngine @Inject constructor(
             }
             if (written < 0) {
                 Log.e(TAG, "TTS_ERROR provider=gemini ttsId=$ttsId category=audiotrack_write_$written")
-                failed = true
                 break
             }
             offset += written
         }
 
-        if (failed) {
+        if (offset < pcmBytes.size) {
             // Interrupted via stop(): owner already released there.
             _ttsState.value = GeminiTtsState.IDLE
             withContext(Dispatchers.Main) { onDone?.invoke() }

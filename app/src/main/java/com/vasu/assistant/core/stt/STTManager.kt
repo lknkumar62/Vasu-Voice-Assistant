@@ -16,14 +16,20 @@ import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.vasu.assistant.core.audio.AudioSessionManager
+import com.vasu.assistant.core.voice.GeminiVoiceState
+import com.vasu.assistant.core.voice.VoiceStateManager
 import com.vasu.assistant.core.wakeword.WakeWordDetector
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -42,9 +48,11 @@ import javax.inject.Singleton
 class STTManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val wakeWordDetectorProvider: Provider<WakeWordDetector>,
-    private val audioSessionManager: AudioSessionManager
+    private val audioSessionManager: AudioSessionManager,
+    private val voiceStateManager: VoiceStateManager
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var speechRecognizer: SpeechRecognizer? = null
     private var isInitialized = false
 
@@ -121,6 +129,10 @@ class STTManager @Inject constructor(
     fun startListening() {
         manuallyStopped = false
         runOnMainThread {
+            if (voiceStateManager.isSpeaking()) {
+                Log.w(TAG, "Cannot listen while speaking"); return@runOnMainThread
+            }
+
             if (!hasRecordAudioPermission()) {
                 Log.e(TAG, "[MIC_ERROR] Cannot start listening: RECORD_AUDIO permission not granted")
                 _state.value = STTState.ERROR
@@ -139,6 +151,10 @@ class STTManager @Inject constructor(
             }
 
             pauseWakeWordMic()
+
+            scope.launch {
+                voiceStateManager.transitionTo(GeminiVoiceState.COMMAND_LISTENING)
+            }
 
             if (!isInitialized || speechRecognizer == null) {
                 createInternalRecognizer()
@@ -179,6 +195,9 @@ class STTManager @Inject constructor(
         mainHandler.removeCallbacksAndMessages(null)
         runOnMainThread {
             Log.i(TAG, "[MIC_STOP] Stopping microphone listening")
+            scope.launch {
+                voiceStateManager.transitionTo(GeminiVoiceState.IDLE)
+            }
             try {
                 speechRecognizer?.stopListening()
             } catch (e: Exception) {
@@ -196,6 +215,9 @@ class STTManager @Inject constructor(
         retryCount = 0
         mainHandler.removeCallbacksAndMessages(null)
         runOnMainThread {
+            scope.launch {
+                voiceStateManager.transitionTo(GeminiVoiceState.IDLE)
+            }
             try {
                 speechRecognizer?.cancel()
             } catch (e: Exception) {
@@ -341,6 +363,14 @@ class STTManager @Inject constructor(
                 error == SpeechRecognizer.ERROR_AUDIO
             ) {
                 Log.w(TAG, "[MIC_CONTENTION] Error code $error — retrying with backoff")
+                
+                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                    Log.w(TAG, "Resetting SpeechRecognizer instance before retry")
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                    isInitialized = false
+                }
+                
                 retryWithBackoff()
                 return
             }
@@ -351,6 +381,10 @@ class STTManager @Inject constructor(
 
             audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
             resumeWakeWordMic()
+            
+            scope.launch {
+                voiceStateManager.transitionTo(GeminiVoiceState.IDLE)
+            }
 
             // Reset recognizer on client errors
             if (error == SpeechRecognizer.ERROR_CLIENT) {
@@ -366,6 +400,16 @@ class STTManager @Inject constructor(
         override fun onResults(results: Bundle?) {
             _state.value = STTState.RESULT_READY
             processResults(results, isFinal = true)
+            
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            scope.launch {
+                if (!matches.isNullOrEmpty()) {
+                    voiceStateManager.transitionTo(GeminiVoiceState.PROCESSING)
+                } else {
+                    voiceStateManager.transitionTo(GeminiVoiceState.IDLE)
+                }
+            }
+
             audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
             resumeWakeWordMic()
             _state.value = STTState.IDLE

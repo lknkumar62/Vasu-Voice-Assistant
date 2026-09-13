@@ -33,29 +33,30 @@ class SpeechQueue @Inject constructor() {
     private val _queueSize = MutableStateFlow(0)
     val queueSize: StateFlow<Int> = _queueSize.asStateFlow()
 
-    /** Tracks the last enqueued text to prevent duplicate consecutive enqueue. */
-    private var lastEnqueuedText: String? = null
+    /** Tracks the last enqueued response ID to prevent duplicate consecutive enqueue. */
+    private var lastEnqueuedResponseId: String? = null
 
     /**
-     * Add text to speech queue. De-duplicates if same text is enqueued consecutively.
+     * Add text to speech queue. De-duplicates if same responseId is enqueued consecutively.
      * Returns the queued item (carrying its unique ttsId), or null when skipped.
      */
-    fun enqueue(text: String, priority: Boolean = false): SpeechItem? {
+    fun enqueue(text: String, responseId: String? = null, priority: Boolean = false): SpeechItem? {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return null
 
-        // De-duplication: skip if same text was just enqueued
-        if (!priority && trimmed == lastEnqueuedText) {
-            Log.d(TAG, "De-duplicated TTS request: \"$trimmed\"")
+        // De-duplication: skip if same responseId was just enqueued
+        if (!priority && responseId != null && responseId == lastEnqueuedResponseId) {
+            Log.d(TAG, "De-duplicated TTS request for responseId: $responseId")
             return null
         }
 
         val item = SpeechItem(
             text = trimmed,
+            responseId = responseId,
             priority = priority
         )
 
-        lastEnqueuedText = trimmed
+        lastEnqueuedResponseId = responseId
 
         if (priority) {
             // Priority items go to front
@@ -73,15 +74,15 @@ class SpeechQueue @Inject constructor() {
 
     /**
      * Get next item and remove from queue.
-     * Clears the consecutive-duplicate guard so the same phrase may be
+     * Clears the consecutive-duplicate guard so the same responseId may be
      * queued again for a LATER turn (genuine repeats), while an identical
-     * phrase still queued behind it stays de-duplicated.
+     * responseId still queued behind it stays de-duplicated.
      */
     fun dequeue(): SpeechItem? {
         val item = queue.poll()
         _currentItem.value = item
         _queueSize.value = queue.size
-        lastEnqueuedText = null
+        lastEnqueuedResponseId = null
         return item
     }
 
@@ -102,7 +103,7 @@ class SpeechQueue @Inject constructor() {
         queue.clear()
         _currentItem.value = null
         _queueSize.value = 0
-        lastEnqueuedText = null
+        lastEnqueuedResponseId = null
     }
 
     /**
@@ -126,6 +127,7 @@ class SpeechQueue @Inject constructor() {
  */
 data class SpeechItem(
     val text: String,
+    val responseId: String? = null,
     val priority: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
     val ttsId: String = "tts_${System.nanoTime()}"
