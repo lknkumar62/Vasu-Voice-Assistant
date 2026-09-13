@@ -107,41 +107,59 @@ class VoiceRouter @Inject constructor(
             if (geminiSuccess) return true
             // If speak() returned false without invoking onError callback (e.g. immediate false),
             // fallback explicitly here too
-            Log.w(TAG, "GeminiTtsEngine returned false, falling back to local voice")
+            Log.w(TAG, "GeminiTtsEngine returned false, falling back to local Maya voice")
             _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
             val localFallbackSuccess = localTtsEngine.speak(
                 text = text,
                 onStart = onStart,
                 onDone = wrappedOnDone,
                 onError = { localErr ->
-                    Log.w(TAG, "Local fallback also failed: $localErr — trying Android fallback")
-                    // Always try Android fallback as last resort, regardless of opt-in, to guarantee voice
-                    fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                    Log.w(TAG, "Local Maya voice also failed: $localErr")
+                    if (settings.androidFallbackTtsEnabled.value) {
+                        fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                    } else {
+                        _currentSource.value = ActiveVoiceSource.MUTED
+                        wrappedOnError("Maya voice unavailable: $localErr")
+                    }
                 }
             )
             if (localFallbackSuccess) return true
-            return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+            if (settings.androidFallbackTtsEnabled.value) {
+                return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+            }
+            _currentSource.value = ActiveVoiceSource.MUTED
+            wrappedOnError("No Maya voice available and local fallback disabled")
+            return false
         }
 
-        // 2. Offline / Local TTS (offline, no key, or offline-only mode)
-        Log.d(TAG, "Routing turn to LocalTtsEngine (offline or Gemini not ready)")
+        // 2. Offline / Local TTS — Maya voice only, no Android fallback unless enabled
+        Log.d(TAG, "Routing turn to LocalTtsEngine (Maya voice, offline or Gemini not ready)")
         _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
         val localSuccess = localTtsEngine.speak(
             text = text,
             onStart = onStart,
             onDone = wrappedOnDone,
             onError = { localError ->
-                Log.w(TAG, "LocalTtsEngine failed: $localError — trying Android fallback")
-                // Always try Android fallback to guarantee voice, even if not explicitly enabled
-                fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                Log.w(TAG, "LocalTtsEngine failed: $localError")
+                if (settings.androidFallbackTtsEnabled.value) {
+                    fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                } else {
+                    _currentSource.value = ActiveVoiceSource.MUTED
+                    wrappedOnError(localError)
+                }
             }
         )
 
         if (localSuccess) return true
 
-        // 3. Android system fallback — always try as last resort to avoid MUTED silence
-        Log.d(TAG, "Local failed, trying Android fallback as last resort")
-        return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+        // 3. Android system fallback — ONLY if explicitly enabled (user wants no local voice, so disabled by default)
+        if (settings.androidFallbackTtsEnabled.value) {
+            Log.d(TAG, "Local Maya voice failed, trying Android fallback (enabled)")
+            return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+        }
+        _currentSource.value = ActiveVoiceSource.MUTED
+        wrappedOnError("No Maya voice available and Android fallback disabled (as requested)")
+        return false
     }
 
     private fun fallbackToLocal(

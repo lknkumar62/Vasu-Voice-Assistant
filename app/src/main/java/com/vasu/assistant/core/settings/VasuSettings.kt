@@ -33,7 +33,7 @@ class VasuSettings @Inject constructor(
     private val _offlineOnly = MutableStateFlow(false)
     val offlineOnly: StateFlow<Boolean> = _offlineOnly.asStateFlow()
 
-    private val _androidFallbackTtsEnabled = MutableStateFlow(true)
+    private val _androidFallbackTtsEnabled = MutableStateFlow(false)
     val androidFallbackTtsEnabled: StateFlow<Boolean> = _androidFallbackTtsEnabled.asStateFlow()
 
     private val _geminiTtsVoice = MutableStateFlow(DEFAULT_GEMINI_TTS_VOICE)
@@ -57,7 +57,7 @@ class VasuSettings @Inject constructor(
         _voiceGuardEnabled.value = prefs.getBoolean("voice_guard_enabled", false)
         _autoAllowEnabled.value = prefs.getBoolean("auto_allow_enabled", true)
         _offlineOnly.value = prefs.getBoolean("offline_only", false)
-        _androidFallbackTtsEnabled.value = prefs.getBoolean("android_fallback_tts", true)
+        _androidFallbackTtsEnabled.value = prefs.getBoolean("android_fallback_tts", false)
         _geminiTtsVoice.value = prefs.getString("gemini_tts_voice", DEFAULT_GEMINI_TTS_VOICE) ?: DEFAULT_GEMINI_TTS_VOICE
         _geminiTtsModel.value = prefs.getString("gemini_tts_model", DEFAULT_GEMINI_TTS_MODEL) ?: DEFAULT_GEMINI_TTS_MODEL
     }
@@ -112,6 +112,22 @@ class VasuSettings @Inject constructor(
         const val DEFAULT_GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
         const val FALLBACK_GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
         const val BASE_GEMINI_TTS_MODEL = "gemini-2.0-flash"
+
+        // Maya same-to-same voices — 43 voices across 3 personas (Friday/Maya/Venom)
+        val MAYA_VOICES = listOf(
+            // Friday persona (13) - friendly, sweet
+            "friday_Aoede", "friday_Autonoe", "friday_Callirrhoe", "friday_Despina", "friday_Erinome", "friday_Gacrux", "friday_Kore", "friday_Laomedeia", "friday_Leda", "friday_Pulcherrima", "friday_Sulafat", "friday_Vindemiatrix", "friday_Zephyr",
+            // Maya persona (13) - main, warm
+            "maya_Aoede", "maya_Autonoe", "maya_Callirrhoe", "maya_Despina", "maya_Erinome", "maya_Gacrux", "maya_Kore", "maya_Laomedeia", "maya_Leda", "maya_Pulcherrima", "maya_Sulafat", "maya_Vindemiatrix", "maya_Zephyr",
+            // Venom persona (17) - deep, powerful
+            "venom_Achernar", "venom_Achird", "venom_Algenib", "venom_Algieba", "venom_Alnilam", "venom_Charon", "venom_Enceladus", "venom_Fenrir", "venom_Iapetus", "venom_Orus", "venom_Puck", "venom_Rasalgethi", "venom_Sadachbia", "venom_Sadaltager", "venom_Schedar", "venom_Umbriel", "venom_Zubenelgenubi"
+        )
+
+        // Gemini voice names (derived from Maya voices — suffix after _)
+        val GEMINI_VOICES = listOf(
+            "Kore", "Aoede", "Autonoe", "Callirrhoe", "Despina", "Erinome", "Gacrux", "Laomedeia", "Leda", "Pulcherrima", "Sulafat", "Vindemiatrix", "Zephyr",
+            "Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Charon", "Enceladus", "Fenrir", "Iapetus", "Orus", "Puck", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Umbriel", "Zubenelgenubi"
+        )
 
         val LANGUAGES = listOf(
             "hi-IN" to "Hindi (India)",
