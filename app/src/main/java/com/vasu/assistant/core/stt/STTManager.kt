@@ -69,6 +69,7 @@ class STTManager @Inject constructor(
     private var retryCount = 0
     private var maxRetries = 3
     private var retryBaseDelayMs = 500L
+    private var manuallyStopped = false
 
     fun initialize(sttConfig: STTConfig = STTConfig()) {
         config = sttConfig
@@ -118,6 +119,7 @@ class STTManager @Inject constructor(
      * Start listening for speech. Requests mic from AudioSessionManager first.
      */
     fun startListening() {
+        manuallyStopped = false
         runOnMainThread {
             if (!hasRecordAudioPermission()) {
                 Log.e(TAG, "[MIC_ERROR] Cannot start listening: RECORD_AUDIO permission not granted")
@@ -172,6 +174,9 @@ class STTManager @Inject constructor(
     }
 
     fun stopListening() {
+        manuallyStopped = true
+        retryCount = 0
+        mainHandler.removeCallbacksAndMessages(null)
         runOnMainThread {
             Log.i(TAG, "[MIC_STOP] Stopping microphone listening")
             try {
@@ -187,6 +192,9 @@ class STTManager @Inject constructor(
     }
 
     fun cancel() {
+        manuallyStopped = true
+        retryCount = 0
+        mainHandler.removeCallbacksAndMessages(null)
         runOnMainThread {
             try {
                 speechRecognizer?.cancel()
@@ -221,6 +229,11 @@ class STTManager @Inject constructor(
      * Retry starting recognition with exponential backoff after mic contention errors.
      */
     private fun retryWithBackoff() {
+        if (manuallyStopped) {
+            Log.d(TAG, "Retry cancelled — manually stopped")
+            retryCount = 0
+            return
+        }
         if (retryCount >= maxRetries) {
             Log.e(TAG, "Max retries ($maxRetries) reached, giving up")
             _state.value = STTState.ERROR
@@ -233,9 +246,17 @@ class STTManager @Inject constructor(
 
         retryCount++
         val delayMs = retryBaseDelayMs * (1L shl (retryCount - 1))
-        Log.w(TAG, "Retrying speech recognition in ${delayMs}ms (attempt $retryCount/$maxRetries)")
+        // Add jitter to avoid synchronized tap-tap burst
+        val jitter = (Math.random() * 200).toLong()
+        val totalDelay = delayMs + jitter
+        Log.w(TAG, "Retrying speech recognition in ${totalDelay}ms (attempt $retryCount/$maxRetries)")
 
         mainHandler.postDelayed({
+            if (manuallyStopped) {
+                Log.d(TAG, "Retry aborted — manually stopped before retry")
+                retryCount = 0
+                return@postDelayed
+            }
             // Destroy and recreate the recognizer
             speechRecognizer?.destroy()
             speechRecognizer = null
@@ -256,7 +277,7 @@ class STTManager @Inject constructor(
             } else {
                 retryWithBackoff()
             }
-        }, delayMs)
+        }, totalDelay)
     }
 
     private fun createRecognizerIntent(): Intent {
@@ -307,7 +328,14 @@ class STTManager @Inject constructor(
             val diagnostic = explainErrorCode(error)
             Log.e(TAG, "[STT_ERROR] onError: code=$error ($diagnostic)")
 
-            // Handle mic contention errors with retry
+            // Suppress retry if user manually stopped — prevents tap-tap loop
+            if (manuallyStopped) {
+                Log.d(TAG, "onError suppressed — manually stopped")
+                _state.value = STTState.IDLE
+                return
+            }
+
+            // Handle mic contention errors with retry — but only if not manually stopped
             if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                 error == SpeechRecognizer.ERROR_CLIENT ||
                 error == SpeechRecognizer.ERROR_AUDIO

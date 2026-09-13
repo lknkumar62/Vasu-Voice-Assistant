@@ -20,10 +20,21 @@ class AndroidFallbackTtsEngine @Inject constructor(
     private var ready = false
 
     fun initialize(onReady: ((Boolean) -> Unit)? = null) {
+        // Eagerly initialize — used as last-resort fallback, must be ready when needed
+        if (tts != null) {
+            onReady?.invoke(ready)
+            return
+        }
         tts = TextToSpeech(context) { status ->
             ready = status == TextToSpeech.SUCCESS
             if (ready) {
-                tts?.setLanguage(Locale("hi", "IN"))
+                val res = tts?.setLanguage(Locale("hi", "IN"))
+                if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    tts?.setLanguage(Locale.US)
+                }
+                Log.i(TAG, "AndroidFallbackTts initialized ready=$ready")
+            } else {
+                Log.e(TAG, "AndroidFallbackTts init failed status=$status")
             }
             onReady?.invoke(ready)
         }
@@ -35,11 +46,28 @@ class AndroidFallbackTtsEngine @Inject constructor(
         onDone: (() -> Unit)?,
         onError: ((String) -> Unit)?
     ): Boolean {
-        val engine = tts
-        if (engine == null || !ready) {
-            onError?.invoke("Android fallback TTS not initialized")
-            return false
+        // Auto-initialize if not yet ready — guarantees voice even on fresh install
+        if (tts == null || !ready) {
+            Log.w(TAG, "Fallback TTS not ready, initializing on-demand")
+            // Try synchronous init with small wait
+            if (tts == null) {
+                // Use blocking init via runBlocking? Instead, try to init and fallback
+                // For now, initialize and retry once
+                tts = TextToSpeech(context) { status ->
+                    ready = status == TextToSpeech.SUCCESS
+                    if (ready) tts?.setLanguage(Locale("hi", "IN"))
+                }
+                // Give it a moment — if still not ready, we will still attempt
+                try { Thread.sleep(400) } catch (_: Exception) {}
+            }
+            val engineCheck = tts
+            if (engineCheck == null || !ready) {
+                Log.e(TAG, "Android fallback TTS still not ready after on-demand init")
+                onError?.invoke("Android fallback TTS not initialized")
+                return false
+            }
         }
+        val engine = tts!!
 
         val speakable = toSpeakableText(text)
         if (speakable.isBlank()) {

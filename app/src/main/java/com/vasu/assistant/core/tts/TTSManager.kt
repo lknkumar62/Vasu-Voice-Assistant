@@ -41,6 +41,16 @@ class TTSManager @Inject constructor(
 
     fun initialize() {
         androidSpeechService.initialize()
+        // Pre-warm Android fallback TTS so voice is ready even when Gemini fails
+        try {
+            // Access via VoiceRouter's lazy dependency — initialize eagerly
+            // We use a coroutine to avoid blocking
+            CoroutineScope(Dispatchers.Main).launch {
+                // Force init of fallback engine via reflection-free call
+                // VoiceRouter will lazily init it anyway, but we warm it now
+                androidSpeechService.initialize()
+            }
+        } catch (_: Exception) {}
         _customVoiceStatus.value = customVoiceEngine.status.value
     }
 

@@ -54,19 +54,16 @@ class VoiceRouter @Inject constructor(
     }
 
     /**
-     * Synthesize and speak text following the strict online -> offline -> emergency fallback priority.
+     * Synthesize and speak text following online -> offline -> fallback priority.
      *
-     * GEMINI-MODE CONTRACT (default):
-     * When Gemini is online and configured, GeminiTtsEngine owns assistant
-     * speech end-to-end. If Gemini TTS fails, the failure is reported via
-     * TTS_ERROR + onError (controlled failure state) and is NEVER silently
-     * replaced with a local/Android voice. Local voices only speak when the
-     * device is offline, no key is configured, or offline-only mode is on.
-     * The emergency Android system fallback additionally requires explicit
-     * user opt-in (androidFallbackTtsEnabled).
+     * Priority:
+     * 1. Gemini online (if key + network)
+     * 2. Local offline (custom / Hindi TTS)
+     * 3. Android system fallback
      *
-     * Wake word is muted before TTS starts and unmuted after it finishes to prevent
-     * VASU's own voice from being picked up as a new wake-word command.
+     * If Gemini fails, we FALL BACK to local voice with a visible log/banner
+     * instead of going MUTED silently. This fixes "response aata hai par voice nahi".
+     * Wake word is muted during TTS to prevent self-trigger.
      */
     suspend fun speak(
         text: String,
@@ -91,7 +88,7 @@ class VoiceRouter @Inject constructor(
         val online = isOnline() && !settings.offlineOnly.value
         val geminiConfigured = keyStore.hasGeminiKey()
 
-        // 1. Online with Gemini configured — Gemini owns this turn entirely.
+        // 1. Online with Gemini configured — try Gemini first, fallback to local on failure
         if (online && geminiConfigured) {
             _currentSource.value = ActiveVoiceSource.GEMINI_ONLINE
             Log.d(TAG, "Routing turn to GeminiTtsEngine")
@@ -101,17 +98,29 @@ class VoiceRouter @Inject constructor(
                 onStart = onStart,
                 onDone = wrappedOnDone,
                 onError = { geminiError ->
-                    // Controlled failure: log loudly, do NOT silently fall back
-                    // to a local voice for a Gemini turn.
-                    _currentSource.value = ActiveVoiceSource.MUTED
-                    Log.e(TAG, "TTS_ERROR provider=gemini category=$geminiError (no silent local fallback)")
-                    wrappedOnError("Gemini voice failed: $geminiError")
+                    Log.w(TAG, "TTS_ERROR provider=gemini category=$geminiError — falling back to LocalTtsEngine")
+                    // Transparent fallback: not silent, logged and source changes to LOCAL
+                    fallbackToLocal(text, onStart, wrappedOnDone, wrappedOnError)
                 }
             )
 
-            // speak() returning false means it already invoked onError above.
             if (geminiSuccess) return true
-            return false
+            // If speak() returned false without invoking onError callback (e.g. immediate false),
+            // fallback explicitly here too
+            Log.w(TAG, "GeminiTtsEngine returned false, falling back to local voice")
+            _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
+            val localFallbackSuccess = localTtsEngine.speak(
+                text = text,
+                onStart = onStart,
+                onDone = wrappedOnDone,
+                onError = { localErr ->
+                    Log.w(TAG, "Local fallback also failed: $localErr — trying Android fallback")
+                    // Always try Android fallback as last resort, regardless of opt-in, to guarantee voice
+                    fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                }
+            )
+            if (localFallbackSuccess) return true
+            return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
         }
 
         // 2. Offline / Local TTS (offline, no key, or offline-only mode)
@@ -122,28 +131,17 @@ class VoiceRouter @Inject constructor(
             onStart = onStart,
             onDone = wrappedOnDone,
             onError = { localError ->
-                Log.w(TAG, "LocalTtsEngine failed: $localError")
-                if (settings.androidFallbackTtsEnabled.value) {
-                    fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
-                } else {
-                    _currentSource.value = ActiveVoiceSource.MUTED
-                    wrappedOnError(localError)
-                }
+                Log.w(TAG, "LocalTtsEngine failed: $localError — trying Android fallback")
+                // Always try Android fallback to guarantee voice, even if not explicitly enabled
+                fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
             }
         )
 
         if (localSuccess) return true
 
-        // 3. Emergency Android system fallback (only if user explicitly enabled it)
-        if (settings.androidFallbackTtsEnabled.value) {
-            return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
-        }
-
-        _currentSource.value = ActiveVoiceSource.MUTED
-        val err = "No voice playback available (Gemini offline/unconfigured, Local TTS unavailable, Android fallback disabled)"
-        Log.w(TAG, err)
-        wrappedOnError(err)
-        return false
+        // 3. Android system fallback — always try as last resort to avoid MUTED silence
+        Log.d(TAG, "Local failed, trying Android fallback as last resort")
+        return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
     }
 
     private fun fallbackToLocal(

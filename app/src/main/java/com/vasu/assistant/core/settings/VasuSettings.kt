@@ -33,7 +33,7 @@ class VasuSettings @Inject constructor(
     private val _offlineOnly = MutableStateFlow(false)
     val offlineOnly: StateFlow<Boolean> = _offlineOnly.asStateFlow()
 
-    private val _androidFallbackTtsEnabled = MutableStateFlow(false)
+    private val _androidFallbackTtsEnabled = MutableStateFlow(true)
     val androidFallbackTtsEnabled: StateFlow<Boolean> = _androidFallbackTtsEnabled.asStateFlow()
 
     private val _geminiTtsVoice = MutableStateFlow(DEFAULT_GEMINI_TTS_VOICE)
@@ -57,7 +57,7 @@ class VasuSettings @Inject constructor(
         _voiceGuardEnabled.value = prefs.getBoolean("voice_guard_enabled", false)
         _autoAllowEnabled.value = prefs.getBoolean("auto_allow_enabled", true)
         _offlineOnly.value = prefs.getBoolean("offline_only", false)
-        _androidFallbackTtsEnabled.value = prefs.getBoolean("android_fallback_tts", false)
+        _androidFallbackTtsEnabled.value = prefs.getBoolean("android_fallback_tts", true)
         _geminiTtsVoice.value = prefs.getString("gemini_tts_voice", DEFAULT_GEMINI_TTS_VOICE) ?: DEFAULT_GEMINI_TTS_VOICE
         _geminiTtsModel.value = prefs.getString("gemini_tts_model", DEFAULT_GEMINI_TTS_MODEL) ?: DEFAULT_GEMINI_TTS_MODEL
     }

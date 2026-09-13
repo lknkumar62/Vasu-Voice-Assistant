@@ -186,7 +186,7 @@ class VoiceViewModel @Inject constructor(
             }
         }
 
-        // STT Errors
+        // STT Errors — auto-restart if continuous mode (except permission)
         viewModelScope.launch {
             sttManager.errors.collect { error ->
                 val errorMode = when (error.kind) {
@@ -203,6 +203,17 @@ class VoiceViewModel @Inject constructor(
                     lastResponse = error.message,
                     isListening = false
                 )
+                // For transient errors in continuous mode, retry listening after brief delay
+                if (continuousListening && error.kind != SttErrorKind.MIC_PERMISSION_DENIED) {
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(800)
+                        if (continuousListening && !voiceBusy && !_uiState.value.isSpeaking) {
+                            android.util.Log.i(TAG, "Retrying listening after error: ${error.kind}")
+                            val liveStarted = geminiLiveVoiceService.startMicrophoneConversation()
+                            if (!liveStarted) sttManager.startListening()
+                        }
+                    }
+                }
             }
         }
     }
@@ -222,6 +233,9 @@ class VoiceViewModel @Inject constructor(
     private val pendingVoiceCommands = ArrayDeque<String>()
     private var voiceBusy = false
 
+    /** When true, mic stays hot — single tap keeps listening in background. */
+    private var continuousListening = false
+
     companion object {
         private const val TAG = "VoiceViewModel"
         private const val DEDUP_WINDOW_MS = 3000L
@@ -229,20 +243,43 @@ class VoiceViewModel @Inject constructor(
     }
 
     fun toggleListening() {
-        if (_uiState.value.isListening) {
+        if (_uiState.value.isListening || continuousListening) {
+            // User wants to STOP continuous listening
+            continuousListening = false
             geminiLiveVoiceService.stopMicrophoneConversation()
             sttManager.stopListening()
+            _uiState.value = _uiState.value.copy(
+                isListening = false,
+                mode = VoiceUiMode.IDLE,
+                statusMessage = VoiceUiMode.IDLE.labelHindi
+            )
+            android.util.Log.i(TAG, "Continuous listening STOPPED by user")
         } else {
-            // Barge-in: the user interrupted to take a new turn. Cancel the
-            // backlog so the NEW utterance becomes the live turn — otherwise a
-            // fresh transcript would jump ahead of older queued commands and
-            // break FIFO order. (Uninterrupted A -> B -> C -> D flow keeps
-            // strict FIFO with no loss; only an explicit interrupt cancels.)
+            // Start continuous listening — single tap, stays hot in background
+            continuousListening = true
             pendingVoiceCommands.clear()
             voiceBusy = false
             ttsManager.stop()
             geminiLiveVoiceService.stopSpeaking()
 
+            val liveStarted = geminiLiveVoiceService.startMicrophoneConversation()
+            if (!liveStarted) {
+                sttManager.startListening()
+            }
+            android.util.Log.i(TAG, "Continuous listening STARTED — single tap, stays in background")
+        }
+    }
+
+    /** Restart listening if continuous mode is active and mic is free */
+    private fun restartListeningIfNeeded() {
+        if (!continuousListening) return
+        if (voiceBusy || _uiState.value.isSpeaking || _uiState.value.isThinking) return
+        if (pendingVoiceCommands.isNotEmpty()) return // drain will handle next
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(300) // small gap to avoid self-trigger
+            if (!continuousListening) return@launch
+            if (voiceBusy || _uiState.value.isSpeaking || _uiState.value.isThinking) return@launch
+            android.util.Log.i(TAG, "Auto-restarting listening (continuous mode)")
             val liveStarted = geminiLiveVoiceService.startMicrophoneConversation()
             if (!liveStarted) {
                 sttManager.startListening()
@@ -256,6 +293,8 @@ class VoiceViewModel @Inject constructor(
         voiceBusy = false
         geminiLiveVoiceService.stopSpeaking()
         ttsManager.stop()
+        // If in continuous mode, restart listening after stop
+        restartListeningIfNeeded()
     }
 
     /**
@@ -342,9 +381,14 @@ class VoiceViewModel @Inject constructor(
 
     /** FIFO: run the next queued command only after the current turn fully finished. */
     private fun drainPendingCommands() {
-        val next = pendingVoiceCommands.removeFirstOrNull() ?: return
-        android.util.Log.i(TAG, "Dequeueing next voice command (${pendingVoiceCommands.size} remaining)")
-        processVoiceCommand(next)
+        val next = pendingVoiceCommands.removeFirstOrNull()
+        if (next != null) {
+            android.util.Log.i(TAG, "Dequeueing next voice command (${pendingVoiceCommands.size} remaining)")
+            processVoiceCommand(next)
+        } else {
+            // Queue empty — if continuous mode, restart listening for next user utterance
+            restartListeningIfNeeded()
+        }
     }
 
     override fun onCleared() {
