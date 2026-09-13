@@ -1149,48 +1149,43 @@ class AudioEngine {
       }
     }
 
-    // ═══ TERTIARY: Browser SpeechSynthesis — EXPLICIT OPT-IN ONLY ═══
-    // Default Gemini mode MUST NOT silently substitute a local voice when
-    // Gemini TTS fails. This branch runs only when the caller passes
-    // allowLocalFallback:true from an explicit user setting.
-    // speakNative() always resolves (never rejects), so we check availability first
-    if (options.allowLocalFallback === true && this.synth) {
-      console.log('[TTS] Local fallback explicitly enabled — using Browser SpeechSynthesis');
-      await this.speakNative(cleanText, {
-        speed: options.speed,
-        pitch: options.pitch,
-        volume: options.volume,
-        onStart: options.onStart,
-        onEnd: options.onEnd,
-      });
-      return;
-    }
-
-    // ═══ QUATERNARY: Capacitor Native TTS (Android TextToSpeech plugin) — EXPLICIT OPT-IN ONLY ═══
-    if (options.allowLocalFallback === true) {
-      console.log('[TTS] Local fallback explicitly enabled — trying Capacitor Native TTS');
+    // ═══ TERTIARY: Browser SpeechSynthesis — ALWAYS as fallback (fast, local) ═══
+    // If Gemini fails or is slow, use browser TTS immediately so user gets voice
+    if (this.synth) {
+      console.log('[TTS] Gemini failed/slow — falling back to Browser SpeechSynthesis (local voice)');
       try {
-        const capacitorSpoken = await this.speakWithCapacitorTTS(cleanText, {
+        await this.speakNative(cleanText, {
           speed: options.speed,
           pitch: options.pitch,
           volume: options.volume,
           onStart: options.onStart,
           onEnd: options.onEnd,
         });
-        if (capacitorSpoken) return;
-      } catch (capErr) {
-        console.warn('[TTS] Capacitor native TTS failed:', capErr);
+        return;
+      } catch (e) {
+        console.warn('[TTS] Browser TTS fallback failed:', e);
       }
-    } else {
-      console.error('[TTS_ERROR] provider=gemini voice=Kore category=gemini_tts_failed_no_silent_local_fallback');
     }
 
-    // ═══ ABSOLUTE LAST RESORT: Play chime so user knows something happened ═══
+    // ═══ QUATERNARY: Capacitor Native TTS (Android TextToSpeech) — ALWAYS as fallback ═══
+    console.log('[TTS] Trying Capacitor Native TTS as fallback');
+    try {
+      const capacitorSpoken = await this.speakWithCapacitorTTS(cleanText, {
+        speed: options.speed,
+        pitch: options.pitch,
+        volume: options.volume,
+        onStart: options.onStart,
+        onEnd: options.onEnd,
+      });
+      if (capacitorSpoken) return;
+    } catch (capErr) {
+      console.warn('[TTS] Capacitor native TTS failed:', capErr);
+    }
+
+    // ═══ LAST RESORT: Log only — avoid tan-tan chime which annoys users ═══
+    // Do NOT play chime — it sounds like "tan tan" and confuses users
     console.error('[TTS] ALL TTS providers exhausted! API key present:', !!(options.apiKey || this.getApiKey()));
     console.error('[TTS] To fix: ensure Gemini API key is configured and network is available');
-    this.transitionTo('SPEAKING');
-    options.onStart?.();
-    try { await this.playSuccessChime(); } catch (_) {}
     this.transitionTo('IDLE');
     options.onEnd?.();
   }
