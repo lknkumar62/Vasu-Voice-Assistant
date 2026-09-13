@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <external-files-path name="vasu_pictures" path="Pictures/Vasu/" />
-    <external-files-path name="vasu_movies" path="Movies/Vasu/" />
-    <cache-path name="cache" path="/" />
-    <external-path name="external_files" path="." />
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="websites" path="websites/" />
+    <external-files-path name="documents" path="documents/" />
+    <external-files-path name="code" path="code/" />
+    <cache-path name="code-zips" path="code/" />
+    <external-files-path name="updates" path="updates/" />
+    <external-files-path name="repos" path="repos/" />
+    <cache-path name="backups" path="backups/" />
 </paths>

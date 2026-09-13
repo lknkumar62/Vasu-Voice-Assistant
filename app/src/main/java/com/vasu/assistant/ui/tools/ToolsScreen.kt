@@ -66,14 +66,14 @@ fun ToolsScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
-            // Search Bar
+            // Search Bar — dynamic count like web
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = viewModel::setSearchQuery,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                placeholder = { Text("Search 39+ tools...", color = VasuTextMuted) },
+                placeholder = { Text("Search ${uiState.totalCount} tools...", color = VasuTextMuted) },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null, tint = VasuCyan)
                 },
@@ -121,6 +121,46 @@ fun ToolsScreen(
                             enabled = true,
                             selected = isSelected
                         )
+                    )
+                }
+            }
+
+            // Hero card — parity with web VasuScreens.tsx:543-547 (Sparkles Smart Tools) — Vasu branded
+            Card(
+                colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(end = 48.dp)) {
+                        Text(
+                            text = "Smart Tools for a Smarter Tomorrow",
+                            color = VasuTextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            lineHeight = 20.sp
+                        )
+                        Text(
+                            text = "More than just an assistant — VASU gives you powerful tools to make your life easier.",
+                            color = VasuTextMuted,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = VasuCyan.copy(alpha = 0.3f),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(42.dp)
                     )
                 }
             }
@@ -432,7 +472,7 @@ fun ToolCardItem(
 fun RiskBadge(riskLevel: RiskLevel) {
     val (bgColor, textColor, label) = when (riskLevel) {
         RiskLevel.LOW -> Triple(VasuGreen.copy(alpha = 0.15f), VasuGreen, "LOW")
-        RiskLevel.MEDIUM -> Triple(VasuWarning.copy(alpha = 0.15f), VasuWarning, "MED")
+        RiskLevel.MEDIUM -> Triple(VasuWarning.copy(alpha = 0.15f), VasuWarning, "MEDIUM")
         RiskLevel.HIGH -> Triple(VasuError.copy(alpha = 0.15f), VasuError, "HIGH")
         RiskLevel.CRITICAL -> Triple(VasuError.copy(alpha = 0.25f), VasuError, "CRIT")
     }

@@ -154,6 +154,33 @@ class ChatViewModel @Inject constructor(
         ttsManager.stop()
     }
 
+    /**
+     * Replay a specific assistant message on demand (copy/speak button).
+     * Does NOT update lastSpokenResponseId — this is user-initiated replay,
+     * separate from the event-driven sendMessage() TTS path.
+     */
+    fun replayMessage(text: String) {
+        if (text.isBlank()) return
+        ttsManager.speakQueued(text)
+    }
+
+    fun clearChat() {
+        viewModelScope.launch {
+            try {
+                conversationDao.deleteAllMessages()
+            } catch (_: Exception) {}
+            lastSpokenResponseId = null
+            _uiState.value = _uiState.value.copy(
+                messages = listOf(
+                    ChatMessage(
+                        content = "नमस्ते! मैं वासु हूँ, आपकी वॉइस असिस्टेंट। आज मैं आपकी क्या मदद करूँ?",
+                        isUser = false
+                    )
+                )
+            )
+        }
+    }
+
     private fun addMessage(message: ChatMessage) {
         val last = _uiState.value.messages.lastOrNull()
         if (last != null && last.isUser == message.isUser && last.content.trim() == message.content.trim()) {

@@ -4,4 +4,6 @@
     <string name="title_activity_main">VASU Assistant</string>
     <string name="package_name">com.vasu.assistant</string>
     <string name="custom_url_scheme">com.vasu.assistant</string>
+    <string name="notification_listener_label">VASU Notifications</string>
+    <string name="accessibility_service_description">VASU accessibility service for screen control and automation</string>
 </resources>

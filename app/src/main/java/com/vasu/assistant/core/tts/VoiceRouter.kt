@@ -107,19 +107,19 @@ class VoiceRouter @Inject constructor(
             if (geminiSuccess) return true
             // If speak() returned false without invoking onError callback (e.g. immediate false),
             // fallback explicitly here too
-            Log.w(TAG, "GeminiTtsEngine returned false, falling back to local Maya voice")
+            Log.w(TAG, "GeminiTtsEngine returned false, falling back to local Vasu voice")
             _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
             val localFallbackSuccess = localTtsEngine.speak(
                 text = text,
                 onStart = onStart,
                 onDone = wrappedOnDone,
                 onError = { localErr ->
-                    Log.w(TAG, "Local Maya voice also failed: $localErr")
+                    Log.w(TAG, "Local Vasu voice also failed: $localErr")
                     if (settings.androidFallbackTtsEnabled.value) {
                         fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
                     } else {
                         _currentSource.value = ActiveVoiceSource.MUTED
-                        wrappedOnError("Maya voice unavailable: $localErr")
+                        wrappedOnError("Vasu voice unavailable: $localErr")
                     }
                 }
             )
@@ -128,12 +128,12 @@ class VoiceRouter @Inject constructor(
                 return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
             }
             _currentSource.value = ActiveVoiceSource.MUTED
-            wrappedOnError("No Maya voice available and local fallback disabled")
+            wrappedOnError("No Vasu voice available and local fallback disabled")
             return false
         }
 
-        // 2. Offline / Local TTS — Maya voice only, no Android fallback unless enabled
-        Log.d(TAG, "Routing turn to LocalTtsEngine (Maya voice, offline or Gemini not ready)")
+        // 2. Offline / Local TTS — Vasu voice only, no Android fallback unless enabled (Maya parity)
+        Log.d(TAG, "Routing turn to LocalTtsEngine (Vasu voice, offline or Gemini not ready)")
         _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
         val localSuccess = localTtsEngine.speak(
             text = text,
@@ -154,11 +154,11 @@ class VoiceRouter @Inject constructor(
 
         // 3. Android system fallback — ONLY if explicitly enabled (user wants no local voice, so disabled by default)
         if (settings.androidFallbackTtsEnabled.value) {
-            Log.d(TAG, "Local Maya voice failed, trying Android fallback (enabled)")
+            Log.d(TAG, "Local Vasu voice failed, trying Android fallback (enabled)")
             return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
         }
         _currentSource.value = ActiveVoiceSource.MUTED
-        wrappedOnError("No Maya voice available and Android fallback disabled (as requested)")
+        wrappedOnError("No Vasu voice available and Android fallback disabled (as requested)")
         return false
     }
 

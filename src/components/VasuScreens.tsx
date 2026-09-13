@@ -16,7 +16,7 @@ import {
   Calculator, Image as ImageIcon, Music, Video, Users,
   Bluetooth, Wifi, Eye, Languages, QrCode, FolderOpen, Cloud,
   Shield, ShieldCheck, Lock, Database, Cpu, Share2, Code,
-  Info, Radio, Headphones, ArrowLeft, Home,
+  Info, Radio, Headphones, ArrowLeft, Home, Wrench, Brain,
 } from "lucide-react";
 
 /* ================================================================
@@ -71,37 +71,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
   assistantState, audioLevel = 0, activeToolName, messages,
   liveVoiceTranscript = "", isTorchActive,
   onToggleListen, onSendMessage, onReplayAudio,
-  onToggleTorch, onSelectTab,
+  onNavigateToChat, onToggleTorch, onSelectTab,
 }) => {
-  const [input, setInput] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const latestVasu = [...messages].reverse().find((m) => m.sender === "vasu");
 
-  const send = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const value = input.trim();
-    if (!value) return;
-    setInput("");
-    onSendMessage(value);
-  };
-
-  const quickActions = [
-    { label: "Call", desc: "Make a call", icon: Phone, command: "Call dialer kholo" },
-    { label: "WhatsApp", desc: "Send a message", icon: MessageCircle, command: "WhatsApp kholo" },
-    { label: "Camera", desc: "Take a photo", icon: Camera, command: "Camera kholo" },
-    { label: "Torch", desc: "Turn on light", icon: Flashlight, command: "" },
-    { label: "YouTube", desc: "Play anything", icon: Youtube, command: "YouTube kholo" },
-    { label: "Maps", desc: "Find a location", icon: MapPin, command: "Google Maps kholo" },
-    { label: "Settings", desc: "Open settings", icon: Settings, command: "" },
-    { label: "More", desc: "All features", icon: MoreHorizontal, command: "" },
+  // Maya-identical 2-col navigation grid — Vasu theme (blue #008CFF), Maya layout
+  // Keep unused Home props for contract compatibility (device shortcuts moved to Tools/Auto)
+  void isTorchActive; void onSendMessage; void onToggleTorch;
+  const navModules: { label: string; desc: string; icon: React.FC<any>; tab: ScreenTab }[] = [
+    { label: "Chat", desc: "Talk to VASU", icon: MessageCircle, tab: "CHAT" },
+    { label: "Voice", desc: "Voice commands", icon: Mic, tab: "VOICE" },
+    { label: "Guardian", desc: "Voice unlock", icon: Shield, tab: "GUARDIAN" },
+    { label: "Permissions", desc: "Access control", icon: Lock, tab: "PERMISSIONS" },
+    { label: "Auto", desc: "Macros & Missions", icon: Bot, tab: "AUTO" },
+    { label: "Memory", desc: "Remember things", icon: Brain, tab: "MEMORY" },
+    { label: "Tools", desc: "Available actions", icon: Wrench, tab: "TOOLS" },
+    { label: "Settings", desc: "Configure VASU", icon: Settings, tab: "SETTINGS" },
   ];
-
-  const executeQuickAction = (item: (typeof quickActions)[number]) => {
-    if (item.label === "Torch") { onToggleTorch(); return; }
-    if (item.label === "Settings") { onSelectTab?.("SETTINGS"); return; }
-    if (item.label === "More") { onSelectTab?.("TOOLS"); return; }
-    onSendMessage(item.command);
-  };
 
   return (
     <main className="min-h-full w-full max-w-2xl mx-auto bg-[#01060D] text-[#F4F8FF] px-4 pb-24" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
@@ -134,7 +121,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       {(liveVoiceTranscript || latestVasu) && (
-        <Card className="p-4 mb-3">
+        <Card className="p-4 mb-4">
           <div className="flex items-center justify-between text-xs text-[#008CFF]">
             <span>
               <Sparkles size={14} className="inline mr-1" />
@@ -150,21 +137,28 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </Card>
       )}
 
-      <form onSubmit={send} className="flex items-center gap-2 p-2 mb-4 rounded-[18px] bg-[#061827] border border-[#008CFF]/35 shadow-[0_0_18px_rgba(0,140,255,.08)]">
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask VASU anything..." className="flex-1 min-w-0 bg-transparent outline-none text-sm text-white placeholder:text-[#7895B8]/60" />
-        <button type="submit" disabled={!input.trim()} className="w-11 h-11 rounded-full bg-[#008CFF] flex items-center justify-center disabled:opacity-30 shadow-[0_0_20px_rgba(0,140,255,.45)]"><Send size={18} /></button>
-      </form>
-
-      <div className="grid grid-cols-4 gap-2">
-        {quickActions.map((item) => {
-          const Icon = item.icon;
-          const active = item.label === "Torch" && isTorchActive;
+      {/* Maya-identical 2-col nav grid — navigation modules only (device shortcuts moved to Tools/Auto) */}
+      <div className="grid grid-cols-2 gap-3">
+        {navModules.map((item) => {
+          const Icon = item.icon as any;
           return (
-            <button key={item.label} type="button" onClick={() => executeQuickAction(item)}
-              className={`min-h-[108px] rounded-[18px] p-3 bg-gradient-to-br from-[#061827] to-[#030F1B] border ${active ? "border-amber-400/70" : "border-[#008CFF]/20"} flex flex-col items-center justify-center gap-2 active:scale-95 transition`}>
-              <Icon size={27} className={item.label === "Call" ? "text-emerald-400" : item.label === "WhatsApp" ? "text-green-400" : item.label === "Torch" && active ? "text-amber-300" : "text-[#008CFF]"} />
-              <span className="text-xs font-semibold">{item.label}</span>
-              <span className="text-[9px] text-[#7895B8] text-center">{item.desc}</span>
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => {
+                if (item.tab === "CHAT" && onNavigateToChat) {
+                  onNavigateToChat();
+                } else {
+                  onSelectTab?.(item.tab);
+                }
+              }}
+              className="min-h-[112px] rounded-[16px] p-4 bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20 hover:border-[#008CFF]/40 flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition shadow-[0_4px_12px_rgba(0,0,0,0.25)]"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#008CFF]/10 border border-[#008CFF]/25 text-[#008CFF] flex items-center justify-center">
+                <Icon size={22} />
+              </div>
+              <span className="text-[13px] font-medium text-[#F4F8FF]">{item.label}</span>
+              <span className="text-[10px] text-[#7895B8] text-center leading-tight">{item.desc}</span>
             </button>
           );
         })}

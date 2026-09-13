@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VASU Assistant</string>
+    <string name="accessibility_service_description">VASU accessibility service for screen control and automation</string>
+    <string name="notification_listener_label">VASU Notifications</string>
+</resources>

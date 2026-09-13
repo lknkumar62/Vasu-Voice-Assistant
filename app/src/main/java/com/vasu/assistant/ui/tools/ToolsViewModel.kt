@@ -123,13 +123,13 @@ class ToolsViewModel @Inject constructor(
 
         fun getCategoryForTool(name: String): String {
             return when {
-                name in listOf("torch", "set_volume", "get_battery", "get_device_info", "open_settings", "set_brightness", "toggle_wifi", "set_ringer_mode", "list_apps", "get_time", "create_alarm", "set_timer") -> "DEVICE"
-                name in listOf("browse_files", "search_files", "read_file", "storage_info", "rename_file", "copy_file", "move_file", "delete_file") -> "FILES"
-                name in listOf("take_photo", "record_video", "stop_recording", "media_control") -> "VISION"
-                name in listOf("read_screen", "click_element", "type_text", "scroll", "go_back", "go_home", "read_notifications", "dismiss_notification") -> "ACCESSIBILITY"
-                name in listOf("make_call", "send_sms", "send_whatsapp") -> "COMMUNICATION"
+                name in listOf("turn_on_torch", "turn_off_torch", "volume_up", "volume_down", "set_volume", "battery_info", "device_info", "create_alarm") -> "DEVICE"
+                name in listOf("browse_files", "search_files", "storage_info", "delete_file", "read_file", "rename_file", "copy_file", "move_file") -> "FILES"
+                name in listOf("take_photo", "ocr_extract", "media_play_pause", "media_next", "record_video", "stop_recording", "media_control") -> "VISION"
+                name in listOf("read_screen", "click", "type_text", "press_back", "press_home", "scroll_down", "scroll_up", "open_app", "read_notifications", "click_element", "scroll", "go_back", "go_home", "dismiss_notification") -> "ACCESSIBILITY"
+                name in listOf("open_whatsapp", "make_call", "send_message", "lookup_contact", "send_sms", "send_whatsapp") -> "COMMUNICATION"
                 name in listOf("get_current_location", "save_parking", "get_parking_location", "find_nearby_places", "get_traffic_info") -> "LOCATION"
-                name in listOf("smart_mode") -> "SMART_MODE"
+                name in listOf("run_mission", "smart_mode") -> "SMART_MODE"
                 name in listOf("search_web", "calculate", "currency_convert", "unit_convert", "weather") -> "UTILITIES"
                 else -> "DEVICE"
             }

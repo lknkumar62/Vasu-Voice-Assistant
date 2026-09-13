@@ -1,8 +1,10 @@
 package com.vasu.assistant.ui.voice
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vasu.assistant.core.ai.AIOrchestrator
+import com.vasu.assistant.core.service.VasuForegroundService
 import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.stt.STTState
@@ -12,7 +14,10 @@ import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.tts.TTSState
 import com.vasu.assistant.core.voice.GeminiLiveVoiceService
 import com.vasu.assistant.core.voice.GeminiVoiceState
+import com.vasu.assistant.core.wakeword.WakeWordDetector
+import com.vasu.assistant.core.wakeword.WakeWordState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,16 +52,24 @@ data class VoiceUiState(
     val lastResponse: String = "",
     val sttState: STTState = STTState.IDLE,
     val ttsState: TTSState = TTSState.IDLE,
-    val rmsLevel: Float = 0f
+    val rmsLevel: Float = 0f,
+    val errorMessage: String? = null,
+    val isWakeWordActive: Boolean = false,
+    val wakeWordState: WakeWordState = WakeWordState.IDLE,
+    val wakeWordReason: String? = null,
+    val geminiModel: String = VasuSettings.DEFAULT_GEMINI_TTS_MODEL, // display model badge
+    val geminiVoice: String = VasuSettings.DEFAULT_GEMINI_TTS_VOICE // display voice badge
 )
 
 @HiltViewModel
 class VoiceViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val sttManager: STTManager,
     private val ttsManager: TTSManager,
     private val aiOrchestrator: AIOrchestrator,
     private val settings: VasuSettings,
-    private val geminiLiveVoiceService: GeminiLiveVoiceService
+    private val geminiLiveVoiceService: GeminiLiveVoiceService,
+    private val wakeWordDetector: WakeWordDetector
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VoiceUiState())
@@ -64,6 +77,33 @@ class VoiceViewModel @Inject constructor(
 
     init {
         ttsManager.initialize()
+
+        // Settings collectors for parity badges & diagnostics
+        viewModelScope.launch {
+            settings.geminiTtsModel.collect { model ->
+                _uiState.value = _uiState.value.copy(geminiModel = model.ifBlank { "gemini-3.1-flash-live-preview" })
+            }
+        }
+        viewModelScope.launch {
+            settings.geminiTtsVoice.collect { voice ->
+                _uiState.value = _uiState.value.copy(geminiVoice = voice.ifBlank { "Kore" })
+            }
+        }
+        viewModelScope.launch {
+            settings.wakeWordEnabled.collect { enabled ->
+                _uiState.value = _uiState.value.copy(isWakeWordActive = enabled)
+            }
+        }
+        viewModelScope.launch {
+            wakeWordDetector.state.collect { wwState ->
+                _uiState.value = _uiState.value.copy(wakeWordState = wwState)
+            }
+        }
+        viewModelScope.launch {
+            wakeWordDetector.unavailableReason.collect { reason ->
+                _uiState.value = _uiState.value.copy(wakeWordReason = reason)
+            }
+        }
 
         // Gemini Live Voice State
         viewModelScope.launch {
@@ -79,15 +119,31 @@ class VoiceViewModel @Inject constructor(
                     GeminiVoiceState.ERROR -> VoiceUiMode.ERROR
                 }
 
-                if (liveState != GeminiVoiceState.IDLE) {
+                if (liveState == GeminiVoiceState.ERROR) {
+                    val msg = _uiState.value.errorMessage ?: "Gemini Live connection error. Check API key & internet, then Reconnect."
+                    _uiState.value = _uiState.value.copy(
+                        voiceState = liveState,
+                        mode = liveMode,
+                        statusMessage = liveMode.labelHindi,
+                        isSpeaking = false,
+                        isThinking = false,
+                        isListening = false,
+                        errorMessage = msg
+                    )
+                } else if (liveState != GeminiVoiceState.IDLE) {
                     _uiState.value = _uiState.value.copy(
                         voiceState = liveState,
                         mode = liveMode,
                         statusMessage = liveMode.labelHindi,
                         isSpeaking = liveState == GeminiVoiceState.SPEAKING,
                         isThinking = liveState == GeminiVoiceState.THINKING,
-                        isListening = liveState == GeminiVoiceState.LISTENING
+                        isListening = liveState == GeminiVoiceState.LISTENING,
+                        errorMessage = if (liveState == GeminiVoiceState.CONNECTED || liveState == GeminiVoiceState.CONNECTING) null else _uiState.value.errorMessage
                     )
+                    // Clear error when connected
+                    if (liveState == GeminiVoiceState.CONNECTED) {
+                        _uiState.value = _uiState.value.copy(errorMessage = null)
+                    }
                 } else {
                     _uiState.value = _uiState.value.copy(
                         voiceState = liveState
@@ -201,6 +257,7 @@ class VoiceViewModel @Inject constructor(
                     mode = errorMode,
                     statusMessage = error.message,
                     lastResponse = error.message,
+                    errorMessage = error.message,
                     isListening = false
                 )
                 // For transient errors in continuous mode, retry listening after brief delay
@@ -240,6 +297,10 @@ class VoiceViewModel @Inject constructor(
         private const val TAG = "VoiceViewModel"
         private const val DEDUP_WINDOW_MS = 3000L
         private const val MAX_PENDING_COMMANDS = 20
+        // Web parity diagnostics constants (same as VoiceView.tsx)
+        const val DIAGNOSTICS_INPUT = "16,000 Hz Mono PCM"
+        const val DIAGNOSTICS_OUTPUT = "24,000 Hz Little-Endian PCM"
+        const val DISPLAY_MODEL = "gemini-3.1-flash-live-preview"
     }
 
     fun toggleListening() {
@@ -261,6 +322,8 @@ class VoiceViewModel @Inject constructor(
             voiceBusy = false
             ttsManager.stop()
             geminiLiveVoiceService.stopSpeaking()
+            // Clear previous error when user retries
+            _uiState.value = _uiState.value.copy(errorMessage = null)
 
             val liveStarted = geminiLiveVoiceService.startMicrophoneConversation()
             if (!liveStarted) {
@@ -301,12 +364,68 @@ class VoiceViewModel @Inject constructor(
      * TEXT-ONLY TEST: Test Gemini Live session with text and receive native Kore audio.
      */
     fun testKoreVoice(text: String = "Namaste Vasu, ek chhota sa greeting bolo.") {
+        _uiState.value = _uiState.value.copy(errorMessage = null)
         geminiLiveVoiceService.sendTextTurn(text)
     }
 
     @Deprecated("Use testKoreVoice instead", ReplaceWith("testKoreVoice(text)"))
     fun testErinomeVoice(text: String = "Namaste Vasu, ek chhota sa greeting bolo.") {
         testKoreVoice(text)
+    }
+
+    // ── Maya parity additions ────────────────────────────────────────
+
+    fun toggleWakeWord() {
+        val enabled = !settings.wakeWordEnabled.value
+        settings.setWakeWordEnabled(enabled)
+        if (enabled) {
+            wakeWordDetector.initialize()
+            VasuForegroundService.start(appContext)
+            android.util.Log.i(TAG, "Wake word ENABLED from VoiceScreen")
+        } else {
+            VasuForegroundService.stop(appContext)
+            wakeWordDetector.stop()
+            android.util.Log.i(TAG, "Wake word DISABLED from VoiceScreen")
+        }
+    }
+
+    fun reconnect() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = null,
+                mode = VoiceUiMode.CONNECTING,
+                statusMessage = VoiceUiMode.CONNECTING.labelHindi
+            )
+            val ok = geminiLiveVoiceService.ensureConnectedSuspend()
+            if (!ok) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Connection failed. Verify Gemini API Key in Settings and internet.",
+                    mode = VoiceUiMode.ERROR,
+                    statusMessage = VoiceUiMode.ERROR.labelHindi
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(errorMessage = null)
+            }
+        }
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(errorMessage = null)
+        if (_uiState.value.mode == VoiceUiMode.ERROR || _uiState.value.mode == VoiceUiMode.PERMISSION_REQUIRED) {
+            _uiState.value = _uiState.value.copy(mode = VoiceUiMode.IDLE, statusMessage = VoiceUiMode.IDLE.labelHindi)
+        }
+    }
+
+    fun testSpeakerHardware() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(errorMessage = null)
+            try {
+                // Use TTSManager queue to verify audio pipeline plays through speaker
+                ttsManager.speakQueued("नमस्ते! मैं कोर हूँ। वासु वॉइस असिस्टेंट बिल्कुल ठीक काम कर रहा है। Speaker hardware test successful.")
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = "Hardware speaker test failed: ${e.message}")
+            }
+        }
     }
 
     private fun onVoiceTranscript(command: String) {

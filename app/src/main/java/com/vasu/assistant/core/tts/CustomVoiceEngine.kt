@@ -15,15 +15,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class VoiceModelStatus(val description: String) {
-    ACTIVE_CUSTOM_MODEL("Maya voice model active"),
-    ACTIVE_CUSTOM_SAMPLES("Maya voices loaded (43 voices)"),
-    FALLBACK_SYSTEM_TTS("System TTS fallback (no Maya voice found)"),
-    ERROR("Error loading Maya voice assets")
+    ACTIVE_CUSTOM_MODEL("Vasu voice model active"),
+    ACTIVE_CUSTOM_SAMPLES("Vasu voices loaded (43 voices)"),
+    FALLBACK_SYSTEM_TTS("System TTS fallback (no Vasu voice found)"),
+    ERROR("Error loading Vasu voice assets")
 }
 
 /**
- * CustomVoiceEngine - Manages Maya's 43 voices + Vasu local samples.
- * Loads from assets/voices (Maya: friday/maya/venom) and vasu_voice.
+ * CustomVoiceEngine - Manages Vasu's 43 voices (Maya parity: friday/maya/venom) + Vasu local samples.
+ * Loads from assets/voices (friday/maya/venom — Maya parity) and vasu_voice.
  */
 @Singleton
 class CustomVoiceEngine @Inject constructor(
@@ -43,12 +43,12 @@ class CustomVoiceEngine @Inject constructor(
     }
 
     /**
-     * Inspect all voice assets: Maya's 43 voices + Vasu local samples.
-     * Maya voices are in assets/voices (friday/maya/venom), Vasu samples in vasu_voice.
+     * Inspect all voice assets: Vasu's 43 voices (Maya parity) + Vasu local samples.
+     * Vasu voices are in assets/voices (friday/maya/venom — Maya parity), Vasu samples in vasu_voice.
      */
     fun detectCustomVoiceAssets() {
         try {
-            // 1. Scan Maya voices (43 ogg files)
+            // 1. Scan Vasu voices (43 ogg files — Maya parity: friday/maya/venom)
             val mayaVoices = runCatching { context.assets.list("voices") ?: emptyArray() }.getOrDefault(emptyArray())
                 .filter { it.endsWith(".ogg") || it.endsWith(".wav") || it.endsWith(".mp3") }
             
@@ -65,14 +65,14 @@ class CustomVoiceEngine @Inject constructor(
 
             var loadedCount = 0
 
-            // Load Maya voices first — map each voice name to asset path
+            // Load Vasu voices first — map each voice name to asset path (Maya parity)
             mayaVoices.forEach { file ->
                 val key = file.substringBeforeLast(".").lowercase().replace("_", " ").trim() // e.g. maya kore -> maya kore
                 customSampleMap[key] = "voices/$file"
-                // Also map short names: kore, aoede etc. point to default maya variant
+                // Also map short names: kore, aoede etc. point to default vasu variant (Maya parity)
                 val shortName = file.substringAfter("_").substringBeforeLast(".").lowercase()
                 customSampleMap.putIfAbsent(shortName, "voices/$file")
-                // Common greetings point to default Maya voice
+                // Common greetings point to default Vasu voice
                 when (key) {
                     "maya kore", "friday kore", "maya erinome" -> {
                         customSampleMap.putIfAbsent("hello", "voices/$file")
@@ -94,16 +94,16 @@ class CustomVoiceEngine @Inject constructor(
             if (modelFile != null || internalModel != null) {
                 _customModelPath.value = internalModel?.absolutePath ?: "assets/vasu_voice/$modelFile"
                 _status.value = VoiceModelStatus.ACTIVE_CUSTOM_MODEL
-                Log.i(TAG, "Loaded Maya+ Vasu neural model: ${_customModelPath.value} with $loadedCount voices")
+                Log.i(TAG, "Loaded Vasu neural model: ${_customModelPath.value} with $loadedCount voices")
             } else if (loadedCount > 0) {
                 _status.value = VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES
-                Log.i(TAG, "Loaded $loadedCount Maya/Vasu voice samples (Maya: ${mayaVoices.size}, Vasu: ${vasuSamples.size})")
+                Log.i(TAG, "Loaded $loadedCount Vasu voice samples (Vasu: ${vasuSamples.size}, legacy: ${mayaVoices.size})")
             } else {
                 _status.value = VoiceModelStatus.FALLBACK_SYSTEM_TTS
-                Log.w(TAG, "No Maya/Vasu voice assets found — will use Gemini only")
+                Log.w(TAG, "No Vasu voice assets found — will use Gemini only")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed scanning Maya voice assets", e)
+            Log.e(TAG, "Failed scanning Vasu voice assets", e)
             _status.value = VoiceModelStatus.ERROR
         }
     }

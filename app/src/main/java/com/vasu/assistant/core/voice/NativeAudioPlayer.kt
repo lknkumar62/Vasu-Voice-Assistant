@@ -106,7 +106,8 @@ class NativeAudioPlayer @Inject constructor(
         }
     }
 
-    private synchronized fun startPlaybackLoopIfNeeded() {
+    @Synchronized
+    private fun startPlaybackLoopIfNeeded() {
         if (playbackThread != null && playbackThread!!.isAlive) {
             synchronized(lock) {
                 lock.notifyAll()

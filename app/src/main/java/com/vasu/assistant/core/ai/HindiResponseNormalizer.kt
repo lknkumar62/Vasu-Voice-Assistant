@@ -91,14 +91,14 @@ class HindiResponseNormalizer @Inject constructor() {
         val roman = detected.script == ResponseScript.ROMAN
         val english = detected.style == DetectedStyle.ENGLISH
 
-        // Maya alias addressing
+        // Maya alias addressing — Vasu branding (Maya parity: handle legacy name)
         if (lower.contains("maya") || lower == "hello maya" || lower == "hey maya" || lower == "hi maya") {
             return if (english) {
-                "Hey, I am Vasu, not Maya. 😊 Tell me, how can I help you?"
+                "Hey, I am Vasu. 😊 Tell me, how can I help you?"
             } else if (roman) {
-                "Are, main Vasu hoon. 😊 Maya nahi. Batao, main tumhari kis tarah madad karoon?"
+                "Are, main Vasu hoon. 😊 Batao, main tumhari kis tarah madad karoon?"
             } else {
-                "अरे, मैं वासु हूँ। 😊 माया नहीं। बताओ, मैं तुम्हारी किस तरह मदद करूँ?"
+                "अरे, मैं वासु हूँ। 😊 बताओ, मैं तुम्हारी किस तरह मदद करूँ?"
             }
         }
 

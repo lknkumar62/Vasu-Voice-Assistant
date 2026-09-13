@@ -45,7 +45,7 @@ export interface ToolItem {
   name: string;
   title: string;
   description: string;
-  category: 'DEVICE' | 'SYSTEM' | 'FILES' | 'CAMERA' | 'COMMUNICATION' | 'MEDIA' | 'SCREEN' | 'NAVIGATION' | 'ALARMS' | 'MISSIONS';
+  category: 'DEVICE' | 'FILES' | 'VISION' | 'ACCESSIBILITY' | 'COMMUNICATION' | 'LOCATION' | 'SMART_MODE' | 'UTILITIES';
   risk: ToolRisk;
   requiredPermission: string;
   isAvailable: boolean;

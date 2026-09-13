@@ -22,13 +22,13 @@ let isMediaPlaying = false;
 let currentTrack = "Arijit Singh - Kesariya (Remix)";
 
 export const REGISTERED_TOOLS: ToolItem[] = [
-  // SYSTEM & DEVICE
+  // DEVICE
   {
     id: 'turn_on_torch',
     name: 'turn_on_torch',
     title: 'Turn On Torch',
     description: 'Turn on the device flashlight',
-    category: 'SYSTEM',
+    category: 'DEVICE',
     risk: 'LOW',
     requiredPermission: 'Camera / Flashlight',
     isAvailable: true,
@@ -39,7 +39,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'turn_off_torch',
     title: 'Turn Off Torch',
     description: 'Turn off the device flashlight',
-    category: 'SYSTEM',
+    category: 'DEVICE',
     risk: 'LOW',
     requiredPermission: 'Camera / Flashlight',
     isAvailable: true,
@@ -50,7 +50,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'volume_up',
     title: 'Volume Up',
     description: 'Increase device media volume by 15%',
-    category: 'SYSTEM',
+    category: 'DEVICE',
     risk: 'LOW',
     requiredPermission: 'None',
     isAvailable: true,
@@ -61,7 +61,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'volume_down',
     title: 'Volume Down',
     description: 'Decrease device media volume by 15%',
-    category: 'SYSTEM',
+    category: 'DEVICE',
     risk: 'LOW',
     requiredPermission: 'None',
     isAvailable: true,
@@ -72,7 +72,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'set_volume',
     title: 'Set Volume',
     description: 'Set device volume to a specific percentage (0 - 100)',
-    category: 'SYSTEM',
+    category: 'DEVICE',
     risk: 'LOW',
     requiredPermission: 'None',
     isAvailable: true,
@@ -112,7 +112,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     parameters: [],
   },
 
-  // COMMUNICATION & WHATSAPP
+  // COMMUNICATION
   {
     id: 'open_whatsapp',
     name: 'open_whatsapp',
@@ -164,13 +164,13 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     parameters: [{ name: 'name', type: 'string', description: 'Contact name', required: true }],
   },
 
-  // MEDIA & WEB
+  // MEDIA & VISION
   {
     id: 'media_play_pause',
     name: 'media_play_pause',
     title: 'Media Play / Pause',
     description: 'Toggle playback of currently playing media',
-    category: 'MEDIA',
+    category: 'VISION',
     risk: 'LOW',
     requiredPermission: 'None',
     isAvailable: true,
@@ -181,7 +181,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'media_next',
     title: 'Next Track',
     description: 'Skip to next music track',
-    category: 'MEDIA',
+    category: 'VISION',
     risk: 'LOW',
     requiredPermission: 'None',
     isAvailable: true,
@@ -192,20 +192,20 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'search_web',
     title: 'Search Web',
     description: 'Perform web search for information or queries',
-    category: 'DEVICE',
+    category: 'UTILITIES',
     risk: 'LOW',
     requiredPermission: 'Internet',
     isAvailable: true,
     parameters: [{ name: 'query', type: 'string', description: 'Search keywords', required: true }],
   },
 
-  // ACCESSIBILITY & SCREEN AUTOMATION
+  // ACCESSIBILITY & AUTOMATION
   {
     id: 'read_screen',
     name: 'read_screen',
     title: 'Read Screen Content',
     description: 'Accessibility Service inspects visible nodes and text on display',
-    category: 'SCREEN',
+    category: 'ACCESSIBILITY',
     risk: 'LOW',
     requiredPermission: 'Accessibility Service',
     isAvailable: true,
@@ -216,7 +216,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'click',
     title: 'Click UI Element',
     description: 'Simulate user touch click on button or element matching label or text',
-    category: 'SCREEN',
+    category: 'ACCESSIBILITY',
     risk: 'HIGH',
     requiredPermission: 'Accessibility Service',
     isAvailable: true,
@@ -227,7 +227,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'type_text',
     title: 'Type Text',
     description: 'Input text into currently active or targeted text field',
-    category: 'SCREEN',
+    category: 'ACCESSIBILITY',
     risk: 'MEDIUM',
     requiredPermission: 'Accessibility Service',
     isAvailable: true,
@@ -238,7 +238,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'press_back',
     title: 'Press Back Button',
     description: 'Navigate back using system accessibility action',
-    category: 'NAVIGATION',
+    category: 'ACCESSIBILITY',
     risk: 'LOW',
     requiredPermission: 'Accessibility Service',
     isAvailable: true,
@@ -249,7 +249,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'press_home',
     title: 'Press Home Button',
     description: 'Navigate to home launcher screen',
-    category: 'NAVIGATION',
+    category: 'ACCESSIBILITY',
     risk: 'LOW',
     requiredPermission: 'Accessibility Service',
     isAvailable: true,
@@ -260,7 +260,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'scroll_down',
     title: 'Scroll Down',
     description: 'Perform downward scroll gesture on active view',
-    category: 'SCREEN',
+    category: 'ACCESSIBILITY',
     risk: 'LOW',
     requiredPermission: 'Accessibility Service',
     isAvailable: true,
@@ -271,7 +271,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'scroll_up',
     title: 'Scroll Up',
     description: 'Perform upward scroll gesture on active view',
-    category: 'SCREEN',
+    category: 'ACCESSIBILITY',
     risk: 'LOW',
     requiredPermission: 'Accessibility Service',
     isAvailable: true,
@@ -282,20 +282,20 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'open_app',
     title: 'Open Application',
     description: 'Launch an installed application by name or package',
-    category: 'NAVIGATION',
+    category: 'ACCESSIBILITY',
     risk: 'MEDIUM',
     requiredPermission: 'Query All Packages',
     isAvailable: true,
     parameters: [{ name: 'appName', type: 'string', description: 'Application name e.g. YouTube, Camera, WhatsApp', required: true }],
   },
 
-  // CAMERA & VISION
+  // VISION
   {
     id: 'take_photo',
     name: 'take_photo',
     title: 'Take Photo',
     description: 'Open camera viewfinder and capture image',
-    category: 'CAMERA',
+    category: 'VISION',
     risk: 'LOW',
     requiredPermission: 'Camera',
     isAvailable: true,
@@ -306,7 +306,7 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'ocr_extract',
     title: 'Extract Text (OCR)',
     description: 'Recognize text from camera view or image on screen',
-    category: 'CAMERA',
+    category: 'VISION',
     risk: 'LOW',
     requiredPermission: 'Camera',
     isAvailable: true,
@@ -348,13 +348,13 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     parameters: [{ name: 'filePath', type: 'string', description: 'Path to the file', required: true }],
   },
 
-  // ALARMS & MISSIONS
+  // DEVICE & SMART MODE
   {
     id: 'create_alarm',
     name: 'create_alarm',
     title: 'Create Alarm',
     description: 'Set device alarm or reminder for a specific time',
-    category: 'ALARMS',
+    category: 'DEVICE',
     risk: 'LOW',
     requiredPermission: 'Set Alarm / Schedule Exact Alarm',
     isAvailable: true,
@@ -368,20 +368,20 @@ export const REGISTERED_TOOLS: ToolItem[] = [
     name: 'run_mission',
     title: 'Run Mission',
     description: 'Trigger an automated background routine or mission',
-    category: 'MISSIONS',
+    category: 'SMART_MODE',
     risk: 'HIGH',
     requiredPermission: 'Foreground Service / WorkManager',
     isAvailable: true,
     parameters: [{ name: 'missionId', type: 'string', description: 'ID of mission to run', required: true }],
   },
 
-  // NOTIFICATIONS
+  // ACCESSIBILITY
   {
     id: 'read_notifications',
     name: 'read_notifications',
     title: 'Read Notifications',
     description: 'Read recent notifications from WhatsApp, Messages, Gmail',
-    category: 'DEVICE',
+    category: 'ACCESSIBILITY',
     risk: 'LOW',
     requiredPermission: 'Notification Listener Service',
     isAvailable: true,

@@ -48,7 +48,10 @@ fun VasuNavGraph(
         }
 
         composable(Screen.Voice.route) {
-            VoiceScreen(onNavigateBack = { navController.popBackStack() })
+            VoiceScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+            )
         }
 
         composable(Screen.Settings.route) {
