@@ -158,7 +158,7 @@ export class GeminiClient {
     console.log('[GeminiClient] aiProviderManager response source:', providerResponse.source);
     if (providerResponse.source !== 'local_jarvis') {
       return {
-        replyText: cleanAssistantText(providerResponse.replyText),
+        replyText: providerResponse.replyText,
         source: 'ai_provider',
         modelUsed: providerResponse.modelUsed,
       };
@@ -190,7 +190,7 @@ export class GeminiClient {
             body: JSON.stringify({
               contents,
               systemInstruction: { parts: [{ text: sysInstruction }] },
-              generationConfig: { temperature: 0.7, maxOutputTokens: 250 },
+              generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
             }),
             signal: controller.signal,
           });

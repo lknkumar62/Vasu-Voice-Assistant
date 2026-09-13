@@ -324,7 +324,7 @@ export class AIProviderManager {
     if (!config || !config.apiKey) throw new Error(`${type} not configured`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       let url = '';
@@ -354,7 +354,7 @@ export class AIProviderManager {
             systemInstruction: { parts: [{ text: sysInstruction }] },
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: options.maxTokens || 250,
+              maxOutputTokens: options.maxTokens || 1024,
             },
           };
           break;
@@ -387,7 +387,7 @@ export class AIProviderManager {
             model: config.model,
             messages,
             temperature: 0.7,
-            max_tokens: options.maxTokens || 150,
+            max_tokens: options.maxTokens || 1024,
           };
           break;
         }
@@ -422,6 +422,15 @@ export class AIProviderManager {
         case 'custom':
           replyText = data?.choices?.[0]?.message?.content?.trim() || '';
           break;
+      }
+
+      // Check for truncation
+      const stopReason = type === 'gemini' 
+        ? data?.candidates?.[0]?.finishReason 
+        : data?.choices?.[0]?.finish_reason;
+
+      if (stopReason === 'MAX_TOKENS') {
+        console.warn(`[AIProvider] Response truncated by ${type} — finishReason: MAX_TOKENS`);
       }
 
       return replyText;

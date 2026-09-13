@@ -63,6 +63,9 @@ export default function App() {
   const wakeStatusRef = useRef<WakeWordStatus>('DISABLED');
   wakeStatusRef.current = wakeStatus;
 
+  // Ref for messages to avoid stale closures in processUserCommand
+  const messagesRef = useRef<ChatMessage[]>([]);
+
   // Audio Context unlock on first user interaction & early greeting preload
   useEffect(() => {
     const unlockAudio = () => {
@@ -156,6 +159,9 @@ export default function App() {
       },
     ];
   });
+
+  // Keep messagesRef in sync for stable closures
+  messagesRef.current = messages;
 
   // Persist messages to localStorage
   useEffect(() => {
@@ -566,7 +572,7 @@ export default function App() {
       // 2. AI Brain via Gemini Client (Direct Gemini REST + Server fallback + Offline Jarvis)
       const aiMsgId = `vasu_${Date.now()}_ai`;
       try {
-        const historyContext = messages.slice(-8).map((m) => ({
+        const historyContext = messagesRef.current.slice(-8).map((m) => ({
           role: (m.sender === 'user' ? 'user' : 'model') as 'user' | 'model',
           parts: [{ text: m.text }],
         }));
@@ -615,7 +621,7 @@ export default function App() {
         processingRef.current = false;
       }
     },
-    [memories, settings, messages, handleExecuteTool, speakAssistantResponse]
+    [memories, settings, handleExecuteTool, speakAssistantResponse]
   );
 
   // Start Microphone Listening Session
