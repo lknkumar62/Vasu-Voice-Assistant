@@ -152,10 +152,10 @@ export class GeminiClient {
   }
 
   public static async chat(params: ChatParams): Promise<ChatResponse> {
-    console.log('[GeminiClient] chat called, apiKey from params:', params.apiKey ? params.apiKey.substring(0,8) + '...' : 'EMPTY');
+    console.log(`[GeminiClient] chat() | apiKey=${params.apiKey ? params.apiKey.substring(0,8) + '...' : 'EMPTY'} | apiKey.length=${params.apiKey?.length || 0}`);
     // Try multi-provider system first
     const providerResponse = await aiProviderManager.chat(params);
-    console.log('[GeminiClient] aiProviderManager response source:', providerResponse.source);
+    console.log(`[GeminiClient] aiProviderManager returned | source=${providerResponse.source} | replyText.length=${providerResponse.replyText.length}`);
     if (providerResponse.source !== 'local_jarvis') {
       return {
         replyText: providerResponse.replyText,

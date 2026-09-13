@@ -226,20 +226,24 @@ export class AIProviderManager {
 
   async chat(params: ChatParams): Promise<AIProviderResponse> {
     const enabledProviders = this.getEnabledProviders();
-    console.log('[AIProviderManager] chat called, enabledProviders count:', enabledProviders.length, 'providers:', enabledProviders, 'params.apiKey:', params.apiKey ? params.apiKey.substring(0,8) + '...' : 'EMPTY');
+    console.log(`[AIProviderManager] chat() called | enabledProviders=${enabledProviders.length} | params.apiKey=${params.apiKey ? params.apiKey.substring(0,8) + '...' : 'EMPTY'} | params.apiKey.length=${params.apiKey?.length || 0}`);
+    
     if (enabledProviders.length === 0) {
       // Fallback: if params has apiKey, configure gemini on-the-fly
       const fallbackKey = (params.apiKey || '').trim();
+      console.log(`[AIProviderManager] No providers! fallbackKey=${fallbackKey ? fallbackKey.substring(0,8) + '...' : 'EMPTY'} length=${fallbackKey.length}`);
+      
       if (fallbackKey && fallbackKey.length > 5) {
-        console.log('[AIProviderManager] No providers configured but params.apiKey present, configuring gemini on-the-fly');
+        console.log('[AIProviderManager] Configuring gemini on-the-fly with params.apiKey');
         this.configure('gemini', { apiKey: fallbackKey, enabled: true });
         // Retry with the now-configured provider
         const retryProviders = this.getEnabledProviders();
+        console.log(`[AIProviderManager] After on-the-fly configure, enabledProviders=${retryProviders.length}`);
         if (retryProviders.length > 0) {
           return this.chat(params);
         }
       }
-      console.warn('[AIProviderManager] NO enabled providers! Returning local_jarvis');
+      console.warn('[AIProviderManager] NO enabled providers after fallback! Returning local_jarvis');
       return {
         replyText: this.getLocalJarvisResponse(params.message),
         source: 'local_jarvis',
@@ -394,7 +398,7 @@ export class AIProviderManager {
         }
       }
 
-      console.log(`[AIProviderManager] Calling ${type}: ${url.slice(0, 80)}...`);
+      console.log(`[AIProviderManager] Calling ${type}: url=${url.slice(0, 100)}... | body keys=${Object.keys(body).join(',')}`);
       const response = await fetch(url, {
         method: 'POST',
         headers,

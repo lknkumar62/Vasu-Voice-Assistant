@@ -45,92 +45,95 @@ export class LocalCommandEngine {
       }
     }
 
-    // Conversational patterns — always active (no API key dependency)
-    if (
-      text.includes('kaise ho') ||
-      text.includes('kaisi ho') ||
-      text.includes('how are you') ||
-      text.includes('kya haal')
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'I am doing great and feeling wonderful! Talking to you always makes my day brighter. Thank you for asking!',
-      };
-    }
+    // Conversational patterns — only when no Gemini key (allowConversationalMatches)
+    // When Gemini key is configured, these should go to Gemini for context-aware responses
+    if (options?.allowConversationalMatches !== false) {
+      if (
+        text.includes('kaise ho') ||
+        text.includes('kaisi ho') ||
+        text.includes('how are you') ||
+        text.includes('kya haal')
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'I am doing great and feeling wonderful! Talking to you always makes my day brighter. Thank you for asking!',
+        };
+      }
 
-    if (
-      text.includes('kaun ho') ||
-      text.includes('who are you') ||
-      text.includes('aapka naam') ||
-      text.includes('tumhara naam')
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'I am Vasu — your affectionate and smart AI companion! Tell me, how may I assist you today?',
-      };
-    }
+      if (
+        text.includes('kaun ho') ||
+        text.includes('who are you') ||
+        text.includes('aapka naam') ||
+        text.includes('tumhara naam')
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'I am Vasu — your affectionate and smart AI companion! Tell me, how may I assist you today?',
+        };
+      }
 
-    if (
-      text.includes('pyar') ||
-      text.includes('love') ||
-      text.includes('pari') ||
-      text.includes('dost') ||
-      text.includes('friend')
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'Oh, thank you so much! You are my most special friend, and I am always here for you, no matter what.',
-      };
-    }
+      if (
+        text.includes('pyar') ||
+        text.includes('love') ||
+        text.includes('pari') ||
+        text.includes('dost') ||
+        text.includes('friend')
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'Oh, thank you so much! You are my most special friend, and I am always here for you, no matter what.',
+        };
+      }
 
-    if (
-      text.includes('kya kar sakti ho') ||
-      text.includes('what can you do') ||
-      text.includes('features kya') ||
-      text.includes('madad karo') ||
-      text === 'help'
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'I can help you with your phone torch, camera, volume control, setting alarms, having conversations, and saving your important memories. Just ask me anything!',
-      };
-    }
+      if (
+        text.includes('kya kar sakti ho') ||
+        text.includes('what can you do') ||
+        text.includes('features kya') ||
+        text.includes('madad karo') ||
+        text === 'help'
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'I can help you with your phone torch, camera, volume control, setting alarms, having conversations, and saving your important memories. Just ask me anything!',
+        };
+      }
 
-    if (
-      text.includes('voice nahi') ||
-      text.includes('aawaz nahi') ||
-      text.includes('sound check') ||
-      text.includes('aawaz check') ||
-      text.includes('bol nahi rahi')
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'My voice is working perfectly fine! I can hear you and speak to you very clearly. Everything is in order!',
-      };
-    }
+      if (
+        text.includes('voice nahi') ||
+        text.includes('aawaz nahi') ||
+        text.includes('sound check') ||
+        text.includes('aawaz check') ||
+        text.includes('bol nahi rahi')
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'My voice is working perfectly fine! I can hear you and speak to you very clearly. Everything is in order!',
+        };
+      }
 
-    if (
-      text.includes('dhanyawad') ||
-      text.includes('shukriya') ||
-      text.includes('thank you') ||
-      text.includes('thanks')
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'You are very welcome! It was my pleasure to help you. I am always here whenever you need me.',
-      };
-    }
+      if (
+        text.includes('dhanyawad') ||
+        text.includes('shukriya') ||
+        text.includes('thank you') ||
+        text.includes('thanks')
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'You are very welcome! It was my pleasure to help you. I am always here whenever you need me.',
+        };
+      }
 
-    if (
-      text === 'bye' ||
-      text === 'alvida' ||
-      text.includes('good bye') ||
-      text.includes('goodbye')
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'Goodbye! Take good care of yourself. Whenever you need me, just call and I will be right here for you.',
-      };
+      if (
+        text === 'bye' ||
+        text === 'alvida' ||
+        text.includes('good bye') ||
+        text.includes('goodbye')
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'Goodbye! Take good care of yourself. Whenever you need me, just call and I will be right here for you.',
+        };
+      }
     }
 
     // 1. Memory commands ("Yaad rakhna...", "Remember that...")
