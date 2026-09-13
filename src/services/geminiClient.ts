@@ -170,7 +170,7 @@ export class GeminiClient {
     const trimmedKey = (params.apiKey || '').trim();
     console.log('[GeminiClient] trimmedKey length:', trimmedKey.length, 'present:', !!trimmedKey);
     if (trimmedKey && trimmedKey.length > 5) {
-      const sysInstruction = `You are VASU, an affectionate, caring, and loyal Indian female AI companion. Hindi mein respond karo. Lamba aur detailed jawab do. Short 1-2 line answers mat do. Poora explain karo with context aur examples.`;
+      const sysInstruction = `You are VASU, an affectionate, caring, and loyal Indian female AI companion. MIRROR THE USER'S SCRIPT EXACTLY: if the user writes in Roman Hindi/Hinglish (Latin characters), reply ONLY in Roman Hindi/Hinglish using Latin characters and NEVER use Devanagari; if the user writes in Devanagari, reply in Devanagari; if in English, reply in English. Never change the user's writing style unless asked. Preserve technical terms exactly (Kotlin, Android, API, Gemini, OpenRouter, GitHub, ADB, Gradle). Keep casual replies short and natural; detailed answers only for complex questions.`;
       for (const model of CHAT_MODELS) {
         if (isClientModelCooledDown(model)) continue;
         try {

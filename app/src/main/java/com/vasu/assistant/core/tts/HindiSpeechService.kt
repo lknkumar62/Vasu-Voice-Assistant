@@ -317,7 +317,24 @@ class AndroidHindiSpeechService @Inject constructor(
 
         fun isFemaleVoiceName(name: String): Boolean {
             val lower = name.lowercase()
+            // "female" contains "male": check the female label first so a
+            // female voice is never misread as male.
+            if (lower.contains("female")) return true
+            if (lower.contains("male")) return false
+            // Google-style voice ids encode gender as a standalone "f"/"m"
+            // token (e.g. en-us-x-f-local). Only an exact token counts —
+            // triplets such as "hia"/"hie"/"sfg"/"ene" must NOT be guessed.
+            val tokens = lower.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+            if ("f" in tokens) return true
+            if ("m" in tokens) return false
             return FEMALE_VOICE_KEYWORDS.any { lower.contains(it) }
         }
     }
 }
+
+/**
+ * Top-level alias so unit tests and callers can use
+ * `com.vasu.assistant.core.tts.isFemaleVoiceName` directly.
+ */
+fun isFemaleVoiceName(name: String): Boolean =
+    AndroidHindiSpeechService.isFemaleVoiceName(name)

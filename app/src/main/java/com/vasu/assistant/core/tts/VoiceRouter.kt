@@ -56,6 +56,15 @@ class VoiceRouter @Inject constructor(
     /**
      * Synthesize and speak text following the strict online -> offline -> emergency fallback priority.
      *
+     * GEMINI-MODE CONTRACT (default):
+     * When Gemini is online and configured, GeminiTtsEngine owns assistant
+     * speech end-to-end. If Gemini TTS fails, the failure is reported via
+     * TTS_ERROR + onError (controlled failure state) and is NEVER silently
+     * replaced with a local/Android voice. Local voices only speak when the
+     * device is offline, no key is configured, or offline-only mode is on.
+     * The emergency Android system fallback additionally requires explicit
+     * user opt-in (androidFallbackTtsEnabled).
+     *
      * Wake word is muted before TTS starts and unmuted after it finishes to prevent
      * VASU's own voice from being picked up as a new wake-word command.
      */
@@ -70,6 +79,7 @@ class VoiceRouter @Inject constructor(
 
         val wrappedOnDone: () -> Unit = {
             muteWakeWord(false)
+            Log.i(TAG, "TTS_COMPLETED source=${_currentSource.value}")
             onDone?.invoke()
         }
         val wrappedOnError: (String) -> Unit = { error ->
@@ -81,7 +91,7 @@ class VoiceRouter @Inject constructor(
         val online = isOnline() && !settings.offlineOnly.value
         val geminiConfigured = keyStore.hasGeminiKey()
 
-        // 1. Online with Gemini configured
+        // 1. Online with Gemini configured — Gemini owns this turn entirely.
         if (online && geminiConfigured) {
             _currentSource.value = ActiveVoiceSource.GEMINI_ONLINE
             Log.d(TAG, "Routing turn to GeminiTtsEngine")
@@ -91,15 +101,20 @@ class VoiceRouter @Inject constructor(
                 onStart = onStart,
                 onDone = wrappedOnDone,
                 onError = { geminiError ->
-                    Log.w(TAG, "Gemini TTS failed ($geminiError); falling back to LocalTtsEngine")
-                    fallbackToLocal(text, onStart, wrappedOnDone, wrappedOnError)
+                    // Controlled failure: log loudly, do NOT silently fall back
+                    // to a local voice for a Gemini turn.
+                    _currentSource.value = ActiveVoiceSource.MUTED
+                    Log.e(TAG, "TTS_ERROR provider=gemini category=$geminiError (no silent local fallback)")
+                    wrappedOnError("Gemini voice failed: $geminiError")
                 }
             )
 
+            // speak() returning false means it already invoked onError above.
             if (geminiSuccess) return true
+            return false
         }
 
-        // 2. Offline / Local TTS
+        // 2. Offline / Local TTS (offline, no key, or offline-only mode)
         Log.d(TAG, "Routing turn to LocalTtsEngine (offline or Gemini not ready)")
         _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
         val localSuccess = localTtsEngine.speak(

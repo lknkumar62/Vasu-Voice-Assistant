@@ -127,6 +127,12 @@ class TTSManager {
       source?: 'voice' | 'typed' | 'replay' | 'tool' | 'wake' | 'system';
       messageId?: string;
       force?: boolean;
+      /**
+       * Explicit opt-in for local (browser/Capacitor) fallback voices.
+       * Default false: Gemini failure is a controlled error, never a
+       * silent local-voice substitution.
+       */
+      allowLocalFallback?: boolean;
     }
   ): Promise<void> {
     const normalized = this.normalizeForSpeech(text);
@@ -155,6 +161,7 @@ class TTSManager {
         pitch: options.pitch,
         volume: options.volume,
         apiKey: options.apiKey || undefined,
+        allowLocalFallback: options.allowLocalFallback,
         onEnd: () => resolve(),
       }).catch(() => resolve());
     });

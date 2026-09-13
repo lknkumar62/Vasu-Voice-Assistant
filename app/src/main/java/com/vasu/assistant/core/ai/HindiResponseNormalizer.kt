@@ -14,14 +14,19 @@ enum class AssistantLanguage {
 }
 
 /**
- * Single Canonical Hindi Response Normalizer & Language Router.
+ * Single Canonical Response Normalizer & Language Router.
  *
- * Requirements:
- * 1. Default assistant response language is Hindi (Devanagari).
- * 2. Normal conversation does not use Roman Hindi / Hinglish.
- * 3. Exact canonical text produced here is shared identically between UI and Local TTS.
- * 4. Lightweight local language detection and routing (no paid APIs).
- * 5. Handles device command results, conversational turns, error messages, and Roman Hindi transliteration.
+ * SCRIPT-MIRRORING CONTRACT (must never be broken):
+ * 1. The user's input script/style has priority and is never changed
+ *    automatically. Roman Hindi input -> Roman Hindi/Hinglish response.
+ *    Devanagari input -> Devanagari response. English input -> English.
+ * 2. Normal conversation mirrors the user's script; Devanagari is used
+ *    ONLY when the user wrote Devanagari (or explicitly asked for Hindi
+ *    script via [checkLanguageSwitchCommand]).
+ * 3. The exact canonical text produced here is shared identically between
+ *    the Chat UI and TTS. TTS-only cleanup lives in toSpeakableText.
+ * 4. Lightweight local language detection via [LanguageDetector] (no paid APIs).
+ * 5. Handles device command results, conversational turns, error messages.
  */
 @Singleton
 class HindiResponseNormalizer @Inject constructor() {
@@ -73,43 +78,87 @@ class HindiResponseNormalizer @Inject constructor() {
     }
 
     /**
-     * Returns natural Hindi responses for common greetings and fast conversational inputs.
+     * Returns natural conversational responses for common greetings and fast
+     * conversational inputs, mirroring the user's script.
+     *
+     * Roman Hindi input gets a Roman Hinglish reply, Devanagari input gets a
+     * Devanagari reply, English input gets an English reply. The script is
+     * never flipped automatically.
      */
     fun getConversationalResponse(input: String): String? {
         val lower = input.lowercase(Locale.ROOT).trim()
+        val detected = LanguageDetector.detect(input)
+        val roman = detected.script == ResponseScript.ROMAN
+        val english = detected.style == DetectedStyle.ENGLISH
 
         // Maya alias addressing
         if (lower.contains("maya") || lower == "hello maya" || lower == "hey maya" || lower == "hi maya") {
-            return "अरे, मैं वासु हूँ। 😊 माया नहीं। बताओ, मैं तुम्हारी किस तरह मदद करूँ?"
+            return if (english) {
+                "Hey, I am Vasu, not Maya. 😊 Tell me, how can I help you?"
+            } else if (roman) {
+                "Are, main Vasu hoon. 😊 Maya nahi. Batao, main tumhari kis tarah madad karoon?"
+            } else {
+                "अरे, मैं वासु हूँ। 😊 माया नहीं। बताओ, मैं तुम्हारी किस तरह मदद करूँ?"
+            }
         }
 
         // Greetings
         if (lower == "hello vasu" || lower == "hi vasu" || lower == "hey vasu" || lower == "namaste vasu") {
-            return "नमस्ते! 😊 बताओ, मैं तुम्हारी किस तरह मदद करूँ?"
+            return if (english) {
+                "Hello! 😊 Tell me, how can I help you?"
+            } else if (roman) {
+                "Namaste! 😊 Batao, main tumhari kis tarah madad karoon?"
+            } else {
+                "नमस्ते! 😊 बताओ, मैं तुम्हारी किस तरह मदद करूँ?"
+            }
         }
 
         if (lower == "hello" || lower == "hi" || lower == "hey" || lower == "namaste" || lower == "नमस्ते" || lower == "हेलो") {
-            return "नमस्ते! 😊 बहुत दिनों बाद बात हुई। कैसे हो?"
+            return if (english) {
+                "Hello! 😊 Good to talk to you. How are you?"
+            } else if (roman) {
+                "Namaste! 😊 Bahut dino baad baat hui. Kaise ho?"
+            } else {
+                "नमस्ते! 😊 बहुत दिनों बाद बात हुई। कैसे हो?"
+            }
         }
 
-        // Status queries / small talk
+        // Status queries / small talk (exact + contains, both scripts)
         if (lower == "ha thik hai tum batao" || lower == "haan theek hai tum batao" || lower == "ha theek hai tum batao" ||
             lower == "main theek hoon" || lower == "theek hoon" || lower == "all good" || lower == "sab theek hai"
         ) {
-            return "मैं भी बिल्कुल ठीक हूँ। तुमसे बात करके और अच्छा लग रहा है। बताओ, आज क्या चल रहा है?"
+            return if (english) {
+                "I am doing great too. Good talking to you! So, what is going on today?"
+            } else if (roman) {
+                "Main bhi bilkul theek hoon. Tumse baat karke aur achha lag raha hai. Batao, aaj kya chal raha hai?"
+            } else {
+                "मैं भी बिल्कुल ठीक हूँ। तुमसे बात करके और अच्छा लग रहा है। बताओ, आज क्या चल रहा है?"
+            }
         }
 
         if (lower == "kaise ho" || lower == "kya haal hai" || lower == "kya haal chal" || lower == "kya chal raha hai" ||
-            lower == "how are you" || lower.contains("क्या हाल") || lower.contains("कैसे हो")
+            lower == "how are you" || lower.contains("क्या हाल") || lower.contains("कैसे हो") ||
+            lower.contains("kya haal") || lower.contains("kya hal") || lower.contains("kaise ho") ||
+            lower.contains("kya chal raha")
         ) {
-            return "नमस्ते बॉस! क्या हाल-चाल हैं? बहुत दिनों बाद मुलाकात हुई। सब ठीक है ना?"
+            return if (english) {
+                "Hey! I am doing well. Long time no see — is everything alright?"
+            } else if (roman || lower.contains("kya haal") || lower.contains("kya hal") ||
+                lower.contains("kaise ho") || lower.contains("kya chal raha")
+            ) {
+                "Main bilkul theek hoon! 😊 Tum batao, aaj kya chal raha hai?"
+            } else {
+                "नमस्ते बॉस! क्या हाल-चाल हैं? बहुत दिनों बाद मुलाकात हुई। सब ठीक है ना?"
+            }
         }
 
         if (lower == "what is your name" || lower == "what is your name?" || lower == "who are you" ||
             lower == "tumhara naam kya hai" || lower == "tum kaun ho" || lower.contains("तुम्हारा नाम") || lower.contains("तुम कौन हो")
         ) {
-            return if (_preferredLanguage.value == AssistantLanguage.ENGLISH) {
+            return if (_preferredLanguage.value == AssistantLanguage.ENGLISH || english) {
                 "My name is VASU. I am your voice assistant."
+            } else if (roman) {
+                "Mera naam Vasu hai. Main aapki voice assistant hoon."
             } else {
                 "मेरा नाम वासु है। मैं आपकी वॉइस असिस्टेंट हूँ।"
             }
@@ -119,99 +168,178 @@ class HindiResponseNormalizer @Inject constructor() {
     }
 
     /**
-     * Converts an ActionResult into natural, conversational Hindi Devanagari text.
+     * Converts an ActionResult into natural conversational text, mirroring
+     * the script of the original user command ([rawCommand]).
+     *
+     * Roman Hinglish commands get Roman confirmations, Devanagari commands
+     * get Devanagari confirmations, English commands get English ones.
      */
     fun describeActionResult(result: ActionResult, rawCommand: String = ""): String {
         val action = result.action.lowercase(Locale.ROOT)
         val raw = rawCommand.lowercase(Locale.ROOT)
+        val detected = LanguageDetector.detect(rawCommand)
+        val roman = detected.script == ResponseScript.ROMAN
+        val english = detected.style == DetectedStyle.ENGLISH
 
         if (!result.success) {
-            return "माफ़ कीजिए, यह काम नहीं हो पाया: ${translateMessageToHindi(result.message)}"
+            val detail = result.message
+            return if (english) {
+                "Sorry, that did not work: $detail"
+            } else if (roman) {
+                "Maaf kijiye, ye kaam nahi ho paya: $detail"
+            } else {
+                "माफ़ कीजिए, यह काम नहीं हो पाया: ${translateMessageToHindi(result.message)}"
+            }
         }
+
+        // Script-aware confirmations: pick() keeps the user's script.
+        // romanText = Roman Hinglish, devaText = Devanagari, engText = English.
+        fun pick(romanText: String, devaText: String, engText: String): String =
+            if (english) engText else if (roman) romanText else devaText
 
         return when {
             action.contains("torch") || raw.contains("torch") || raw.contains("टॉर्च") || raw.contains("flashlight") -> {
                 if (raw.contains("off") || raw.contains("band") || raw.contains("बंद") || result.message.contains("off", ignoreCase = true)) {
-                    "टॉर्च बंद कर दी है।"
+                    pick("Torch band kar di hai.", "टॉर्च बंद कर दी है।", "Torch is now off.")
                 } else {
-                    "ठीक है, टॉर्च चालू कर दी है।"
+                    pick("Theek hai, torch chalu kar di hai.", "ठीक है, टॉर्च चालू कर दी है।", "Done, torch is now on.")
                 }
             }
             action == "open_app" || raw.contains("open") || raw.contains("kholo") || raw.contains("खोलो") -> {
                 val appName = result.message.removePrefix("Opened ").trim()
-                if (appName.isNotBlank()) "$appName खोल दिया गया है।" else "ऐप खोल दिया गया है।"
+                if (appName.isNotBlank()) pick(
+                    "$appName khol diya gaya hai.",
+                    "$appName खोल दिया गया है।",
+                    "Opened $appName."
+                ) else pick("App khol diya gaya hai.", "ऐप खोल दिया गया है।", "App opened.")
             }
             action == "set_volume" || action == "volume" -> {
                 val level = Regex("\\d+").find(result.message)?.value ?: ""
-                if (level.isNotBlank()) "वॉल्यूम $level% पर सेट कर दिया गया है।" else "वॉल्यूम सेट कर दिया गया है।"
+                if (level.isNotBlank()) pick(
+                    "Volume $level% par set kar diya gaya hai.",
+                    "वॉल्यूम $level% पर सेट कर दिया गया है।",
+                    "Volume set to $level%."
+                ) else pick("Volume set kar diya gaya hai.", "वॉल्यूम सेट कर दिया गया है।", "Volume updated.")
             }
-            action == "volume_up" -> "वॉल्यूम बढ़ा दिया गया है।"
-            action == "volume_down" -> "वॉल्यूम कम कर दिया गया है।"
+            action == "volume_up" -> pick("Volume badha diya gaya hai.", "वॉल्यूम बढ़ा दिया गया है।", "Volume increased.")
+            action == "volume_down" -> pick("Volume kam kar diya gaya hai.", "वॉल्यूम कम कर दिया गया है।", "Volume decreased.")
             action.contains("bluetooth") -> {
                 if (raw.contains("off") || raw.contains("band") || raw.contains("बंद") || result.message.contains("off", ignoreCase = true)) {
-                    "ब्लूटूथ बंद कर दिया गया है।"
+                    pick("Bluetooth band kar diya gaya hai.", "ब्लूटूथ बंद कर दिया गया है।", "Bluetooth is now off.")
                 } else {
-                    "ब्लूटूथ चालू कर दिया गया है।"
+                    pick("Bluetooth chalu kar diya gaya hai.", "ब्लूटूथ चालू कर दिया गया है।", "Bluetooth is now on.")
                 }
             }
             action.contains("media") -> {
                 when {
-                    action.contains("next") -> "अगला गाना चला दिया गया है।"
-                    action.contains("previous") -> "पिछला गाना चला दिया गया है।"
-                    else -> "मीडिया प्ले/पॉज़ कर दिया गया है।"
+                    action.contains("next") -> pick("Agla gaana chala diya gaya hai.", "अगला गाना चला दिया गया है।", "Playing the next track.")
+                    action.contains("previous") -> pick("Pichla gaana chala diya gaya hai.", "पिछला गाना चला दिया गया है।", "Playing the previous track.")
+                    else -> pick("Media play/pause kar diya gaya hai.", "मीडिया प्ले/पॉज़ कर दिया गया है।", "Media play/paused.")
                 }
             }
             action == "create_alarm" -> {
-                val time = Regex("\\d{1,2}:\\d{2}").find(result.message)?.value ?: "दिए गए समय"
-                "$time के लिए अलार्म सेट कर दिया गया है।"
+                val time = Regex("\\d{1,2}:\\d{2}").find(result.message)?.value ?: "diye gaye samay"
+                if (roman || english) pick(
+                    "$time ke liye alarm set kar diya gaya hai.",
+                    "$time के लिए अलार्म सेट कर दिया गया है।",
+                    "Alarm set for $time."
+                ) else "${Regex("\\d{1,2}:\\d{2}").find(result.message)?.value ?: "दिए गए समय"} के लिए अलार्म सेट कर दिया गया है।"
             }
             action == "set_timer" -> {
                 val sec = Regex("\\d+").find(result.message)?.value ?: ""
-                if (sec.isNotBlank()) "$sec सेकंड का टाइमर शुरू कर दिया गया है।" else "टाइमर शुरू कर दिया गया है।"
+                if (sec.isNotBlank()) pick(
+                    "$sec second ka timer shuru kar diya gaya hai.",
+                    "$sec सेकंड का टाइमर शुरू कर दिया गया है।",
+                    "Timer started for $sec seconds."
+                ) else pick("Timer shuru kar diya gaya hai.", "टाइमर शुरू कर दिया गया है।", "Timer started.")
             }
             action == "time" || action == "get_time" -> result.message
-            action == "weather" || action == "get_weather" -> "मौसम की जानकारी प्राप्त की जा रही है..."
+            action == "weather" || action == "get_weather" -> pick(
+                "Mausam ki jaankari li ja rahi hai...",
+                "मौसम की जानकारी प्राप्त की जा रही है...",
+                "Fetching the weather..."
+            )
             action == "location" || action == "get_current_location" -> {
                 val addr = (result.data?.get("address") as? String) ?: ""
-                if (addr.isNotBlank()) "आपकी वर्तमान लोकेशन है: $addr" else "लोकेशन प्राप्त हो गई है।"
+                if (addr.isNotBlank()) pick(
+                    "Aapki current location hai: $addr",
+                    "आपकी वर्तमान लोकेशन है: $addr",
+                    "Your current location is: $addr"
+                ) else pick("Location mil gayi hai.", "लोकेशन प्राप्त हो गई है।", "Location received.")
             }
-            action == "parking" || action == "save_parking" -> "आपकी पार्किंग लोकेशन सुरक्षित कर ली गई है।"
+            action == "parking" || action == "save_parking" -> pick(
+                "Aapki parking location save kar li gayi hai.",
+                "आपकी पार्किंग लोकेशन सुरक्षित कर ली गई है।",
+                "Parking location saved."
+            )
             action == "search_web" -> {
                 val query = result.message.removePrefix("Searching for ").trim()
-                if (query.isNotBlank()) "$query के लिए खोजा जा रहा है..." else "सर्च किया जा रहा है..."
+                if (query.isNotBlank()) pick(
+                    "$query ke liye search kiya ja raha hai...",
+                    "$query के लिए खोजा जा रहा है...",
+                    "Searching for $query..."
+                ) else pick("Search kiya ja raha hai...", "सर्च किया जा रहा है...", "Searching...")
             }
-            action == "browse" || action == "browse_files" -> "फ़ाइलें देख ली गई हैं।"
-            action == "search_files" || action == "search" -> "फ़ाइलें खोज ली गई हैं।"
-            action == "read" || action == "read_file" -> "फ़ाइल पढ़ ली गई है।"
-            action == "rename" || action == "rename_file" -> "फ़ाइल का नाम बदल दिया गया है।"
-            action == "copy" || action == "copy_file" -> "फ़ाइल कॉपी कर दी गई है।"
-            action == "move" || action == "move_file" -> "फ़ाइल स्थानांतरित कर दी गई है।"
-            action == "delete" || action == "delete_file" -> "फ़ाइल हटा दी गई है।"
-            action == "storage" || action == "storage_info" -> "स्टोरेज की जानकारी प्राप्त हो गई है।"
-            action == "take_photo" || action == "photo" -> "फ़ोटो खींच ली गई है।"
-            action == "start_recording" || action == "record_video" -> "वीडियो रिकॉर्डिंग शुरू कर दी गई है।"
-            action == "stop_recording" -> "वीडियो रिकॉर्डिंग रोक दी गई है।"
+            action == "browse" || action == "browse_files" -> pick("Files dekh li gayi hain.", "फ़ाइलें देख ली गई हैं।", "Files listed.")
+            action == "search_files" || action == "search" -> pick("Files khoj li gayi hain.", "फ़ाइलें खोज ली गई हैं।", "Files found.")
+            action == "read" || action == "read_file" -> pick("File padh li gayi hai.", "फ़ाइल पढ़ ली गई है।", "File read.")
+            action == "rename" || action == "rename_file" -> pick("File ka naam badal diya gaya hai.", "फ़ाइल का नाम बदल दिया गया है।", "File renamed.")
+            action == "copy" || action == "copy_file" -> pick("File copy kar di gayi hai.", "फ़ाइल कॉपी कर दी गई है।", "File copied.")
+            action == "move" || action == "move_file" -> pick("File move kar di gayi hai.", "फ़ाइल स्थानांतरित कर दी गई है।", "File moved.")
+            action == "delete" || action == "delete_file" -> pick("File hata di gayi hai.", "फ़ाइल हटा दी गई है।", "File deleted.")
+            action == "storage" || action == "storage_info" -> pick(
+                "Storage ki jaankari mil gayi hai.",
+                "स्टोरेज की जानकारी प्राप्त हो गई है।",
+                "Storage info received."
+            )
+            action == "take_photo" || action == "photo" -> pick("Photo le li gayi hai.", "फ़ोटो खींच ली गई है।", "Photo captured.")
+            action == "start_recording" || action == "record_video" -> pick(
+                "Video recording shuru kar di gayi hai.",
+                "वीडियो रिकॉर्डिंग शुरू कर दी गई है।",
+                "Video recording started."
+            )
+            action == "stop_recording" -> pick("Video recording rok di gayi hai.", "वीडियो रिकॉर्डिंग रोक दी गई है।", "Video recording stopped.")
             action == "notifications" || action == "read_notifications" -> {
                 val count = Regex("\\d+").find(result.message)?.value ?: "0"
-                "$count नए नोटिफ़िकेशन मिले हैं।"
+                pick("$count naye notifications mile hain.", "$count नए नोटिफ़िकेशन मिले हैं।", "You have $count new notifications.")
             }
-            action == "dismiss" || action == "dismiss_notification" -> "नोटिफ़िकेशन हटा दिया गया है।"
-            action == "macro" || action == "create_macro" || action == "run_macro" -> "मैक्रो सफलतापूर्वक पूरा हुआ।"
-            action == "back" || action == "press_back" -> "वापस चले गए हैं।"
-            action == "home" || action == "press_home" -> "होम स्क्रीन पर चले गए हैं।"
-            action == "click" || action == "click_element" -> "क्लिक कर दिया गया है।"
-            action == "type" || action == "type_text" -> "टेक्स्ट टाइप कर दिया गया है।"
-            action == "make_call" -> "कॉल लगाया जा रहा है।"
-            action == "send_message" || action == "send_sms" -> "मैसेज भेजा जा रहा है।"
-            action == "whatsapp" || action == "send_whatsapp_message" -> "व्हाट्सएप खोला जा रहा है।"
+            action == "dismiss" || action == "dismiss_notification" -> pick(
+                "Notification hata diya gaya hai.",
+                "नोटिफ़िकेशन हटा दिया गया है।",
+                "Notification dismissed."
+            )
+            action == "macro" || action == "create_macro" || action == "run_macro" -> pick(
+                "Macro safaltapurvak poora hua.",
+                "मैक्रो सफलतापूर्वक पूरा हुआ।",
+                "Macro completed successfully."
+            )
+            action == "back" || action == "press_back" -> pick("Wapas chale gaye hain.", "वापस चले गए हैं।", "Went back.")
+            action == "home" || action == "press_home" -> pick("Home screen par chale gaye hain.", "होम स्क्रीन पर चले गए हैं।", "On the home screen.")
+            action == "click" || action == "click_element" -> pick("Click kar diya gaya hai.", "क्लिक कर दिया गया है।", "Clicked.")
+            action == "type" || action == "type_text" -> pick("Text type kar diya gaya hai.", "टेक्स्ट टाइप कर दिया गया है।", "Text typed.")
+            action == "make_call" -> pick("Call lagaya ja raha hai.", "कॉल लगाया जा रहा है।", "Calling now.")
+            action == "send_message" || action == "send_sms" -> pick("Message bheja ja raha hai.", "मैसेज भेजा जा रहा है।", "Sending the message.")
+            action == "whatsapp" || action == "send_whatsapp_message" -> pick("WhatsApp khola ja raha hai.", "व्हाट्सएप खोला जा रहा है।", "Opening WhatsApp.")
             action == "battery" || action == "get_battery_info" -> {
                 val level = Regex("\\d+").find(result.message)?.value ?: ""
-                if (level.isNotBlank()) "बैटरी अभी $level% है।" else "बैटरी की जानकारी प्राप्त हो गई है।"
+                if (level.isNotBlank()) pick(
+                    "Battery abhi $level% hai.",
+                    "बैटरी अभी $level% है।",
+                    "Battery is at $level%."
+                ) else pick("Battery ki jaankari mil gayi hai.", "बैटरी की जानकारी प्राप्त हो गई है।", "Battery info received.")
             }
-            action == "wifi" || action == "toggle_wifi" -> "वाई-फ़ाई सेटिंग्स खोल दी गई हैं।"
-            action == "ringer" || action == "set_ringer_mode" -> "रिंगर मोड बदल दिया गया है।"
-            action == "apps" || action == "list_apps" -> "इंस्टॉल किए गए ऐप्स की सूची प्राप्त हो गई है।"
-            else -> translateMessageToHindi(result.message)
+            action == "wifi" || action == "toggle_wifi" -> pick(
+                "Wi-Fi settings khol di gayi hain.",
+                "वाई-फ़ाई सेटिंग्स खोल दी गई हैं।",
+                "Wi-Fi settings opened."
+            )
+            action == "ringer" || action == "set_ringer_mode" -> pick("Ringer mode badal diya gaya hai.", "रिंगर मोड बदल दिया गया है।", "Ringer mode changed.")
+            action == "apps" || action == "list_apps" -> pick(
+                "Installed apps ki list mil gayi hai.",
+                "इंस्टॉल किए गए ऐप्स की सूची प्राप्त हो गई है।",
+                "Installed apps listed."
+            )
+            else -> if (english || roman) result.message.trim() else translateMessageToHindi(result.message)
         }
     }
 
@@ -240,17 +368,49 @@ class HindiResponseNormalizer @Inject constructor() {
     }
 
     /**
-     * Ensures the final generated response is canonical, clean, and in natural Hindi Devanagari.
+     * Canonicalizes a generated AI response while preserving the user's script.
+     *
+     * This is the single choke point used by [AIOrchestrator] for every cloud
+     * AI turn. Devanagari forcing is applied ONLY when the user wrote in
+     * Devanagari; Roman/English responses pass through untouched so the
+     * user's script is never flipped automatically.
+     *
+     * @param response the raw model text (chat-visible form is preserved)
+     * @param userInput the original user turn used for script detection
      */
-    fun canonicalize(response: String): String {
+    fun normalize(response: String, userInput: String = ""): String {
         if (response.isBlank()) return ""
 
+        // Explicit language switch preference always wins.
         if (_preferredLanguage.value == AssistantLanguage.ENGLISH) {
             return response.trim()
         }
 
-        return translateMessageToHindi(response).trim()
+        if (userInput.isBlank()) {
+            // No signal about the user's script: do NOT force Devanagari.
+            // Only clean up system phrases that are already Devanagari-bound
+            // when the response itself is Devanagari-heavy.
+            return if (LanguageDetector.isDevanagari(response)) {
+                translateMessageToHindi(response).trim()
+            } else {
+                response.trim()
+            }
+        }
+
+        val detected = LanguageDetector.detect(userInput)
+        return when (detected.style) {
+            DetectedStyle.DEVANAGARI_HINDI -> translateMessageToHindi(response).trim()
+            // Roman Hindi / Hinglish / English / Other: preserve as generated.
+            else -> response.trim()
+        }
     }
+
+    /**
+     * Ensures the final generated response is canonical and clean.
+     * Script-preserving: without user-input context it never forces
+     * Devanagari onto a Roman/English response.
+     */
+    fun canonicalize(response: String): String = normalize(response)
 
     companion object {
         private val ROMAN_HINDI_MAP = mapOf(

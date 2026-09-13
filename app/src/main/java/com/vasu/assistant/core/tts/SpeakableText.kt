@@ -26,6 +26,8 @@ private val EMPHASIS = Regex("(\\*{1,3}|_{2,3})(.+?)\\1")
 private val UI_LABELS = Regex("(?i)^(?:VASU|Assistant|User|Speaker|Role|Copy):\\s*")
 private val BLANK_LINES = Regex("\\n{2,}")
 private val REPEATED_SPACES = Regex("[ \\t]{2,}")
+/** Zero-width and control characters that break TTS pronunciation. Removed, never spoken. */
+private val ZERO_WIDTH_AND_CONTROL = Regex("[\\u200B-\\u200D\\uFEFF\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]")
 
 /**
  * Matches Unicode Emojis, Dingbats, Miscellaneous Symbols, Supplemental Symbols.
@@ -43,6 +45,9 @@ fun toSpeakableText(raw: String): String {
 
     // 1. Unicode NFC Normalization to keep Devanagari conjuncts and matras solid
     var text = Normalizer.normalize(raw, Normalizer.Form.NFC)
+
+    // 1b. Strip zero-width/control characters (invisible TTS poison)
+    text = text.replace(ZERO_WIDTH_AND_CONTROL, "")
 
     // 2. Remove fenced code snippets entirely (code is noise when read out)
     text = text.replace(FENCED_CODE, " ")

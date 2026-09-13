@@ -38,15 +38,16 @@ class SpeechQueue @Inject constructor() {
 
     /**
      * Add text to speech queue. De-duplicates if same text is enqueued consecutively.
+     * Returns the queued item (carrying its unique ttsId), or null when skipped.
      */
-    fun enqueue(text: String, priority: Boolean = false) {
+    fun enqueue(text: String, priority: Boolean = false): SpeechItem? {
         val trimmed = text.trim()
-        if (trimmed.isEmpty()) return
+        if (trimmed.isEmpty()) return null
 
         // De-duplication: skip if same text was just enqueued
         if (!priority && trimmed == lastEnqueuedText) {
             Log.d(TAG, "De-duplicated TTS request: \"$trimmed\"")
-            return
+            return null
         }
 
         val item = SpeechItem(
@@ -67,15 +68,20 @@ class SpeechQueue @Inject constructor() {
         }
 
         _queueSize.value = queue.size
+        return item
     }
 
     /**
-     * Get next item and remove from queue
+     * Get next item and remove from queue.
+     * Clears the consecutive-duplicate guard so the same phrase may be
+     * queued again for a LATER turn (genuine repeats), while an identical
+     * phrase still queued behind it stays de-duplicated.
      */
     fun dequeue(): SpeechItem? {
         val item = queue.poll()
         _currentItem.value = item
         _queueSize.value = queue.size
+        lastEnqueuedText = null
         return item
     }
 
@@ -115,10 +121,12 @@ class SpeechQueue @Inject constructor() {
 }
 
 /**
- * Speech queue item
+ * Speech queue item. Each item carries a unique ttsId so TTS start/complete
+ * events can be correlated across Chat, Voice, router and engine logs.
  */
 data class SpeechItem(
     val text: String,
     val priority: Boolean = false,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val ttsId: String = "tts_${System.nanoTime()}"
 )

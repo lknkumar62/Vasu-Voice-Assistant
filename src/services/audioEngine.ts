@@ -829,6 +829,13 @@ class AudioEngine {
       volume?: number;
       apiKey?: string;
       forceKoreVoice?: boolean;
+      /**
+       * Explicit opt-in for local (browser/Capacitor) fallback voices.
+       * Default false: Gemini mode uses Gemini TTS only; on Gemini failure
+       * a controlled TTS_ERROR is logged and NO local voice takes over
+       * silently. Pass true only from an explicit user setting.
+       */
+      allowLocalFallback?: boolean;
       onStart?: () => void;
       onEnd?: () => void;
     } = {}
@@ -876,6 +883,7 @@ class AudioEngine {
         volume: options.volume,
         apiKey: options.apiKey,
         preferLocal: false,
+        allowLocalFallback: options.allowLocalFallback,
         onStart: options.onStart,
         onEnd: completeWithSettle,
       }).catch((err) => {
@@ -968,6 +976,12 @@ class AudioEngine {
       apiKey?: string;
       preferLocal?: boolean;
       useStudioVoice?: boolean;
+      /**
+       * Explicit opt-in for local (browser/Capacitor) fallback voices.
+       * Default false: Gemini failure ends in a controlled TTS_ERROR, never
+       * a silent local-voice substitution.
+       */
+      allowLocalFallback?: boolean;
       onStart?: () => void;
       onEnd?: () => void;
     } = {}
@@ -1135,8 +1149,44 @@ class AudioEngine {
       }
     }
 
-    // ═══ NO LOCAL TTS FALLBACK — Log error and play chime ═══
-    console.error('[TTS] Gemini TTS unavailable! API key present:', !!(options.apiKey || this.getApiKey()));
+    // ═══ TERTIARY: Browser SpeechSynthesis — EXPLICIT OPT-IN ONLY ═══
+    // Default Gemini mode MUST NOT silently substitute a local voice when
+    // Gemini TTS fails. This branch runs only when the caller passes
+    // allowLocalFallback:true from an explicit user setting.
+    // speakNative() always resolves (never rejects), so we check availability first
+    if (options.allowLocalFallback === true && this.synth) {
+      console.log('[TTS] Local fallback explicitly enabled — using Browser SpeechSynthesis');
+      await this.speakNative(cleanText, {
+        speed: options.speed,
+        pitch: options.pitch,
+        volume: options.volume,
+        onStart: options.onStart,
+        onEnd: options.onEnd,
+      });
+      return;
+    }
+
+    // ═══ QUATERNARY: Capacitor Native TTS (Android TextToSpeech plugin) — EXPLICIT OPT-IN ONLY ═══
+    if (options.allowLocalFallback === true) {
+      console.log('[TTS] Local fallback explicitly enabled — trying Capacitor Native TTS');
+      try {
+        const capacitorSpoken = await this.speakWithCapacitorTTS(cleanText, {
+          speed: options.speed,
+          pitch: options.pitch,
+          volume: options.volume,
+          onStart: options.onStart,
+          onEnd: options.onEnd,
+        });
+        if (capacitorSpoken) return;
+      } catch (capErr) {
+        console.warn('[TTS] Capacitor native TTS failed:', capErr);
+      }
+    } else {
+      console.error('[TTS_ERROR] provider=gemini voice=Kore category=gemini_tts_failed_no_silent_local_fallback');
+    }
+
+    // ═══ ABSOLUTE LAST RESORT: Play chime so user knows something happened ═══
+    console.error('[TTS] ALL TTS providers exhausted! API key present:', !!(options.apiKey || this.getApiKey()));
     console.error('[TTS] To fix: ensure Gemini API key is configured and network is available');
     this.transitionTo('SPEAKING');
     options.onStart?.();
@@ -1397,6 +1447,10 @@ class AudioEngine {
       // Convert Hinglish text to phonetic for Android TTS engines
       const textToSpeak = toPhoneticHinglish(text);
 
+      // Transition to SPEAKING state and notify caller
+      this.transitionTo('SPEAKING');
+      options.onStart?.();
+
       await TextToSpeech.speak({
         text: textToSpeak,
         lang: 'hi-IN',
@@ -1407,6 +1461,8 @@ class AudioEngine {
       });
 
       console.log('[AudioEngine] Capacitor TTS completed successfully');
+      // Notify caller that speech ended
+      options.onEnd?.();
       return true;
     } catch (e) {
       console.warn('[AudioEngine] Capacitor TTS failed:', e);

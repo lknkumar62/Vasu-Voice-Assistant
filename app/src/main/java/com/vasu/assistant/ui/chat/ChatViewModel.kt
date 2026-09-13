@@ -118,15 +118,20 @@ class ChatViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(inputText = "", isLoading = true)
                 addMessage(ChatMessage(content = text, isUser = true))
 
+                val requestId = "req_${System.currentTimeMillis()}_${text.hashCode()}"
+                Log.d(TAG, "AI_REQUEST requestId=$requestId chatTurn")
                 val response = aiOrchestrator.processInput(text)
                 val responseMsg = ChatMessage(content = response, isUser = false)
                 addMessage(responseMsg)
                 _uiState.value = _uiState.value.copy(isLoading = false)
 
-                // TTS: Speak exactly once for this specific response
+                // TTS: Speak exactly once for this specific response, only
+                // after the AI response is COMPLETE (never per stream chunk:
+                // one assistant response = one TTS request = one playback).
                 if (lastSpokenResponseId != responseMsg.id) {
                     lastSpokenResponseId = responseMsg.id
-                    Log.d(TAG, "Speaking response ${responseMsg.id}")
+                    Log.d(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId assistantMessageId=${responseMsg.id}")
+                    Log.d(TAG, "GEMINI_TTS_REQUEST assistantMessageId=${responseMsg.id} (queued)")
                     ttsManager.speakQueued(response)
                 } else {
                     Log.d(TAG, "Response ${responseMsg.id} already spoken, skipping TTS")

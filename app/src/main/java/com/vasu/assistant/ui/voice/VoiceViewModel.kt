@@ -174,12 +174,14 @@ class VoiceViewModel @Inject constructor(
             }
         }
 
-        // Final results
+        // Final results — final transcripts only, never partials.
+        // While a response is speaking, the transcript is queued FIFO and
+        // runs only after the current TTS completes (no overlap, no loss).
         viewModelScope.launch {
             sttManager.results.collect { result ->
                 if (result.isFinal) {
                     _uiState.value = _uiState.value.copy(transcript = "")
-                    processVoiceCommand(result.text)
+                    onVoiceTranscript(result.text)
                 }
             }
         }
@@ -205,19 +207,39 @@ class VoiceViewModel @Inject constructor(
         }
     }
 
-    /** Tracks last processed command to prevent duplicate processing. */
+    /** Tracks last processed command to suppress STT double-emits (short window only). */
     private var lastProcessedCommand: String? = null
+    private var lastProcessedAtMs: Long = 0L
 
     /** Tracks last spoken response ID to prevent duplicate TTS. */
     private var lastSpokenResponseId: String? = null
+
+    /**
+     * FIFO of voice commands captured while VASU is busy (thinking/speaking).
+     * Commands are NEVER executed mid-playback: each waits for the current
+     * response's TTS_COMPLETED, then runs through the normal pipeline.
+     */
+    private val pendingVoiceCommands = ArrayDeque<String>()
+    private var voiceBusy = false
+
+    companion object {
+        private const val TAG = "VoiceViewModel"
+        private const val DEDUP_WINDOW_MS = 3000L
+        private const val MAX_PENDING_COMMANDS = 20
+    }
 
     fun toggleListening() {
         if (_uiState.value.isListening) {
             geminiLiveVoiceService.stopMicrophoneConversation()
             sttManager.stopListening()
         } else {
-            // IMPORTANT: Stop any current TTS before starting to listen
-            // Prevents VASU's own voice from being picked up by the microphone
+            // Barge-in: the user interrupted to take a new turn. Cancel the
+            // backlog so the NEW utterance becomes the live turn — otherwise a
+            // fresh transcript would jump ahead of older queued commands and
+            // break FIFO order. (Uninterrupted A -> B -> C -> D flow keeps
+            // strict FIFO with no loss; only an explicit interrupt cancels.)
+            pendingVoiceCommands.clear()
+            voiceBusy = false
             ttsManager.stop()
             geminiLiveVoiceService.stopSpeaking()
 
@@ -229,6 +251,9 @@ class VoiceViewModel @Inject constructor(
     }
 
     fun stopSpeaking() {
+        // Explicit user stop: silence everything, drop queued turns, free mic.
+        pendingVoiceCommands.clear()
+        voiceBusy = false
         geminiLiveVoiceService.stopSpeaking()
         ttsManager.stop()
     }
@@ -245,15 +270,44 @@ class VoiceViewModel @Inject constructor(
         testKoreVoice(text)
     }
 
-    private fun processVoiceCommand(command: String) {
+    private fun onVoiceTranscript(command: String) {
         val trimmed = command.trim()
         if (trimmed.isEmpty()) return
 
-        // De-duplication: skip if same command was just processed
-        if (trimmed == lastProcessedCommand) {
+        // De-duplication: skip STT double-emits of the same phrase within a
+        // short window, but allow genuine repeats in long conversations.
+        val now = System.currentTimeMillis()
+        if (trimmed == lastProcessedCommand && now - lastProcessedAtMs < DEDUP_WINDOW_MS) {
             return
         }
+
+        if (voiceBusy || _uiState.value.isSpeaking || _uiState.value.isThinking) {
+            if (pendingVoiceCommands.size >= MAX_PENDING_COMMANDS) {
+                pendingVoiceCommands.removeFirst()
+            }
+            pendingVoiceCommands.addLast(trimmed)
+            lastProcessedCommand = trimmed
+            lastProcessedAtMs = now
+            android.util.Log.i(TAG, "Queued voice command during playback (${pendingVoiceCommands.size} pending)")
+            _uiState.value = _uiState.value.copy(
+                statusMessage = "Sun liya — bolne ke baad karungi (${pendingVoiceCommands.size})"
+            )
+            return
+        }
+
+        processVoiceCommand(trimmed)
+    }
+
+    private fun processVoiceCommand(command: String) {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) {
+            drainPendingCommands()
+            return
+        }
+
         lastProcessedCommand = trimmed
+        lastProcessedAtMs = System.currentTimeMillis()
+        voiceBusy = true
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -270,13 +324,27 @@ class VoiceViewModel @Inject constructor(
                 lastResponse = response
             )
 
-            // Speak response — only once per response
+            // Speak response — only once per response. The queued next
+            // command starts only after this TTS actually completes.
             val responseId = "${trimmed.hashCode()}_${response.hashCode()}"
             if (lastSpokenResponseId != responseId) {
                 lastSpokenResponseId = responseId
-                ttsManager.speakQueued(response)
+                ttsManager.speakQueued(response) {
+                    voiceBusy = false
+                    drainPendingCommands()
+                }
+            } else {
+                voiceBusy = false
+                drainPendingCommands()
             }
         }
+    }
+
+    /** FIFO: run the next queued command only after the current turn fully finished. */
+    private fun drainPendingCommands() {
+        val next = pendingVoiceCommands.removeFirstOrNull() ?: return
+        android.util.Log.i(TAG, "Dequeueing next voice command (${pendingVoiceCommands.size} remaining)")
+        processVoiceCommand(next)
     }
 
     override fun onCleared() {
