@@ -384,16 +384,16 @@ fun SettingsScreen(
                         else -> Icons.Default.Info
                     },
                     label = when (state.customVoiceStatus) {
-                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL -> "Custom Voice Model Active"
-                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> "Custom Voice Samples Loaded"
-                        com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS -> "Local Voice Asset Folder"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL -> "Maya Voice Model Active"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> "Maya Voices Loaded (43)"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS -> "Maya Voice Assets"
                         com.vasu.assistant.core.tts.VoiceModelStatus.ERROR -> "Custom Voice Error"
                     },
                     detail = when (state.customVoiceStatus) {
-                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL -> "Local neural voice model loaded from app/src/main/assets/vasu_voice/"
-                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> "Custom audio samples loaded from app/src/main/assets/vasu_voice/"
-                        com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS -> "Place your voice clips or neural model in app/src/main/assets/vasu_voice/ to use custom voice."
-                        com.vasu.assistant.core.tts.VoiceModelStatus.ERROR -> "Failed loading custom voice assets."
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL -> "Maya neural voice active"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_SAMPLES -> "43 Maya voices ready: friday/maya/venom personas"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.FALLBACK_SYSTEM_TTS -> "Maya voices not found — using Gemini Kore"
+                        com.vasu.assistant.core.tts.VoiceModelStatus.ERROR -> "Failed loading Maya voice assets."
                     },
                     color = when (state.customVoiceStatus) {
                         com.vasu.assistant.core.tts.VoiceModelStatus.ACTIVE_CUSTOM_MODEL,
@@ -401,6 +401,48 @@ fun SettingsScreen(
                         else -> VasuCyan
                     }
                 )
+            }
+
+            // Maya Voice Selection — same as Maya (43 voices)
+            SettingsSection(title = "MAYA VOICE (43)") {
+                var mayaVoiceMenu by remember { mutableStateOf(false) }
+                SettingsCard {
+                    Text("Selected Maya Voice", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    Box {
+                        OutlinedButton(onClick = { mayaVoiceMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text(state.geminiTtsVoice.ifBlank { "Kore (default)" }, color = VasuCyan)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VasuCyan)
+                        }
+                        DropdownMenu(expanded = mayaVoiceMenu, onDismissRequest = { mayaVoiceMenu = false }) {
+                            // Show all 43 Maya voices grouped
+                            Text("— Friday (13) —", color = VasuTextMuted, modifier = Modifier.padding(8.dp))
+                            VasuSettings.MAYA_VOICES.filter { it.startsWith("friday") }.forEach { v ->
+                                DropdownMenuItem(
+                                    text = { Text(v) },
+                                    onClick = { viewModel.setGeminiTtsVoice(v.substringAfter("_")); mayaVoiceMenu = false }
+                                )
+                            }
+                            Text("— Maya (13) —", color = VasuTextMuted, modifier = Modifier.padding(8.dp))
+                            VasuSettings.MAYA_VOICES.filter { it.startsWith("maya") }.forEach { v ->
+                                DropdownMenuItem(
+                                    text = { Text(v) },
+                                    onClick = { viewModel.setGeminiTtsVoice(v.substringAfter("_")); mayaVoiceMenu = false }
+                                )
+                            }
+                            Text("— Venom (17) —", color = VasuTextMuted, modifier = Modifier.padding(8.dp))
+                            VasuSettings.MAYA_VOICES.filter { it.startsWith("venom") }.forEach { v ->
+                                DropdownMenuItem(
+                                    text = { Text(v) },
+                                    onClick = { viewModel.setGeminiTtsVoice(v.substringAfter("_")); mayaVoiceMenu = false }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("Maya's 43 voices: Friday (sweet), Maya (warm), Venom (deep). Home & Chat unchanged, Tools & all features Maya same.", color = VasuTextMuted, fontSize = 12.sp)
+                }
             }
 
             SettingsSection(title = "WAKE WORD") {
