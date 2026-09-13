@@ -28,11 +28,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.vasu.assistant.ui.components.VasuCard
 import com.vasu.assistant.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -54,31 +56,22 @@ fun ChatScreen(
     // Copy helper
     fun copyText(id: String, text: String) {
         clipboard.setText(AnnotatedString(text))
-        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 
-    // Smart scroll: track if user is near bottom
-    LaunchedEffect(listState) {
-        // Observe scroll via snapshotFlow implicitly by tracking firstVisibleItemIndex changes
-        // Simple heuristic: we update isNearBottom whenever layout changes
-    }
-
-    // Auto-scroll on new message only if user was near bottom
+    // Smart scroll: trigger only if user is near bottom
     LaunchedEffect(uiState.messages.size, uiState.isLoading, uiState.partialTranscript) {
         if (isNearBottom && uiState.messages.isNotEmpty()) {
             scope.launch {
-                // small delay to let layout settle
-                kotlinx.coroutines.delay(80)
-                if (isNearBottom) {
-                    try {
-                        listState.animateScrollToItem(maxOf(0, uiState.messages.size - 1))
-                    } catch (_: Exception) {}
-                }
+                kotlinx.coroutines.delay(100)
+                try {
+                    listState.animateScrollToItem(uiState.messages.size - 1)
+                } catch (_: Exception) {}
             }
         }
     }
 
-    // Derived near-bottom detection via layoutInfo
+    // Bottom detection
     LaunchedEffect(listState.firstVisibleItemIndex, listState.layoutInfo.totalItemsCount) {
         val info = listState.layoutInfo
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
@@ -86,7 +79,6 @@ fun ChatScreen(
         isNearBottom = if (total == 0) true else (total - lastVisible <= 2)
     }
 
-    // Filter messages by sidebar search
     val filteredMessages = remember(uiState.messages, searchQuery) {
         if (searchQuery.isBlank()) uiState.messages
         else uiState.messages.filter { it.content.contains(searchQuery, ignoreCase = true) }
@@ -102,33 +94,33 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Bot avatar with Online dot
+                        // Professional Bot Avatar
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
                                 .background(VasuCyan.copy(alpha = 0.15f))
-                                .border(1.dp, VasuCyan.copy(alpha = 0.5f), CircleShape),
+                                .border(1.dp, VasuCyan.copy(alpha = 0.4f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.SmartToy,
                                 contentDescription = "VASU",
                                 tint = VasuCyan,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
-                            // Online dot at bottom-end
+                            // Online Dot
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .offset(x = 1.dp, y = 1.dp)
-                                    .size(12.dp)
+                                    .offset(x = 2.dp, y = 2.dp)
+                                    .size(10.dp)
                                     .clip(CircleShape)
                                     .background(VasuSuccess)
-                                    .border(2.dp, VasuDarkBg, CircleShape)
+                                    .border(1.5.dp, VasuDarkBg, CircleShape)
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "VASU",
@@ -136,23 +128,15 @@ fun ChatScreen(
                                 fontSize = 15.sp,
                                 color = VasuTextPrimary
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "● Online",
-                                    fontSize = 11.sp,
-                                    color = VasuSuccess,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
                             Text(
                                 text = when {
                                     uiState.isListening -> "Listening..."
                                     uiState.isLoading -> "Thinking..."
                                     speakingId != null -> "Speaking..."
-                                    else -> "Always ready to help"
+                                    else -> "Online & Ready"
                                 },
-                                fontSize = 10.sp,
-                                color = VasuTextMuted
+                                fontSize = 11.sp,
+                                color = if (speakingId != null || uiState.isLoading || uiState.isListening) VasuCyan else VasuTextMuted
                             )
                         }
                     }
@@ -177,7 +161,7 @@ fun ChatScreen(
                                 viewModel.stopSpeaking()
                                 speakingId = null
                             } else {
-                                Toast.makeText(context, "Voice output ${if (speakingId != null) "off" else "ready"}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Voice playback ready", Toast.LENGTH_SHORT).show()
                             }
                         }) {
                             Icon(
@@ -198,18 +182,18 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Header subtitle — hyper professional 16.dp spacing, typography polished
+            // Professional Header
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Text(
                     text = "Chat",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = VasuTextPrimary,
-                    letterSpacing = 0.3.sp
+                    letterSpacing = 0.5.sp
                 )
                 Text(
                     text = "Talk. Ask. Explore. VASU is always with you.",
@@ -219,7 +203,7 @@ fun ChatScreen(
                 )
             }
 
-            // Sidebar search — hyper professional 16.dp rounded, proper elevation
+            // Search Bar
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -251,10 +235,9 @@ fun ChatScreen(
                 ),
                 shape = RoundedCornerShape(16.dp),
                 singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                textStyle = TextStyle(fontSize = 13.sp)
             )
 
-            // Messages — hyper professional spacing 16.dp, padding 16.dp
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -287,7 +270,7 @@ fun ChatScreen(
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "Hello, User 👋",
                                 fontWeight = FontWeight.Bold,
@@ -299,11 +282,10 @@ fun ChatScreen(
                                 fontSize = 12.sp,
                                 color = VasuTextMuted
                             )
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             SuggestionGrid(onSuggestionClick = { cmd ->
                                 viewModel.updateInput(cmd)
                                 viewModel.sendMessage()
-                                // scroll to bottom
                                 scope.launch {
                                     kotlinx.coroutines.delay(100)
                                     try { listState.animateScrollToItem(filteredMessages.size) } catch (_: Exception) {}
@@ -314,7 +296,6 @@ fun ChatScreen(
                 }
 
                 items(filteredMessages, key = { it.id }) { message ->
-                    // System message detection: role system via toolName == "system" or content prefix
                     val isSystem = message.toolName == "system" || message.isToolExecution && message.toolName == null && message.content.startsWith("System:", ignoreCase = true)
                     if (isSystem) {
                         SystemMessageBubble(message)
@@ -331,8 +312,6 @@ fun ChatScreen(
                                 } else {
                                     speakingId = message.id
                                     viewModel.replayMessage(message.content)
-                                    // Reset speakingId after delay approximate? ViewModel will stop callback not wired,
-                                    // so clear after 8 sec fallback
                                     scope.launch {
                                         kotlinx.coroutines.delay(8000)
                                         if (speakingId == message.id) speakingId = null
@@ -343,7 +322,6 @@ fun ChatScreen(
                     }
                 }
 
-                // Live voice transcript bubble (partialTranscript)
                 if (uiState.partialTranscript.isNotBlank()) {
                     item {
                         Row(
@@ -351,7 +329,7 @@ fun ChatScreen(
                             horizontalArrangement = Arrangement.End
                         ) {
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = VasuCyan.copy(alpha = 0.2f)),
+                                colors = CardDefaults.cardColors(containerColor = VasuCyan.copy(alpha = 0.15f)),
                                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.3f)),
                                 modifier = Modifier.widthIn(max = 300.dp)
@@ -360,13 +338,13 @@ fun ChatScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(
                                             modifier = Modifier
-                                                .size(7.dp)
+                                                .size(6.dp)
                                                 .clip(CircleShape)
                                                 .background(VasuCyan)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Icon(Icons.Filled.Mic, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(Icons.Filled.Mic, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(text = "Listening...", fontSize = 11.sp, color = VasuCyan, fontWeight = FontWeight.Medium)
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -382,7 +360,6 @@ fun ChatScreen(
                     }
                 }
 
-                // Thinking indicator
                 if (uiState.isLoading) {
                     item {
                         ThinkingBubble()
@@ -390,7 +367,6 @@ fun ChatScreen(
                 }
             }
 
-            // Pill row above input (Maya parity)
             PillRow(
                 isListening = uiState.isListening,
                 onSendCommand = { cmd ->
@@ -404,16 +380,12 @@ fun ChatScreen(
                 onVoiceToggle = { viewModel.toggleListening() }
             )
 
-// Input area — hyper professional 16.dp rounded, elevation 4.dp, crisp icons
-            Card(
+            VasuCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .imePadding(),
-                colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.25f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                borderAlpha = 0.2f
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
@@ -421,7 +393,7 @@ fun ChatScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     IconButton(onClick = {
-                        Toast.makeText(context, "Attachment coming soon", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Attachments coming soon", Toast.LENGTH_SHORT).show()
                     }) {
                         Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(VasuTextMuted.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
                             Icon(
@@ -450,7 +422,7 @@ fun ChatScreen(
                         shape = RoundedCornerShape(16.dp),
                         singleLine = false,
                         maxLines = 3,
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, lineHeight = 20.sp)
+                        textStyle = TextStyle(fontSize = 14.sp, lineHeight = 20.sp)
                     )
 
                     IconButton(onClick = { viewModel.toggleListening() }) {
@@ -483,26 +455,23 @@ fun ChatScreen(
                 }
             }
 
-            // Clear chats / sidebar action footer for small screens
             if (filteredMessages.isNotEmpty()) {
                 TextButton(
                     onClick = {
-                        // Clear via ViewModel - we add clearConversation in ViewModel; for now clear UI state
-                        // Use viewModel.clearChat if available, else just toast
                         try {
                             viewModel.clearChat()
                         } catch (_: Exception) {
-                            Toast.makeText(context, "Clear coming soon", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Chat cleared", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 2.dp),
-                    colors = ButtonDefaults.textButtonColors(contentColor = VasuError.copy(alpha = 0.9f))
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = VasuError.copy(alpha = 0.8f))
                 ) {
-                    Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Clear All Chats", fontSize = 12.sp)
+                    Text("Clear Conversation", fontSize = 12.sp)
                 }
             }
         }
@@ -513,20 +482,18 @@ fun ChatScreen(
 private fun ThinkingBubble() {
     val infinite = rememberInfiniteTransition(label = "thinking")
     val alpha by infinite.animateFloat(
-        initialValue = 0.4f,
+        initialValue = 0.3f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(700, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(animation = tween(800, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
         label = "pulse"
     )
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.1f)),
-            modifier = Modifier.padding(horizontal = 4.dp)
+        VasuCard(
+            modifier = Modifier.padding(horizontal = 4.dp),
+            borderAlpha = 0.1f
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -720,8 +687,8 @@ fun ChatBubble(
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = bgColor),
-            shape = if (isUser) RoundedCornerShape(16.dp).copy(topEnd = RoundedCornerShape(4.dp))
-            else RoundedCornerShape(16.dp).copy(topStart = RoundedCornerShape(4.dp)),
+            shape = if (isUser) RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+            else RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
             border = if (isUser) androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.3f))
             else androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f)),
             modifier = Modifier
@@ -734,7 +701,7 @@ fun ChatBubble(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.25f),
+                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.3f),
                                 RoundedCornerShape(8.dp)
                             )
                             .padding(horizontal = 8.dp, vertical = 6.dp),

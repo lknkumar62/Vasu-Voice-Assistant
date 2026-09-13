@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.vasu.assistant.ui.components.VasuCard
 import com.vasu.assistant.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,7 +42,8 @@ fun VoiceScreen(
                     Text(
                         text = "Voice Mode",
                         fontWeight = FontWeight.Bold,
-                        color = VasuCyan
+                        color = VasuCyan,
+                        fontSize = 18.sp
                     )
                 },
                 navigationIcon = {
@@ -54,7 +56,6 @@ fun VoiceScreen(
                     }
                 },
                 actions = {
-                    // Stop button if speaking
                     if (uiState.isSpeaking) {
                         IconButton(onClick = viewModel::stopSpeaking) {
                             Icon(
@@ -79,22 +80,22 @@ fun VoiceScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // ── Top badges row (model + voice) — parity with web 259-278 ──
+            // 1. Top Badges Row
             ModelVoiceBadgesRow(
                 model = uiState.geminiModel.ifBlank { "gemini-3.1-flash-live-preview" },
                 voice = uiState.geminiVoice.ifBlank { "Kore" }
             )
 
-            // ── Main status display card — parity with web 281-305 ──
+            // 2. Status Hub
             StatusDisplayCard(
                 mode = uiState.mode,
                 isListening = uiState.isListening,
                 onReconnect = viewModel::reconnect
             )
 
-            // ── Error banner — parity with web 308-337 ──
+            // 3. Error Banner
             if (uiState.errorMessage != null) {
                 ErrorBannerCard(
                     message = uiState.errorMessage!!,
@@ -104,16 +105,12 @@ fun VoiceScreen(
                 )
             }
 
-            // Waveform visualization — hyper professional 16.dp, elevation 4.dp, crisp icons
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
+            // 4. Waveform Visualizer Card
+            VasuCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     WaveformVisualizer(
@@ -121,9 +118,8 @@ fun VoiceScreen(
                         rmsLevel = uiState.rmsLevel
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    // Status Message
                     Text(
                         text = uiState.statusMessage,
                         color = when (uiState.mode) {
@@ -132,37 +128,23 @@ fun VoiceScreen(
                             VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> VasuWarning
                             VoiceUiMode.CONNECTING, VoiceUiMode.CONNECTED -> VasuCyan
                             VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE, VoiceUiMode.ERROR -> VasuError
-                            VoiceUiMode.OFFLINE_MODE, VoiceUiMode.GEMINI_UNAVAILABLE, VoiceUiMode.DISCONNECTED, VoiceUiMode.IDLE -> VasuTextSecondary
+                            else -> VasuTextSecondary
                         },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center
                     )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Voice Engine Badge — Hindi label kept (Vasu theme)
-                    Text(
-                        text = "वॉयस: ${uiState.activeVoiceSource.displayName}",
-                        color = VasuCyanLight.copy(alpha = 0.7f),
-                        fontSize = 12.sp
-                    )
                 }
             }
 
-            // Transcript card — hyper professional 16.dp, elevation 3.dp
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.10f))
+            // 5. Transcript Area (Glass Card)
+            VasuCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Partial transcript (real-time)
                     if (uiState.transcript.isNotEmpty()) {
                         Text(
                             text = uiState.transcript,
@@ -180,10 +162,9 @@ fun VoiceScreen(
                         )
                     }
 
-                    // Last response
                     if (uiState.lastResponse.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        HorizontalDivider(color = VasuDarkCard)
+                        HorizontalDivider(color = VasuCyan.copy(alpha = 0.1f))
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = uiState.lastResponse,
@@ -196,94 +177,43 @@ fun VoiceScreen(
                 }
             }
 
-            // Mic Button — keep Vasu primary mic
+            // 6. Voice Control (Mic Button)
             VoiceMicButton(
                 isListening = uiState.isListening,
                 isSpeaking = uiState.isSpeaking,
                 onClick = { viewModel.toggleListening() }
             )
 
-            // ── Primary Action Buttons — hyper professional 16.dp
-            Button(
-                onClick = { viewModel.testKoreVoice("Namaste Vasu, ek chhota sa greeting bolo.") },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = VasuCyan,
-                    contentColor = VasuDarkBg
-                ),
-                shape = RoundedCornerShape(16.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
-            ) {
-                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(VasuDarkBg.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Text("Test Kore Voice (Text Test)", fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp)
-            }
-
-            // Grid: Live Mic + Hardware Test — hyper professional 16.dp, spacing 16.dp, crisp icons
+            // 7. Primary Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedButton(
-                    onClick = { viewModel.toggleListening() },
+                Button(
+                    onClick = { viewModel.testKoreVoice() },
                     modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (uiState.isListening) VasuCyan.copy(alpha = 0.12f) else VasuDarkCard,
-                        contentColor = if (uiState.isListening) VasuCyan else VasuTextPrimary
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (uiState.isListening) VasuCyan.copy(alpha = 0.5f) else VasuCyan.copy(alpha = 0.15f)
-                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = VasuCyan, contentColor = VasuDarkBg),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (uiState.isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = null,
-                            tint = VasuCyan,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (uiState.isListening) "Stop Listening" else "Live Mic",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.2.sp
-                    )
+                    Text("Test Kore Voice", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
 
                 OutlinedButton(
                     onClick = { viewModel.testSpeakerHardware() },
                     modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = VasuDarkCard,
-                        contentColor = VasuTextPrimary
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.15f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuTextPrimary),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.2f)),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuSuccess.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.VolumeUp,
-                            contentDescription = null,
-                            tint = VasuSuccess,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                    Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp), tint = VasuSuccess)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Hardware Test", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Hardware Test", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
-            // ── Wake word toggle card — parity with web 489-532 ──
+            // 8. Wake Word Toggle
             WakeWordToggleCard(
                 isActive = uiState.isWakeWordActive,
                 wakeState = uiState.wakeWordState,
@@ -291,13 +221,13 @@ fun VoiceScreen(
                 onToggle = viewModel::toggleWakeWord
             )
 
-            // ── Technical Diagnostics — parity with web 534-552 ──
+            // 9. Technical Diagnostics
             DiagnosticsCard(
                 model = uiState.geminiModel.ifBlank { "gemini-3.1-flash-live-preview" },
                 voice = uiState.geminiVoice.ifBlank { "Kore" }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -312,11 +242,11 @@ private fun ModelVoiceBadgesRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Model Badge
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = VasuDarkCard,
             border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.18f)),
-            shadowElevation = 2.dp,
             modifier = Modifier.weight(1f)
         ) {
             Row(
@@ -324,53 +254,30 @@ private fun ModelVoiceBadgesRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Memory,
-                        contentDescription = null,
-                        tint = VasuCyan,
-                        modifier = Modifier.size(12.dp)
-                    )
+                Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Memory, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(10.dp))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = model,
-                    color = VasuCyan,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    letterSpacing = 0.3.sp
-                )
+                Text(text = model, color = VasuCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
+        // Voice Badge
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = VasuDarkCard,
             border = androidx.compose.foundation.BorderStroke(1.dp, VasuSuccess.copy(alpha = 0.25f)),
-            shadowElevation = 2.dp,
-            modifier = Modifier.weight(0.55f)
+            modifier = Modifier.weight(0.6f)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(VasuSuccess.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.RecordVoiceOver,
-                        contentDescription = null,
-                        tint = VasuSuccess,
-                        modifier = Modifier.size(12.dp)
-                    )
+                Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(VasuSuccess.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.RecordVoiceOver, contentDescription = null, tint = VasuSuccess, modifier = Modifier.size(10.dp))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Voice: $voice",
-                    color = VasuSuccess,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
+                Text(text = "Voice: $voice", color = VasuSuccess, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }
@@ -382,66 +289,44 @@ private fun StatusDisplayCard(
     isListening: Boolean,
     onReconnect: () -> Unit
 ) {
-    // Map mode to web getStatusBadge() colors/labels — web 206-252
     val (dotColor, label, showReconnect) = when (mode) {
-        VoiceUiMode.SPEAKING -> Triple(VasuError, "SPEAKING (Kore 24kHz)", false)
+        VoiceUiMode.SPEAKING -> Triple(VasuPurple, "SPEAKING (Kore)", false)
         VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> Triple(VasuWarning, "THINKING...", false)
-        VoiceUiMode.LISTENING -> Triple(VasuCyan, "LISTENING (16kHz PCM)", false)
+        VoiceUiMode.LISTENING -> Triple(VasuCyan, "LISTENING", false)
         VoiceUiMode.CONNECTED -> Triple(VasuSuccess, "CONNECTED & READY", false)
-        VoiceUiMode.CONNECTING -> Triple(VasuInfo, "CONNECTING TO LIVE...", false)
-        VoiceUiMode.ERROR, VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE -> Triple(VasuError, "ERROR ENCOUNTERED", true)
+        VoiceUiMode.CONNECTING -> Triple(VasuInfo, "CONNECTING...", false)
+        VoiceUiMode.ERROR, VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE -> Triple(VasuError, "SYSTEM ERROR", true)
         VoiceUiMode.DISCONNECTED -> Triple(VasuTextMuted, "DISCONNECTED", true)
-        else -> Triple(VasuTextMuted, "DISCONNECTED", true)
+        else -> Triple(VasuTextMuted, "IDLE", true)
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
+    VasuCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                )
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
                 Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = label,
-                    color = VasuTextPrimary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
+                Text(text = label, color = VasuTextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
             }
             if (showReconnect) {
                 OutlinedButton(
                     onClick = onReconnect,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuCyan),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.5f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.4f)),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Reconnect", fontSize = 11.sp)
+                    Text("Reconnect", fontSize = 10.sp)
                 }
             } else {
-                Text(
-                    text = "24 kHz PCM Stereo Out",
-                    color = VasuTextMuted,
-                    fontSize = 10.sp
-                )
+                Text(text = "24 kHz PCM Stereo", color = VasuTextMuted, fontSize = 10.sp)
             }
         }
     }
@@ -458,54 +343,32 @@ private fun ErrorBannerCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF3A0F0F).copy(alpha = 0.95f)),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, VasuError.copy(alpha = 0.6f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    imageVector = Icons.Default.ErrorOutline,
-                    contentDescription = null,
-                    tint = VasuError,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = VasuError, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Live Connection Notice:",
-                        color = Color(0xFFFF8A80),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("Live Connection Notice:", color = Color(0xFFFF8A80), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = message,
-                        color = VasuTextPrimary.copy(alpha = 0.95f),
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
-                    )
+                    Text(message, color = VasuTextPrimary.copy(alpha = 0.95f), fontSize = 12.sp, lineHeight = 16.sp)
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = VasuTextMuted, modifier = Modifier.size(16.dp))
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = VasuError.copy(alpha = 0.2f))
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onOpenSettings) {
-                    Text("Configure API Key in Settings", color = Color(0xFFFF8A80), fontSize = 11.sp)
+                    Text("Settings", color = Color(0xFFFF8A80), fontSize = 11.sp)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = onRetry,
                     colors = ButtonDefaults.buttonColors(containerColor = VasuError.copy(alpha = 0.9f), contentColor = Color.White),
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text("Retry", fontSize = 11.sp)
                 }
@@ -523,36 +386,20 @@ private fun WakeWordToggleCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isActive) VasuSuccess.copy(alpha = 0.10f) else VasuDarkCard
-        ),
+        colors = CardDefaults.cardColors(containerColor = if (isActive) VasuSuccess.copy(alpha = 0.05f) else VasuDarkCard),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isActive) VasuSuccess.copy(alpha = 0.25f) else VasuCyan.copy(alpha = 0.12f)
-        )
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) VasuSuccess.copy(alpha = 0.2f) else VasuCyan.copy(alpha = 0.12f))
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            if (isActive) VasuSuccess.copy(alpha = 0.2f) else VasuDarkElevated
-                        )
-                        .border(
-                            1.dp,
-                            if (isActive) VasuSuccess.copy(alpha = 0.4f) else VasuTextMuted.copy(alpha = 0.2f),
-                            RoundedCornerShape(10.dp)
-                        ),
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
+                        .background(if (isActive) VasuSuccess.copy(alpha = 0.15f) else VasuDarkElevated)
+                        .border(1.dp, if (isActive) VasuSuccess.copy(alpha = 0.3f) else VasuTextMuted.copy(alpha = 0.2f), RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -564,28 +411,19 @@ private fun WakeWordToggleCard(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Wake Word: \"Hello Vasu\"",
-                        color = VasuTextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("Wake Word: \"Hello Vasu\"", color = VasuTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Text(
                         text = when {
-                            isActive && wakeState.name == "LISTENING" -> "Continuously active in background"
+                            isActive && wakeState.name == "LISTENING" -> "Active in background"
                             isActive && wakeState.name == "DETECTED" -> "Wake word heard!"
                             isActive -> "Listening for wake word"
-                            else -> "Tap switch to enable hands-free voice wake"
+                            else -> "Enable hands-free voice wake"
                         },
                         color = VasuTextSecondary,
                         fontSize = 11.sp
                     )
-                    if (reason != null && !isActive) {
-                        Text(text = reason, color = VasuTextMuted, fontSize = 10.sp)
-                    }
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = isActive,
                 onCheckedChange = { onToggle() },
@@ -593,9 +431,7 @@ private fun WakeWordToggleCard(
                     checkedThumbColor = VasuDarkBg,
                     checkedTrackColor = VasuSuccess,
                     uncheckedThumbColor = VasuTextMuted,
-                    uncheckedTrackColor = VasuDarkElevated,
-                    checkedBorderColor = VasuSuccess,
-                    uncheckedBorderColor = VasuTextMuted.copy(alpha = 0.3f)
+                    uncheckedTrackColor = VasuDarkElevated
                 )
             )
         }
@@ -607,17 +443,10 @@ private fun DiagnosticsCard(
     model: String,
     voice: String
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.10f))
+    VasuCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DiagnosticsRow(label = "Gemini Model:", value = model, valueColor = VasuCyan, isBold = true)
             DiagnosticsRow(label = "Prebuilt Voice:", value = voice, valueColor = VasuSuccess, isBold = true)
             DiagnosticsRow(label = "Input Modality:", value = "16,000 Hz Mono PCM", valueColor = VasuTextSecondary)
@@ -627,23 +456,10 @@ private fun DiagnosticsCard(
 }
 
 @Composable
-private fun DiagnosticsRow(
-    label: String,
-    value: String,
-    valueColor: Color,
-    isBold: Boolean = false
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, color = VasuTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Normal)
-        Text(
-            text = value,
-            color = valueColor,
-            fontSize = 11.sp,
-            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
-        )
+private fun DiagnosticsRow(label: String, value: String, valueColor: Color, isBold: Boolean = false) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(text = label, color = VasuTextSecondary, fontSize = 11.sp)
+        Text(text = value, color = valueColor, fontSize = 11.sp, fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal)
     }
 }
 
@@ -655,17 +471,18 @@ fun WaveformVisualizer(
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(84.dp),
+        modifier = Modifier.fillMaxWidth().height(80.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        repeat(20) { index ->
-            val delay = index * 100
+        repeat(25) { index ->
+            val delay = index * 80
+            val baseHeight = if (isListening) (15f + (index % 5) * 10f) else 6f
+            val rmsModulator = if (isListening) (rmsLevel * 60f) else 0f
+            
             val height by infiniteTransition.animateFloat(
-                initialValue = 8f,
-                targetValue = if (isListening) (20f + (index % 5) * 15f) else 8f,
+                initialValue = baseHeight,
+                targetValue = baseHeight + rmsModulator,
                 animationSpec = infiniteRepeatable(
                     animation = tween(600 + delay, easing = EaseInOutSine),
                     repeatMode = RepeatMode.Reverse
@@ -676,14 +493,9 @@ fun WaveformVisualizer(
             Box(
                 modifier = Modifier
                     .width(3.dp)
-                    .height(height.dp)
+                    .height(height.coerceIn(6f, 70f).dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        when {
-                            isListening -> VasuCyan
-                            else -> VasuTextMuted.copy(alpha = 0.3f)
-                        }
-                    )
+                    .background(if (isListening) VasuCyan else VasuTextMuted.copy(alpha = 0.3f))
             )
         }
     }
@@ -698,9 +510,9 @@ fun VoiceMicButton(
     val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isListening || isSpeaking) 1.3f else 1f,
+        targetValue = if (isListening || isSpeaking) 1.25f else 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(800),
+            animation = tween(900),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
@@ -716,24 +528,24 @@ fun VoiceMicButton(
         if (isListening || isSpeaking) {
             Box(
                 modifier = Modifier
-                    .size(120.dp)
+                    .size(110.dp)
                     .scale(pulse)
                     .clip(CircleShape)
-                    .background(buttonColor.copy(alpha = 0.15f))
+                    .background(buttonColor.copy(alpha = 0.2f))
             )
         }
 
         FloatingActionButton(
             onClick = onClick,
-            modifier = Modifier.size(88.dp),
+            modifier = Modifier.size(80.dp),
             containerColor = buttonColor,
             contentColor = VasuDarkBg,
             shape = CircleShape
         ) {
             Icon(
                 imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                contentDescription = if (isListening) "Stop" else "Start Listening",
-                modifier = Modifier.size(40.dp)
+                contentDescription = null,
+                modifier = Modifier.size(36.dp)
             )
         }
     }

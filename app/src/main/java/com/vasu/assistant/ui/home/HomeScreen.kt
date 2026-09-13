@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.vasu.assistant.core.wakeword.WakeWordState
+import com.vasu.assistant.ui.components.VasuCard
 import com.vasu.assistant.ui.theme.*
 
 data class HomeGridItem(
@@ -115,197 +116,155 @@ fun HomeScreen(
     )
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxHeight()
-                    ) {
-                        Text(
-                            text = "VASU",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 24.sp,
-                            color = VasuCyan
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Voice Assistant",
-                            fontSize = 12.sp,
-                            color = VasuTextMuted
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = VasuDarkBg
-                )
-            )
-        },
         containerColor = VasuDarkBg
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Status Section
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Avatar with state indicators
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(
-                            animateColorAsState(
-                                when {
-                                    uiState.isListening -> VasuCyan.copy(alpha = 0.2f)
-                                    uiState.isSpeaking -> VasuPurple.copy(alpha = 0.2f)
-                                    uiState.isThinking -> VasuWarning.copy(alpha = 0.2f)
-                                    uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen.copy(alpha = 0.1f)
-                                    else -> VasuDarkCard
-                                }
-                            ).value
-                        ),
-                    contentAlignment = Alignment.Center
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // HUD Elements: Last Message
+            if (uiState.lastMessage.isNotBlank()) {
+                VasuCard(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "VASU Avatar",
-                        modifier = Modifier.size(60.dp),
-                        tint = when {
-                            uiState.isListening -> VasuCyan
-                            uiState.isSpeaking -> VasuPurple
-                            uiState.isThinking -> VasuWarning
-                            uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
-                            else -> VasuTextSecondary
-                        }
+                    Text(
+                        text = uiState.lastMessage,
+                        color = VasuTextPrimary,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2
                     )
                 }
-
                 Spacer(modifier = Modifier.height(16.dp))
+            }
 
-                // Status Text
-                Text(
-                    text = when {
-                        uiState.isListening -> "Listening..."
-                        uiState.isThinking -> "Thinking..."
-                        uiState.isSpeaking -> "Speaking..."
-                        uiState.wakeWordState == WakeWordState.LISTENING -> "Say \"Hello Vasu\""
-                        uiState.wakeWordState == WakeWordState.DETECTED -> "Wake word detected!"
-                        uiState.wakeWordState == WakeWordState.MODEL_NOT_AVAILABLE -> "Wake word unavailable"
-                        else -> "Ready"
-                    },
-                    color = when {
-                        uiState.isListening -> VasuCyan
-                        uiState.isThinking -> VasuWarning
-                        uiState.isSpeaking -> VasuPurple
-                        uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
-                        uiState.wakeWordState == WakeWordState.DETECTED -> VasuGreen
-                        uiState.wakeWordState == WakeWordState.MODEL_NOT_AVAILABLE -> VasuError
-                        else -> VasuTextMuted
-                    },
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Last Message Card — hyper professional 16.dp, elevation 3.dp
-                if (uiState.lastMessage.isNotBlank()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(0.9f),
-                        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
-                    ) {
-                        Text(
-                            text = uiState.lastMessage,
-                            modifier = Modifier.padding(16.dp),
-                            color = VasuTextPrimary,
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Wake Word Status — hyper professional 16.dp
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .clickable { viewModel.toggleWakeWord() },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.12f) else VasuDarkCard
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.25f) else VasuCyan.copy(alpha = 0.12f))
+            // HUD Elements: Wake Word Status
+            VasuCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.toggleWakeWord() },
+                containerColor = if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.12f) else VasuDarkCard,
+                borderColor = if (uiState.isWakeWordActive) VasuGreen else VasuCyan,
+                borderAlpha = if (uiState.isWakeWordActive) 0.25f else 0.12f
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = if (uiState.isWakeWordActive) Icons.Default.Hearing else Icons.Default.HearingDisabled,
-                                contentDescription = "Wake Word",
-                                tint = if (uiState.isWakeWordActive) VasuGreen else VasuTextSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Wake Word",
-                                    color = VasuTextPrimary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = if (uiState.isWakeWordActive) "\"Hello Vasu\" listening" else "Tap to enable",
-                                    color = VasuTextMuted,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = uiState.isWakeWordActive,
-                            onCheckedChange = { viewModel.toggleWakeWord() },
-                            modifier = Modifier.scale(0.8f),
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = VasuDarkBg,
-                                checkedTrackColor = VasuGreen,
-                                uncheckedThumbColor = VasuTextMuted,
-                                uncheckedTrackColor = VasuDarkSurface
-                            )
+                        Icon(
+                            imageVector = if (uiState.isWakeWordActive) Icons.Default.Hearing else Icons.Default.HearingDisabled,
+                            contentDescription = "Wake Word",
+                            tint = if (uiState.isWakeWordActive) VasuGreen else VasuTextSecondary,
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Wake Word",
+                                color = VasuTextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (uiState.isWakeWordActive) "\"Hello Vasu\" listening" else "Tap to enable",
+                                color = VasuTextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
                     }
+                    Switch(
+                        checked = uiState.isWakeWordActive,
+                        onCheckedChange = { viewModel.toggleWakeWord() },
+                        modifier = Modifier.scale(0.8f),
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = VasuDarkBg,
+                            checkedTrackColor = VasuGreen,
+                            uncheckedThumbColor = VasuTextMuted,
+                            uncheckedTrackColor = VasuDarkSurface
+                        )
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            // Grid of Actions — hyper professional 2-col grid, 16.dp spacing, 120dp cards, crisp icons
+            // ORB CENTER - Primary Visual Focus
+            Box(
+                modifier = Modifier
+                    .size(160.dp)
+                    .clip(CircleShape)
+                    .background(
+                        animateColorAsState(
+                            when {
+                                uiState.isListening -> VasuCyan.copy(alpha = 0.2f)
+                                uiState.isSpeaking -> VasuPurple.copy(alpha = 0.2f)
+                                uiState.isThinking -> VasuWarning.copy(alpha = 0.2f)
+                                uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen.copy(alpha = 0.1f)
+                                else -> VasuDarkCard
+                            }
+                        ).value
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "VASU Orb",
+                    modifier = Modifier.size(80.dp),
+                    tint = when {
+                        uiState.isListening -> VasuCyan
+                        uiState.isSpeaking -> VasuPurple
+                        uiState.isThinking -> VasuWarning
+                        uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
+                        else -> VasuTextSecondary
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Status Text
+            Text(
+                text = when {
+                    uiState.isListening -> "Listening..."
+                    uiState.isThinking -> "Thinking..."
+                    uiState.isSpeaking -> "Speaking..."
+                    uiState.wakeWordState == WakeWordState.LISTENING -> "Say \"Hello Vasu\""
+                    uiState.wakeWordState == WakeWordState.DETECTED -> "Wake word detected!"
+                    uiState.wakeWordState == WakeWordState.MODEL_NOT_AVAILABLE -> "Wake word unavailable"
+                    else -> "Ready"
+                },
+                color = when {
+                    uiState.isListening -> VasuCyan
+                    uiState.isThinking -> VasuWarning
+                    uiState.isSpeaking -> VasuPurple
+                    uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
+                    uiState.wakeWordState == WakeWordState.DETECTED -> VasuGreen
+                    uiState.wakeWordState == WakeWordState.MODEL_NOT_AVAILABLE -> VasuError
+                    else -> VasuTextMuted
+                },
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Professional Grid
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
+                    .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 20.dp)
@@ -338,20 +297,14 @@ fun HomeGridButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    VasuCard(
         modifier = modifier
             .fillMaxWidth()
             .height(120.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
+            .clickable(onClick = onClick)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
