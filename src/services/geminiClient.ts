@@ -251,7 +251,7 @@ export class GeminiClient {
         try {
           console.log(`[GeminiClient] Trying TTS with model: ${model}, key prefix: ${trimmedKey.substring(0, 10)}...`);
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
           const response = await fetch(url, {
             method: 'POST',
@@ -287,14 +287,15 @@ export class GeminiClient {
             const errorText = await response.text().catch(() => 'Could not read error body');
             console.warn(`[GeminiClient] TTS ${model} returned ${response.status}: ${errorText.substring(0, 200)}`);
             if (response.status === 429) {
-              recordClientModelCooldown('tts', 5);
-              recordClientModelCooldown(model, 5);
+              // Only cooldown the specific rate-limited model, NOT global 'tts'
+              recordClientModelCooldown(model, 10);
+              console.warn(`[GeminiClient] TTS ${model} rate-limited, 10s cooldown for this model only`);
               // Don't break — try next model
               continue;
             }
           }
         } catch (e: any) {
-          const errMsg = e?.name === 'AbortError' ? 'Timeout after 5s' : e?.message || String(e);
+          const errMsg = e?.name === 'AbortError' ? 'Timeout after 10s' : e?.message || String(e);
           console.warn(`[GeminiClient] TTS ${model} failed: ${errMsg}`);
           continue;
         }

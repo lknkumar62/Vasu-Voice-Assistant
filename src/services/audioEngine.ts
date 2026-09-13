@@ -993,9 +993,112 @@ class AudioEngine {
       return;
     }
 
-    // ═══ MAYA-STYLE: Gemini Live WebSocket TTS (primary path) ═══
-    // Send text directly to Gemini BidiGenerateContent WebSocket,
-    // receive streaming 24kHz PCM chunks → play via pcmAudioPlayer
+    // ═══ PRIMARY: Gemini REST TTS (most reliable) ═══
+    if (!options.preferLocal) {
+      try {
+        const activeKey = options.apiKey || this.getApiKey();
+        if (activeKey && activeKey.length > 5) {
+          console.log('[TTS] Provider: Gemini REST | Voice: Kore | Model: gemini-3.1-flash-tts-preview | Format: 24kHz WAV');
+          const audioUrl = await GeminiClient.generateTTSAudio(cleanText, activeKey);
+
+          if (audioUrl) {
+            const ctx = this.getAudioContext();
+            if (ctx.state === 'suspended') {
+              try {
+                await ctx.resume();
+              } catch (_) {}
+            }
+
+            let playedViaWebAudio = false;
+            try {
+              const resp = await fetch(audioUrl);
+              const arrayBuf = await resp.arrayBuffer();
+              const decodedBuffer = await ctx.decodeAudioData(arrayBuf);
+
+              this.transitionTo('SPEAKING');
+              options.onStart?.();
+
+              await new Promise<void>((res) => {
+                let finished = false;
+                const complete = () => {
+                  if (finished) return;
+                  finished = true;
+                  this.currentBufferSource = null;
+                  try {
+                    URL.revokeObjectURL(audioUrl);
+                  } catch (_) {}
+                  this.transitionTo('IDLE');
+                  options.onEnd?.();
+                  res();
+                };
+
+                const source = ctx.createBufferSource();
+                source.buffer = decodedBuffer;
+                source.connect(ctx.destination);
+                this.currentBufferSource = source;
+                source.onended = complete;
+                source.start(0);
+              });
+              playedViaWebAudio = true;
+            } catch (decodeErr) {
+              console.warn("[TTS] WebAudio decoding failed, attempting HTMLAudioElement fallback:", decodeErr);
+            }
+
+            if (playedViaWebAudio) {
+              return;
+            }
+
+            // Fallback to HTMLAudioElement
+            let playedViaAudioElement = false;
+            try {
+              const audio = new Audio(audioUrl);
+              this.currentAudioElement = audio;
+
+              await new Promise<void>((res, rej) => {
+                let finished = false;
+                const complete = () => {
+                  if (finished) return;
+                  finished = true;
+                  this.currentAudioElement = null;
+                  try {
+                    URL.revokeObjectURL(audioUrl);
+                  } catch (_) {}
+                  this.transitionTo('IDLE');
+                  options.onEnd?.();
+                  res();
+                };
+
+                audio.onended = complete;
+                audio.onerror = (e) => {
+                  console.warn("[TTS] Audio element error:", e);
+                  this.transitionTo('IDLE');
+                  rej(e);
+                };
+                audio.play().then(() => {
+                  this.transitionTo('SPEAKING');
+                  options.onStart?.();
+                }).catch((err) => {
+                  console.warn("[TTS] Audio play rejected:", err);
+                  this.transitionTo('IDLE');
+                  rej(err);
+                });
+              });
+              playedViaAudioElement = true;
+            } catch (audioElErr) {
+              console.warn("[TTS] HTMLAudioElement fallback failed:", audioElErr);
+            }
+
+            if (playedViaAudioElement) {
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[TTS] Gemini REST TTS failed:", e);
+      }
+    }
+
+    // ═══ SECONDARY: Gemini Live WebSocket TTS (streaming PCM) ═══
     if (!options.preferLocal) {
       try {
         const activeKey = options.apiKey || this.getApiKey();
@@ -1028,134 +1131,18 @@ class AudioEngine {
           return;
         }
       } catch (e) {
-        console.warn('[AudioEngine] Gemini Live WebSocket TTS failed, falling through:', e);
+        console.warn('[TTS] Gemini Live WebSocket TTS failed:', e);
       }
     }
 
-    // ═══ FALLBACK: Gemini REST TTS (request/response) ═══
-    if (!options.preferLocal) {
-      try {
-        const activeKey = options.apiKey || this.getApiKey();
-        console.log('[TTS] Provider: Gemini REST | Voice: Kore | Model: gemini-3.1-flash-tts-preview | Format: 24kHz WAV');
-        const audioUrl = await GeminiClient.generateTTSAudio(cleanText, activeKey);
-
-        if (audioUrl) {
-          const ctx = this.getAudioContext();
-          if (ctx.state === 'suspended') {
-            try {
-              await ctx.resume();
-            } catch (_) {}
-          }
-
-          let playedViaWebAudio = false;
-          try {
-            const resp = await fetch(audioUrl);
-            const arrayBuf = await resp.arrayBuffer();
-            const decodedBuffer = await ctx.decodeAudioData(arrayBuf);
-
-            this.transitionTo('SPEAKING');
-            options.onStart?.();
-
-            await new Promise<void>((res) => {
-              let finished = false;
-              const complete = () => {
-                if (finished) return;
-                finished = true;
-                this.currentBufferSource = null;
-                try {
-                  URL.revokeObjectURL(audioUrl);
-                } catch (_) {}
-                this.transitionTo('IDLE');
-                options.onEnd?.();
-                res();
-              };
-
-              const source = ctx.createBufferSource();
-              source.buffer = decodedBuffer;
-              source.connect(ctx.destination);
-              this.currentBufferSource = source;
-              source.onended = complete;
-              source.start(0);
-            });
-            playedViaWebAudio = true;
-          } catch (decodeErr) {
-            console.warn("WebAudio decoding failed, attempting HTMLAudioElement fallback:", decodeErr);
-          }
-
-          if (playedViaWebAudio) {
-            return;
-          }
-
-          // Fallback to HTMLAudioElement
-          let playedViaAudioElement = false;
-          try {
-            const audio = new Audio(audioUrl);
-            this.currentAudioElement = audio;
-
-            await new Promise<void>((res, rej) => {
-              let finished = false;
-              const complete = () => {
-                if (finished) return;
-                finished = true;
-                this.currentAudioElement = null;
-                try {
-                  URL.revokeObjectURL(audioUrl);
-                } catch (_) {}
-                this.transitionTo('IDLE');
-                options.onEnd?.();
-                res();
-              };
-
-              audio.onended = complete;
-              audio.onerror = (e) => {
-                console.warn("Kore audio element error:", e);
-                this.transitionTo('IDLE');
-                rej(e);
-              };
-              audio.play().then(() => {
-                this.transitionTo('SPEAKING');
-                options.onStart?.();
-              }).catch((err) => {
-                console.warn("Kore audio play rejected:", err);
-                this.transitionTo('IDLE');
-                rej(err);
-              });
-            });
-            playedViaAudioElement = true;
-          } catch (audioElErr) {
-            console.warn("HTMLAudioElement fallback failed, falling through to speakNative:", audioElErr);
-          }
-
-          if (playedViaAudioElement) {
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn("Gemini Kore voice generation failed, falling back to offline speech:", e);
-      }
-    }
-
-    // Offline Fallback: Try Capacitor Native TTS first (works on Android even without speechSynthesis)
-    const capacitorSuccess = await this.speakWithCapacitorTTS(cleanText, {
-      speed: options.speed,
-      pitch: options.pitch,
-      volume: options.volume,
-      onStart: options.onStart,
-      onEnd: options.onEnd,
-    });
-    if (capacitorSuccess) return;
-
-    // Final Fallback: Browser Web Speech API (only works in browsers, not Android WebView)
-    if (!this.synth) {
-      console.warn('[AudioEngine] All TTS methods failed — playing chime as last resort');
-      this.transitionTo('SPEAKING');
-      options.onStart?.();
-      try { await this.playSuccessChime(); } catch (_) {}
-      this.transitionTo('IDLE');
-      options.onEnd?.();
-      return;
-    }
-    await this.speakNative(cleanText, options);
+    // ═══ NO LOCAL TTS FALLBACK — Log error and play chime ═══
+    console.error('[TTS] Gemini TTS unavailable! API key present:', !!(options.apiKey || this.getApiKey()));
+    console.error('[TTS] To fix: ensure Gemini API key is configured and network is available');
+    this.transitionTo('SPEAKING');
+    options.onStart?.();
+    try { await this.playSuccessChime(); } catch (_) {}
+    this.transitionTo('IDLE');
+    options.onEnd?.();
   }
 
   /**
