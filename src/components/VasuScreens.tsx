@@ -30,10 +30,11 @@ const CircleButton = ({ children, onClick }: { children: React.ReactNode; onClic
 );
 
 const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20 rounded-[18px] shadow-[inset_0_1px_rgba(255,255,255,.03)] ${className}`}>
+  <div className={`bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20 rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.3),inset_0_1px_rgba(255,255,255,.03)] ${className}`}>
     {children}
   </div>
 );
+
 
 const IconBox = ({ children }: { children: React.ReactNode }) => (
   <div className="w-10 h-10 rounded-xl bg-[#008CFF]/10 border border-[#008CFF]/25 text-[#008CFF] flex items-center justify-center">
@@ -138,7 +139,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       )}
 
       {/* Maya-identical 2-col nav grid — navigation modules only (device shortcuts moved to Tools/Auto) */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         {navModules.map((item) => {
           const Icon = item.icon as any;
           return (
@@ -152,17 +153,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   onSelectTab?.(item.tab);
                 }
               }}
-              className="min-h-[112px] rounded-[16px] p-4 bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20 hover:border-[#008CFF]/40 flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition shadow-[0_4px_12px_rgba(0,0,0,0.25)]"
+              className="min-h-[112px] rounded-[16px] p-4 bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20 hover:border-[#008CFF]/40 flex flex-col items-center justify-center gap-3 active:scale-[0.98] transition shadow-[0_4px_12px_rgba(0,0,0,0.25)]"
             >
               <div className="w-10 h-10 rounded-xl bg-[#008CFF]/10 border border-[#008CFF]/25 text-[#008CFF] flex items-center justify-center">
                 <Icon size={22} />
               </div>
-              <span className="text-[13px] font-medium text-[#F4F8FF]">{item.label}</span>
-              <span className="text-[10px] text-[#7895B8] text-center leading-tight">{item.desc}</span>
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[13px] font-semibold text-[#F4F8FF]">{item.label}</span>
+                <span className="text-[10px] text-[#7895B8] text-center leading-tight opacity-80">{item.desc}</span>
+              </div>
             </button>
           );
         })}
       </div>
+
 
       <Card className="mt-4 p-4 flex items-center gap-4">
         <div className="w-12 h-12 rounded-full bg-[#008CFF]/10 border border-[#008CFF]/30 flex items-center justify-center"><Lightbulb size={26} className="text-[#008CFF]" /></div>
@@ -366,81 +370,82 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           </div>
 
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-3 space-y-3">
-            {messages.length === 0 && !isListening && !liveVoiceTranscript && (
-              <div className="py-6 text-center">
-                <div className="w-16 h-16 mx-auto rounded-full bg-[#008CFF]/10 border border-[#008CFF]/30 flex items-center justify-center"><Bot size={31} className="text-[#008CFF]" /></div>
-                <h2 className="mt-3 font-bold">Hello, User 👋</h2>
-                <p className="text-xs text-[#7895B8]">I'm VASU, your AI companion.</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-5">
-                  {suggestions.map(([label, command, Icon]) => (
-                    <button key={label} type="button" onClick={() => onSendMessage(command)} className="text-left p-3 rounded-xl bg-[#061827] border border-[#008CFF]/15 hover:border-[#008CFF]/40">
-                      <Icon size={18} className="text-[#008CFF] mb-2" />
-                      <span className="text-xs">{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+           <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+             {messages.length === 0 && !isListening && !liveVoiceTranscript && (
+               <div className="py-10 text-center">
+                 <div className="w-20 h-20 mx-auto rounded-full bg-[#008CFF]/10 border border-[#008CFF]/30 flex items-center justify-center mb-4 shadow-inner"><Bot size={38} className="text-[#008CFF]" /></div>
+                 <h2 className="text-2xl font-bold">Hello, User 👋</h2>
+                 <p className="text-sm text-[#7895B8] mt-1">I'm VASU, your AI companion. How can I help you today?</p>
+                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-8">
+                   {suggestions.map(([label, command, Icon]) => (
+                     <button key={label} type="button" onClick={() => onSendMessage(command)} className="text-left p-4 rounded-2xl bg-[#061827] border border-[#008CFF]/15 hover:border-[#008CFF]/40 active:scale-95 transition-all group">
+                       <Icon size={20} className="text-[#008CFF] mb-2 group-hover:scale-110 transition-transform" />
+                       <span className="text-xs font-medium block">{label}</span>
+                     </button>
+                   ))}
+                 </div>
+               </div>
+             )}
+ 
+             {messages.map((msg) => {
+               const isUser = msg.sender === "user";
+               const isSystem = msg.sender === "system";
+               if (isSystem) {
+                 return (
+                   <div key={msg.id} className="text-center text-[11px] text-[#7895B8] py-2 flex items-center justify-center gap-1.5">
+                     <AlertCircle size={14} className="text-[#008CFF]" />{msg.text}
+                   </div>
+                 );
+               }
+               return (
+                 <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                   <div className={`max-w-[85%] rounded-2xl p-3.5 shadow-sm ${isUser ? "bg-[#008CFF] text-white border border-[#008CFF] rounded-tr-none" : "bg-[#061827] border border-[#008CFF]/20 text-[#F4F8FF] rounded-tl-none"}`}>
+                     {msg.toolCall && (
+                       <div className="mb-2 p-2 bg-black/20 rounded-lg text-[10px] font-mono border border-white/5 flex items-center gap-2">
+                         <Terminal size={12} className="text-[#00C8FF]" />
+                         <span>Tool: {msg.toolCall.tool} <span className="text-[#7895B8]">({msg.toolCall.status})</span></span>
+                       </div>
+                     )}
+                     <div className="whitespace-pre-wrap text-[14px] leading-relaxed">{msg.text}</div>
+                     {!isUser && (
+                       <div className="flex gap-4 mt-3 pt-2 border-t border-white/10">
+                         <button type="button" onClick={() => copy(msg.id, msg.text)} className="text-[#7895B8] hover:text-white transition-colors">
+                           {copied === msg.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                         </button>
+                         <button type="button" onClick={() => speak(msg.id, msg.text)} className={`text-[#7895B8] ${playingMsgId === msg.id ? "text-[#00C8FF] animate-pulse" : "hover:text-white transition-colors"}`}>
+                           {playingMsgId === msg.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                         </button>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               );
+             })}
+ 
+             {liveVoiceTranscript && (
+               <div className="flex justify-end animate-in fade-in zoom-in-95 duration-200">
+                 <div className="max-w-[85%] bg-[#008CFF]/20 border border-[#008CFF]/40 rounded-2xl rounded-tr-none p-3.5 text-sm text-[#F4F8FF] shadow-lg">
+                   <div className="flex items-center gap-1.5 mb-1 text-[#00C8FF] text-[11px] font-bold uppercase tracking-wider">
+                     <span className="w-2 h-2 rounded-full bg-[#00C8FF] animate-ping" />
+                     <Mic className="w-3.5 h-3.5" /><span>Listening...</span>
+                   </div>
+                   <p className="font-medium italic">"{liveVoiceTranscript}"</p>
+                 </div>
+               </div>
+             )}
+ 
+             {isLoading && !isListening && (
+               <div className="flex justify-start items-center">
+                 <div className="bg-[#061827] border border-[#008CFF]/20 rounded-2xl rounded-tl-none p-3 text-xs text-[#00C8FF] font-mono flex items-center gap-2 shadow-sm">
+                   <span className="w-2 h-2 rounded-full bg-[#00C8FF] animate-bounce" />
+                   <span className="opacity-80">VASU is thinking...</span>
+                 </div>
+               </div>
+             )}
+ 
+             <div ref={endRef} />
+           </div>
 
-            {messages.map((msg) => {
-              const isUser = msg.sender === "user";
-              const isSystem = msg.sender === "system";
-              if (isSystem) {
-                return (
-                  <div key={msg.id} className="text-center text-[10px] text-[#7895B8]">
-                    <AlertCircle size={13} className="inline mr-1" />{msg.text}
-                  </div>
-                );
-              }
-              return (
-                <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[88%] rounded-2xl p-3 ${isUser ? "bg-[#008CFF]/20 border border-[#008CFF]/30 rounded-tr-sm" : "bg-[#061827] border border-[#008CFF]/15 rounded-tl-sm"}`}>
-                    {msg.toolCall && (
-                      <div className="mb-2 p-2 bg-black/30 rounded-lg text-[10px]">
-                        <Terminal size={12} className="inline text-[#008CFF] mr-1" />
-                        Tool: {msg.toolCall.tool} · {msg.toolCall.status}
-                      </div>
-                    )}
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.text}</div>
-                    {!isUser && (
-                      <div className="flex gap-4 mt-3 pt-2 border-t border-white/5">
-                        <button type="button" onClick={() => copy(msg.id, msg.text)} className="text-[#7895B8] hover:text-[#00C8FF]">
-                          {copied === msg.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                        </button>
-                        <button type="button" onClick={() => speak(msg.id, msg.text)} className={`text-[#7895B8] ${playingMsgId === msg.id ? "text-[#008CFF] animate-pulse" : "hover:text-[#00C8FF]"}`}>
-                          {playingMsgId === msg.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {liveVoiceTranscript && (
-              <div className="flex justify-end">
-                <div className="max-w-[85%] bg-[#008CFF]/20 border border-[#008CFF]/30 rounded-2xl rounded-tr-sm p-3 text-sm text-[#F4F8FF]">
-                  <div className="flex items-center gap-1.5 mb-1 text-[#008CFF] text-[11px] font-mono">
-                    <span className="w-2 h-2 rounded-full bg-[#008CFF] animate-ping" />
-                    <Mic className="w-3.5 h-3.5" /><span>Listening...</span>
-                  </div>
-                  <p className="font-medium">"{liveVoiceTranscript}"</p>
-                </div>
-              </div>
-            )}
-
-            {isLoading && !isListening && (
-              <div className="flex justify-start items-center">
-                <div className="bg-[#061827] border border-[#008CFF]/10 rounded-2xl rounded-tl-sm p-3 text-xs text-[#008CFF] font-mono flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#008CFF] animate-ping" />
-                  <span>VASU is thinking...</span>
-                </div>
-              </div>
-            )}
-
-            <div ref={endRef} />
-          </div>
 
           <div className="p-2 border-t border-[#008CFF]/15">
             <div className="flex gap-2 overflow-x-auto mb-2">
@@ -534,10 +539,11 @@ export const ToolsView: React.FC<ToolsViewProps> = ({ onExecuteTool }) => {
         ))}
       </div>
 
-      <Card className="p-5 mb-5 relative overflow-hidden">
-        <Sparkles size={65} className="absolute right-6 top-5 text-[#008CFF] opacity-30" />
-        <h2 className="text-xl font-bold">Smart Tools for a Smarter Tomorrow</h2>
-        <p className="text-sm text-[#7895B8] mt-1 max-w-xl">More than just an assistant — VASU gives you powerful tools to make your life easier.</p>
+      <Card className="p-6 mb-6 relative overflow-hidden group transition-all duration-500 hover:border-[#008CFF]/40 shadow-xl">
+        <Sparkles size={80} className="absolute -right-4 -top-4 text-[#008CFF] opacity-20 group-hover:opacity-40 transition-opacity duration-700" />
+        <h2 className="text-2xl font-bold text-white tracking-tight">Smart Tools for a Smarter Tomorrow</h2>
+        <p className="text-sm text-[#7895B8] mt-2 max-w-xl leading-relaxed">More than just an assistant — VASU gives you powerful tools to make your life easier.</p>
+        <div className="absolute bottom-0 right-0 w-32 h-32 bg-[#008CFF]/5 blur-3xl rounded-full" />
       </Card>
 
       <div className="space-y-6">

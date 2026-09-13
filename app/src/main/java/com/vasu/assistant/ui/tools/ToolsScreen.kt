@@ -1,6 +1,7 @@
 package com.vasu.assistant.ui.tools
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -66,42 +67,49 @@ fun ToolsScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
-            // Search Bar — dynamic count like web
+            // Search Bar — hyper professional 16.dp rounded, spacing 16.dp
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = viewModel::setSearchQuery,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                placeholder = { Text("Search ${uiState.totalCount} tools...", color = VasuTextMuted) },
+                    .padding(vertical = 16.dp),
+                placeholder = { Text("Search ${uiState.totalCount} tools...", color = VasuTextMuted, fontSize = 13.sp) },
                 leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = VasuCyan)
+                    Box(
+                        modifier = Modifier.size(32.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(16.dp))
+                    }
                 },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = VasuTextMuted)
+                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = VasuTextMuted, modifier = Modifier.size(18.dp))
                         }
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = VasuTextPrimary,
                     unfocusedTextColor = VasuTextPrimary,
                     focusedBorderColor = VasuCyan,
-                    unfocusedBorderColor = VasuDarkCard,
-                    focusedContainerColor = VasuDarkSurface,
-                    unfocusedContainerColor = VasuDarkSurface
-                )
+                    unfocusedBorderColor = VasuCyan.copy(alpha = 0.15f),
+                    focusedContainerColor = VasuDarkCard,
+                    unfocusedContainerColor = VasuDarkCard,
+                    cursorColor = VasuCyan
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
             )
 
-            // Category Chips Row
+            // Category Chips Row — spacing 16.dp
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ToolsViewModel.CATEGORIES.forEach { (catKey, catLabel) ->
@@ -125,47 +133,69 @@ fun ToolsScreen(
                 }
             }
 
-            // Hero card — parity with web VasuScreens.tsx:543-547 (Sparkles Smart Tools) — Vasu branded
+            // Hero card — hyper professional 16.dp rounded, spacing 16.dp, elevation 4.dp, crisp icons
             Card(
                 colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.15f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = 16.dp)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(end = 48.dp)) {
-                        Text(
-                            text = "Smart Tools for a Smarter Tomorrow",
-                            color = VasuTextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            lineHeight = 20.sp
-                        )
+                    Column(modifier = Modifier.fillMaxWidth().padding(end = 56.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(VasuCyan.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(16.dp))
+                            }
+                            Text(
+                                text = "Smart Tools for a Smarter Tomorrow",
+                                color = VasuTextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                lineHeight = 20.sp
+                            )
+                        }
                         Text(
                             text = "More than just an assistant — VASU gives you powerful tools to make your life easier.",
-                            color = VasuTextMuted,
+                            color = VasuTextSecondary,
                             fontSize = 12.sp,
                             lineHeight = 16.sp,
-                            modifier = Modifier.padding(top = 6.dp)
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(VasuCyan.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                                Text("${uiState.totalCount} tools", color = VasuCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(VasuDarkElevated).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                                Text("Hyper Professional", color = VasuTextMuted, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                    Box(
+                        modifier = Modifier.align(Alignment.TopEnd).size(48.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.08f)).border(1.dp, VasuCyan.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = VasuCyan.copy(alpha = 0.85f),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = null,
-                        tint = VasuCyan.copy(alpha = 0.3f),
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(42.dp)
-                    )
                 }
             }
 
-            // Tools List
+            // Tools List — hyper professional spacing 16.dp
             if (uiState.filteredTools.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -173,16 +203,22 @@ fun ToolsScreen(
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No tools found matching '${uiState.searchQuery}'",
-                        color = VasuTextMuted,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(VasuDarkCard).border(1.dp, VasuCyan.copy(alpha = 0.15f), CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = VasuTextMuted, modifier = Modifier.size(24.dp))
+                        }
+                        Text(
+                            text = "No tools found matching '${uiState.searchQuery}'",
+                            color = VasuTextMuted,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     items(uiState.filteredTools, key = { it.name }) { tool ->
@@ -384,12 +420,14 @@ fun ToolCardItem(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.10f))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp)
+                .padding(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -398,69 +436,91 @@ fun ToolCardItem(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = getToolIcon(tool.name),
-                        contentDescription = null,
-                        tint = VasuCyan,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = tool.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = VasuCyan,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
+                    Box(
+                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(VasuCyan.copy(alpha = 0.12f)).border(1.dp, VasuCyan.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = getToolIcon(tool.name),
+                            contentDescription = null,
+                            tint = VasuCyan,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = tool.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = VasuCyan,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = tool.requiredRole.displayName,
+                            color = VasuTextMuted,
+                            fontSize = 10.sp,
+                            lineHeight = 12.sp
+                        )
+                    }
                 }
                 RiskBadge(riskLevel = tool.riskLevel)
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
 
             Text(
                 text = tool.description,
                 style = MaterialTheme.typography.bodySmall,
-                color = VasuTextPrimary,
-                lineHeight = 16.sp
+                color = VasuTextSecondary,
+                lineHeight = 17.sp,
+                fontSize = 12.sp,
+                maxLines = 3
             )
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${tool.parameters.size} params • Role: ${tool.requiredRole.displayName}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = VasuTextMuted,
-                    fontSize = 11.sp
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Tune, contentDescription = null, tint = VasuTextMuted, modifier = Modifier.size(12.dp))
+                    Text(
+                        text = "${tool.parameters.size} params",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VasuTextMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(
                         onClick = onClick,
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuTextSecondary)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuTextSecondary),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.18f))
                     ) {
-                        Text("Info", fontSize = 11.sp)
+                        Text("Info", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
 
                     Button(
                         onClick = onTest,
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = VasuCyan,
                             contentColor = VasuDarkBg
-                        )
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                     ) {
-                        Text("TEST", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("TEST", fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.5.sp)
                     }
                 }
             }

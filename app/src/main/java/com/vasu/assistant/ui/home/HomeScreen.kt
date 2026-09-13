@@ -3,6 +3,7 @@ package com.vasu.assistant.ui.home
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -214,19 +215,21 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Last Message Card
+                // Last Message Card — hyper professional 16.dp, elevation 3.dp
                 if (uiState.lastMessage.isNotBlank()) {
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f),
+                        modifier = Modifier.fillMaxWidth(0.9f),
                         colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
                     ) {
                         Text(
                             text = uiState.lastMessage,
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(16.dp),
                             color = VasuTextPrimary,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
                             textAlign = TextAlign.Center,
                             maxLines = 2
                         )
@@ -235,21 +238,22 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Wake Word Status
+                // Wake Word Status — hyper professional 16.dp
                 Card(
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
                         .clickable { viewModel.toggleWakeWord() },
                     colors = CardDefaults.cardColors(
-                        containerColor = if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.15f) else VasuDarkCard
+                        containerColor = if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.12f) else VasuDarkCard
                     ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = if (uiState.isWakeWordActive) CardDefaults.outlinedCardBorder() else null
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.25f) else VasuCyan.copy(alpha = 0.12f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -295,15 +299,15 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Grid of Actions
+            // Grid of Actions — hyper professional 2-col grid, 16.dp spacing, 120dp cards, crisp icons
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 20.dp)
             ) {
                 items(gridItems) { item ->
@@ -338,38 +342,47 @@ fun HomeGridButton(
         modifier = modifier
             .fillMaxWidth()
             .height(120.dp)
-            .clickable(onClick = onClick)
-            .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp)),
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = item.label,
-                modifier = Modifier.size(32.dp),
-                tint = item.color
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(item.color.copy(alpha = 0.12f)).border(1.dp, item.color.copy(alpha = 0.18f), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = item.label,
+                    modifier = Modifier.size(24.dp),
+                    tint = item.color
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = item.label,
                 color = VasuTextPrimary,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                letterSpacing = 0.2.sp
             )
             if (item.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = item.description,
-                    color = VasuTextMuted,
+                    color = VasuTextSecondary,
                     fontSize = 10.sp,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    lineHeight = 12.sp
                 )
             }
         }

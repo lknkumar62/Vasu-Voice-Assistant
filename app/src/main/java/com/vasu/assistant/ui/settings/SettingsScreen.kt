@@ -1,7 +1,11 @@
 package com.vasu.assistant.ui.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -11,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -21,7 +26,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.network.NetworkState
 import com.vasu.assistant.core.settings.VasuSettings
@@ -403,45 +408,154 @@ fun SettingsScreen(
                 )
             }
 
-            // Vasu Voice Selection — 43 voices (Maya parity, Vasu branding)
+            // Vasu Voice Selection — 43 voices (Maya parity, Vasu branding) — Hyper Professional Material3
             SettingsSection(title = "VASU VOICE (43)") {
-                var vasuVoiceMenu by remember { mutableStateOf(false) }
                 SettingsCard {
-                    Text("Selected Vasu Voice", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(8.dp))
-                    Box {
-                        OutlinedButton(onClick = { vasuVoiceMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(state.geminiTtsVoice.ifBlank { "Kore (default)" }, color = VasuCyan)
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VasuCyan)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(VasuCyan.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.RecordVoiceOver, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(20.dp))
                         }
-                        DropdownMenu(expanded = vasuVoiceMenu, onDismissRequest = { vasuVoiceMenu = false }) {
-                            // Show all 43 Vasu voices grouped (personas: friday/warm/venom)
-                            Text("— Friday (13) —", color = VasuTextMuted, modifier = Modifier.padding(8.dp))
-                            VasuSettings.MAYA_VOICES.filter { it.startsWith("friday") }.forEach { v ->
-                                DropdownMenuItem(
-                                    text = { Text(v) },
-                                    onClick = { viewModel.setGeminiTtsVoice(v.substringAfter("_")); vasuVoiceMenu = false }
-                                )
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Selected Vasu Voice", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Same engine as Maya — 43 studio voices", color = VasuTextSecondary, fontSize = 11.sp)
+                        }
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(VasuCyan.copy(alpha = 0.15f)).border(1.dp, VasuCyan.copy(alpha = 0.3f), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("43", color = VasuCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    var vasuVoiceExpanded by remember { mutableStateOf(false) }
+                    val voiceTraits = remember {
+                        mapOf(
+                            "Aoede" to "Breezy", "Autonoe" to "Bright", "Callirrhoe" to "Easy-going", "Despina" to "Smooth",
+                            "Erinome" to "Clear", "Gacrux" to "Mature", "Kore" to "Firm", "Laomedeia" to "Upbeat",
+                            "Leda" to "Youthful", "Pulcherrima" to "Forward", "Sulafat" to "Warm", "Vindemiatrix" to "Gentle", "Zephyr" to "Bright",
+                            "Achernar" to "Deep", "Achird" to "Brisk", "Algenib" to "Gravelly", "Algieba" to "Smooth", "Alnilam" to "Firm",
+                            "Charon" to "Informative", "Enceladus" to "Breathy", "Fenrir" to "Excitable", "Iapetus" to "Clear", "Orus" to "Firm",
+                            "Puck" to "Upbeat", "Rasalgethi" to "Gravelly", "Sadachbia" to "Even", "Sadaltager" to "Knowledgeable", "Schedar" to "Even-tempered", "Umbriel" to "Easy-going", "Zubenelgenubi" to "Casual"
+                        )
+                    }
+                    val selectedSuffix = state.geminiTtsVoice.ifBlank { "Kore" }
+                    val selectedFull = VasuSettings.MAYA_VOICES.firstOrNull { it.substringAfter("_") == selectedSuffix } ?: "maya_Kore"
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { vasuVoiceExpanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuCyan),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.25f)),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Mic, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(14.dp))
                             }
-                            Text("— Warm (13) —", color = VasuTextMuted, modifier = Modifier.padding(8.dp))
-                            VasuSettings.MAYA_VOICES.filter { it.startsWith("maya") }.forEach { v ->
-                                DropdownMenuItem(
-                                    text = { Text(v) },
-                                    onClick = { viewModel.setGeminiTtsVoice(v.substringAfter("_")); vasuVoiceMenu = false }
-                                )
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                                Text(selectedFull, color = VasuTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                val trait = voiceTraits[selectedSuffix] ?: "Studio"
+                                val persona = if (selectedFull.startsWith("friday")) "Friday — sweet" else if (selectedFull.startsWith("venom")) "Venom — deep" else "Warm — warm"
+                                Text("$trait • $persona", color = VasuTextMuted, fontSize = 10.sp)
                             }
-                            Text("— Venom (17) —", color = VasuTextMuted, modifier = Modifier.padding(8.dp))
-                            VasuSettings.MAYA_VOICES.filter { it.startsWith("venom") }.forEach { v ->
-                                DropdownMenuItem(
-                                    text = { Text(v) },
-                                    onClick = { viewModel.setGeminiTtsVoice(v.substringAfter("_")); vasuVoiceMenu = false }
-                                )
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(20.dp))
+                        }
+                        DropdownMenu(
+                            expanded = vasuVoiceExpanded,
+                            onDismissRequest = { vasuVoiceExpanded = false },
+                            modifier = Modifier.background(VasuDarkElevated, RoundedCornerShape(16.dp)).border(1.dp, VasuCyan.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                        ) {
+                            Column(
+                                modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(vertical = 8.dp)
+                            ) {
+                                DropdownGroupHeader(title = "FRIDAY — SWEET", count = 13, color = VasuCyan)
+                                for (v in VasuSettings.MAYA_VOICES.filter { it.startsWith("friday") }) {
+                                    val suffix = v.substringAfter("_")
+                                    val isSelected = suffix == selectedSuffix
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                                Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(if (isSelected) VasuCyan.copy(alpha = 0.20f) else VasuTextMuted.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                                                    Text(suffix.take(1), color = if (isSelected) VasuCyan else VasuTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(v, color = if (isSelected) VasuCyan else VasuTextPrimary, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                                    Text(voiceTraits[suffix] ?: "Warm", color = VasuTextMuted, fontSize = 10.sp)
+                                                }
+                                                if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(16.dp))
+                                            }
+                                        },
+                                        onClick = { viewModel.setGeminiTtsVoice(suffix); vasuVoiceExpanded = false },
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                }
+                                HorizontalDivider(color = VasuCyan.copy(alpha = 0.10f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                                DropdownGroupHeader(title = "WARM — MAYA (WARM)", count = 13, color = VasuSuccess)
+                                for (v in VasuSettings.MAYA_VOICES.filter { it.startsWith("maya") }) {
+                                    val suffix = v.substringAfter("_")
+                                    val isSelected = suffix == selectedSuffix
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                                Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(if (isSelected) VasuSuccess.copy(alpha = 0.20f) else VasuTextMuted.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                                                    Text(suffix.take(1), color = if (isSelected) VasuSuccess else VasuTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(v, color = if (isSelected) VasuSuccess else VasuTextPrimary, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                                    Text(voiceTraits[suffix] ?: "Warm", color = VasuTextMuted, fontSize = 10.sp)
+                                                }
+                                                if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = VasuSuccess, modifier = Modifier.size(16.dp))
+                                            }
+                                        },
+                                        onClick = { viewModel.setGeminiTtsVoice(suffix); vasuVoiceExpanded = false },
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                }
+                                HorizontalDivider(color = VasuCyan.copy(alpha = 0.10f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                                DropdownGroupHeader(title = "VENOM — DEEP", count = 17, color = VasuPurple)
+                                for (v in VasuSettings.MAYA_VOICES.filter { it.startsWith("venom") }) {
+                                    val suffix = v.substringAfter("_")
+                                    val isSelected = suffix == selectedSuffix
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                                Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(if (isSelected) VasuPurple.copy(alpha = 0.20f) else VasuTextMuted.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                                                    Text(suffix.take(1), color = if (isSelected) VasuPurple else VasuTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(v, color = if (isSelected) VasuPurple else VasuTextPrimary, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                                    Text(voiceTraits[suffix] ?: "Deep", color = VasuTextMuted, fontSize = 10.sp)
+                                                }
+                                                if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = VasuPurple, modifier = Modifier.size(16.dp))
+                                            }
+                                        },
+                                        onClick = { viewModel.setGeminiTtsVoice(suffix); vasuVoiceExpanded = false },
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
                             }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text("Vasu's 43 voices: Friday (sweet), Warm (warm), Venom (deep). Home & Chat unchanged — all features same.", color = VasuTextMuted, fontSize = 12.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(VasuDarkElevated).border(1.dp, VasuCyan.copy(alpha = 0.10f), RoundedCornerShape(12.dp)).padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(16.dp))
+                        Text(
+                            "43 VASU voices — Friday (sweet, 13) · Warm (warm, 13 — maya_Kore etc.) · Venom (deep, 17). Same engine as Maya, same voice model names (maya_Kore, friday_Aoede…). Home & Chat logic unchanged — all features identical, only orb differs.",
+                            color = VasuTextSecondary, fontSize = 11.sp, lineHeight = 15.sp
+                        )
+                    }
                 }
             }
 
@@ -655,6 +769,21 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun DropdownGroupHeader(title: String, count: Int, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.10f)).border(1.dp, color.copy(alpha = 0.18f), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
+        Text(title, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
+        Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(color.copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+            Text("$count", color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
 private fun SliderCard(
     label: String,
     value: Float,
@@ -664,11 +793,15 @@ private fun SliderCard(
     SettingsCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(String.format("%.2f", value), color = VasuCyan, fontSize = 14.sp)
+            Text(label, color = VasuTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(VasuCyan.copy(alpha = 0.12f)).border(1.dp, VasuCyan.copy(alpha = 0.25f), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 3.dp)) {
+                Text(String.format("%.2f", value), color = VasuCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            }
         }
+        Spacer(Modifier.height(4.dp))
         Slider(
             value = value,
             onValueChange = onChange,
@@ -676,7 +809,7 @@ private fun SliderCard(
             colors = SliderDefaults.colors(
                 thumbColor = VasuCyan,
                 activeTrackColor = VasuCyan,
-                inactiveTrackColor = VasuTextMuted
+                inactiveTrackColor = VasuTextMuted.copy(alpha = 0.35f)
             )
         )
     }
@@ -685,8 +818,11 @@ private fun SliderCard(
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
     ) {
         Column(modifier = Modifier.padding(16.dp), content = content)
     }
@@ -700,17 +836,29 @@ private fun StatusRow(
     color: Color
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.12f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = color)
-            Column {
-                Text(label, color = color, fontSize = 14.sp)
-                detail?.let { Text(it, color = VasuTextMuted, fontSize = 12.sp) }
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape).background(color.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                detail?.let {
+                    Spacer(Modifier.height(3.dp))
+                    Text(it, color = VasuTextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+                }
             }
         }
     }
@@ -718,14 +866,18 @@ private fun StatusRow(
 
 @Composable
 fun SettingsSection(title: String, content: @Composable () -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(
-            text = title,
-            color = VasuCyan,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
+    Column(modifier = Modifier.padding(vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+            Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(VasuCyan))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = VasuCyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp
+            )
+        }
         content()
     }
 }
@@ -739,18 +891,28 @@ fun SettingsItem(
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = title, tint = VasuTextSecondary)
-            Column {
-                Text(title, color = VasuTextPrimary, fontSize = 16.sp)
-                Text(subtitle, color = VasuTextMuted, fontSize = 12.sp)
+            Box(
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(VasuCyan.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = title, tint = VasuCyan, modifier = Modifier.size(20.dp))
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = VasuTextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = VasuTextMuted, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -764,20 +926,39 @@ fun SettingsToggleItem(
     onToggle: (Boolean) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = title, tint = VasuTextSecondary)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, color = VasuTextPrimary, fontSize = 16.sp)
-                Text(subtitle, color = VasuTextMuted, fontSize = 12.sp)
+            Box(
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (enabled) VasuCyan.copy(alpha = 0.15f) else VasuTextMuted.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = title, tint = if (enabled) VasuCyan else VasuTextSecondary, modifier = Modifier.size(20.dp))
             }
-            Switch(checked = enabled, onCheckedChange = onToggle)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = VasuTextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = VasuDarkBg,
+                    checkedTrackColor = VasuCyan,
+                    checkedBorderColor = VasuCyan,
+                    uncheckedThumbColor = VasuTextMuted,
+                    uncheckedTrackColor = VasuDarkElevated,
+                    uncheckedBorderColor = VasuTextMuted.copy(alpha = 0.3f)
+                )
+            )
         }
     }
 }

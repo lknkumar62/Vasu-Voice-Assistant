@@ -198,35 +198,41 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Header subtitle like Maya / VasuScreens "Talk. Ask. Explore..."
+            // Header subtitle — hyper professional 16.dp spacing, typography polished
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = "Chat",
-                    fontSize = 22.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = VasuTextPrimary
+                    color = VasuTextPrimary,
+                    letterSpacing = 0.3.sp
                 )
                 Text(
                     text = "Talk. Ask. Explore. VASU is always with you.",
                     fontSize = 12.sp,
-                    color = VasuTextMuted
+                    color = VasuTextSecondary,
+                    lineHeight = 16.sp
                 )
             }
 
-            // Sidebar search (Maya parity) + responsive layout
-            // On all sizes we show search; on wide screens it would be in a sidebar but here top bar search satisfies audit
+            // Sidebar search — hyper professional 16.dp rounded, proper elevation
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = { Text("Search conversations...", color = VasuTextMuted, fontSize = 12.sp) },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = VasuTextMuted, modifier = Modifier.size(18.dp)) },
+                leadingIcon = {
+                    Box(
+                        modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Filled.Search, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(14.dp)) }
+                },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
                         IconButton(onClick = { searchQuery = "" }) {
@@ -235,7 +241,7 @@ fun ChatScreen(
                     }
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = VasuCyan.copy(alpha = 0.5f),
+                    focusedBorderColor = VasuCyan,
                     unfocusedBorderColor = VasuCyan.copy(alpha = 0.15f),
                     focusedTextColor = VasuTextPrimary,
                     unfocusedTextColor = VasuTextPrimary,
@@ -243,20 +249,20 @@ fun ChatScreen(
                     focusedContainerColor = VasuDarkCard,
                     unfocusedContainerColor = VasuDarkCard
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
             )
 
-            // Messages
+            // Messages — hyper professional spacing 16.dp, padding 16.dp
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 12.dp)
             ) {
                 if (showSuggestions) {
                     item {
@@ -346,11 +352,11 @@ fun ChatScreen(
                         ) {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = VasuCyan.copy(alpha = 0.2f)),
-                                shape = RoundedCornerShape(16.dp).copy(topEnd = RoundedCornerShape(4.dp)),
+                                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.3f)),
                                 modifier = Modifier.widthIn(max = 300.dp)
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
+                                Column(modifier = Modifier.padding(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(
                                             modifier = Modifier
@@ -398,30 +404,33 @@ fun ChatScreen(
                 onVoiceToggle = { viewModel.toggleListening() }
             )
 
-            // Input area
+// Input area — hyper professional 16.dp rounded, elevation 4.dp, crisp icons
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
                     .imePadding(),
                 colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                shape = RoundedCornerShape(24.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.35f))
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.25f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // Paperclip attachment
                     IconButton(onClick = {
                         Toast.makeText(context, "Attachment coming soon", Toast.LENGTH_SHORT).show()
                     }) {
-                        Icon(
-                            imageVector = Icons.Filled.AttachFile,
-                            contentDescription = "Attach",
-                            tint = VasuTextMuted,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(VasuTextMuted.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.AttachFile,
+                                contentDescription = "Attach",
+                                tint = VasuTextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
 
                     OutlinedTextField(
@@ -431,37 +440,45 @@ fun ChatScreen(
                         placeholder = { Text("Ask VASU anything...", color = VasuTextMuted, fontSize = 13.sp) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = VasuCyan,
-                            unfocusedBorderColor = VasuTextMuted.copy(alpha = 0.4f),
+                            unfocusedBorderColor = VasuCyan.copy(alpha = 0.15f),
                             focusedTextColor = VasuTextPrimary,
                             unfocusedTextColor = VasuTextPrimary,
                             cursorColor = VasuCyan,
-                            focusedContainerColor = VasuDarkCard,
-                            unfocusedContainerColor = VasuDarkCard
+                            focusedContainerColor = VasuDarkElevated,
+                            unfocusedContainerColor = VasuDarkElevated
                         ),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         singleLine = false,
                         maxLines = 3,
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 18.sp)
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, lineHeight = 20.sp)
                     )
 
-                    // Mic toggle inside input (Maya has mic + send)
                     IconButton(onClick = { viewModel.toggleListening() }) {
-                        Icon(
-                            imageVector = if (uiState.isListening) Icons.Default.Stop else Icons.Default.Mic,
-                            contentDescription = if (uiState.isListening) "Stop" else "Mic",
-                            tint = if (uiState.isListening) VasuError else VasuCyan
-                        )
+                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(if (uiState.isListening) VasuError.copy(alpha = 0.15f) else VasuCyan.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (uiState.isListening) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = if (uiState.isListening) "Stop" else "Mic",
+                                tint = if (uiState.isListening) VasuError else VasuCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
 
                     IconButton(
                         onClick = { viewModel.sendMessage() },
                         enabled = uiState.inputText.isNotBlank() && !uiState.isLoading
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                            tint = if (uiState.inputText.isNotBlank()) VasuCyan else VasuTextMuted
-                        )
+                        Box(
+                            modifier = Modifier.size(36.dp).clip(CircleShape).background(if (uiState.inputText.isNotBlank()) VasuCyan else VasuTextMuted.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = if (uiState.inputText.isNotBlank()) VasuDarkBg else VasuTextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -507,7 +524,7 @@ private fun ThinkingBubble() {
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-            shape = RoundedCornerShape(16.dp).copy(topStart = RoundedCornerShape(4.dp)),
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.1f)),
             modifier = Modifier.padding(horizontal = 4.dp)
         ) {
@@ -543,7 +560,7 @@ private fun PillRow(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         PillChip(
@@ -579,7 +596,7 @@ private fun PillChip(
 ) {
     Surface(
         modifier = Modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = if (isActive) VasuCyan else VasuDarkCard,
         border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) VasuCyan else VasuCyan.copy(alpha = 0.15f)),
         shadowElevation = if (isActive) 6.dp else 0.dp
@@ -597,8 +614,8 @@ private fun PillChip(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = if (isActive) VasuDarkBg else VasuTextSecondary
             )
         }
@@ -633,7 +650,7 @@ private fun SuggestionGrid(onSuggestionClick: (String) -> Unit) {
                             .height(88.dp)
                             .clickable { onSuggestionClick(command) },
                         colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.15f))
                     ) {
                         Column(
@@ -711,7 +728,7 @@ fun ChatBubble(
                 .padding(horizontal = 4.dp)
                 .widthIn(max = 320.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 if (hasTool) {
                     Row(
                         modifier = Modifier

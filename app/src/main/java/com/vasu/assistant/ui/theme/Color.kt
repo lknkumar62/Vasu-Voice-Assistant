@@ -2,10 +2,10 @@ package com.vasu.assistant.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// VASU Primary Colors
-val VasuCyan = Color(0xFF00E5FF)
-val VasuCyanDark = Color(0xFF00B8D4)
-val VasuCyanLight = Color(0xFF6EFFFF)
+// VASU Primary Colors — hyper professional (VasuCyan #008CFF)
+val VasuCyan = Color(0xFF008CFF)
+val VasuCyanDark = Color(0xFF0066CC)
+val VasuCyanLight = Color(0xFF4DA8FF)
 
 // VASU Secondary Colors
 val VasuPurple = Color(0xFF7C4DFF)
@@ -16,11 +16,11 @@ val VasuPurpleLight = Color(0xFFB47CFF)
 val VasuGreen = Color(0xFF00FF88)
 val VasuGreenDark = Color(0xFF00C864)
 
-// Background Colors
-val VasuDarkBg = Color(0xFF0D1117)
-val VasuDarkSurface = Color(0xFF161B22)
-val VasuDarkCard = Color(0xFF1C2128)
-val VasuDarkElevated = Color(0xFF21262D)
+// Background Colors — hyper professional deep navy (VasuDarkBg #01060D, cards #061827)
+val VasuDarkBg = Color(0xFF01060D)
+val VasuDarkSurface = Color(0xFF061827)
+val VasuDarkCard = Color(0xFF061827)
+val VasuDarkElevated = Color(0xFF0A2340)
 
 // Text Colors
 val VasuTextPrimary = Color(0xFFE6EDF3)

@@ -77,9 +77,9 @@ fun VoiceScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ── Top badges row (model + voice) — parity with web 259-278 ──
             ModelVoiceBadgesRow(
@@ -104,12 +104,13 @@ fun VoiceScreen(
                 )
             }
 
-            // Waveform visualization — KEEP Maya native bars (not glow)
+            // Waveform visualization — hyper professional 16.dp, elevation 4.dp, crisp icons
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = VasuDarkCard.copy(alpha = 0.7f)),
+                colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
                 shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, VasuTextMuted.copy(alpha = 0.15f))
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -149,16 +150,16 @@ fun VoiceScreen(
                 }
             }
 
-            // Transcript card
+            // Transcript card — hyper professional 16.dp, elevation 3.dp
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = VasuDarkCard
-                ),
-                shape = RoundedCornerShape(16.dp)
+                colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.10f))
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Partial transcript (real-time)
@@ -202,78 +203,82 @@ fun VoiceScreen(
                 onClick = { viewModel.toggleListening() }
             )
 
-            // ── Primary Action Buttons — parity with web 422-487 ──
-            // Test Kore Voice (Text Test) — full width primary
+            // ── Primary Action Buttons — hyper professional 16.dp
             Button(
                 onClick = { viewModel.testKoreVoice("Namaste Vasu, ek chhota sa greeting bolo.") },
-                modifier = Modifier.fillMaxWidth().height(54.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = VasuCyan,
                     contentColor = VasuDarkBg
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Test Kore Voice (Text Test)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(VasuDarkBg.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Test Kore Voice (Text Test)", fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp)
             }
 
-            // Grid: Live Mic + Hardware Test — parity with web btn-toggle-live-mic / btn-test-speaker-hardware
+            // Grid: Live Mic + Hardware Test — hyper professional 16.dp, spacing 16.dp, crisp icons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Live Mic Streaming toggle
                 OutlinedButton(
                     onClick = { viewModel.toggleListening() },
-                    modifier = Modifier.weight(1f).height(52.dp),
+                    modifier = Modifier.weight(1f).height(56.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (uiState.isListening) VasuCyan.copy(alpha = 0.15f) else VasuDarkCard,
+                        containerColor = if (uiState.isListening) VasuCyan.copy(alpha = 0.12f) else VasuDarkCard,
                         contentColor = if (uiState.isListening) VasuCyan else VasuTextPrimary
                     ),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (uiState.isListening) VasuCyan.copy(alpha = 0.6f) else VasuTextMuted.copy(alpha = 0.3f)
+                        if (uiState.isListening) VasuCyan.copy(alpha = 0.5f) else VasuCyan.copy(alpha = 0.15f)
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(
-                        imageVector = if (uiState.isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = null,
-                        tint = VasuCyan,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (uiState.isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                            contentDescription = null,
+                            tint = VasuCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (uiState.isListening) "Stop Listening" else "Live Mic",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.2.sp
                     )
                 }
 
-                // Hardware Speaker Test
                 OutlinedButton(
                     onClick = { viewModel.testSpeakerHardware() },
-                    modifier = Modifier.weight(1f).height(52.dp),
+                    modifier = Modifier.weight(1f).height(56.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = VasuDarkCard,
                         contentColor = VasuTextPrimary
                     ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, VasuTextMuted.copy(alpha = 0.3f)),
-                    shape = RoundedCornerShape(12.dp)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.VolumeUp,
-                        contentDescription = null,
-                        tint = VasuSuccess,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuSuccess.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            tint = VasuSuccess,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Hardware Test", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -304,56 +309,61 @@ private fun ModelVoiceBadgesRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Model badge — web 270-273
         Surface(
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(16.dp),
             color = VasuDarkCard,
-            border = androidx.compose.foundation.BorderStroke(1.dp, VasuTextMuted.copy(alpha = 0.4f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.18f)),
+            shadowElevation = 2.dp,
             modifier = Modifier.weight(1f)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Memory,
-                    contentDescription = null,
-                    tint = VasuCyan,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+                Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Memory,
+                        contentDescription = null,
+                        tint = VasuCyan,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = model,
                     color = VasuCyan,
                     fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    letterSpacing = 0.3.sp
                 )
             }
         }
-        // Voice badge — web 274-277
         Surface(
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(16.dp),
             color = VasuDarkCard,
-            border = androidx.compose.foundation.BorderStroke(1.dp, VasuSuccess.copy(alpha = 0.4f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, VasuSuccess.copy(alpha = 0.25f)),
+            shadowElevation = 2.dp,
             modifier = Modifier.weight(0.55f)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.RecordVoiceOver,
-                    contentDescription = null,
-                    tint = VasuSuccess,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+                Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(VasuSuccess.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.RecordVoiceOver,
+                        contentDescription = null,
+                        tint = VasuSuccess,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Voice: $voice",
                     color = VasuSuccess,
@@ -386,14 +396,15 @@ private fun StatusDisplayCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard.copy(alpha = 0.8f)),
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuTextMuted.copy(alpha = 0.2f))
+        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -446,10 +457,11 @@ private fun ErrorBannerCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF3A0F0F).copy(alpha = 0.95f)),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, VasuError.copy(alpha = 0.6f))
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
                     imageVector = Icons.Default.ErrorOutline,
@@ -512,18 +524,19 @@ private fun WakeWordToggleCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isActive) VasuSuccess.copy(alpha = 0.12f) else VasuDarkCard
+            containerColor = if (isActive) VasuSuccess.copy(alpha = 0.10f) else VasuDarkCard
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (isActive) VasuSuccess.copy(alpha = 0.3f) else VasuTextMuted.copy(alpha = 0.2f)
+            if (isActive) VasuSuccess.copy(alpha = 0.25f) else VasuCyan.copy(alpha = 0.12f)
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -596,13 +609,14 @@ private fun DiagnosticsCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkBg.copy(alpha = 0.9f)),
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuTextMuted.copy(alpha = 0.2f))
+        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.10f))
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             DiagnosticsRow(label = "Gemini Model:", value = model, valueColor = VasuCyan, isBold = true)
             DiagnosticsRow(label = "Prebuilt Voice:", value = voice, valueColor = VasuSuccess, isBold = true)
