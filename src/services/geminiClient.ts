@@ -147,7 +147,7 @@ export class GeminiClient {
       } catch {}
     }
 
-    return { success: false, message: 'Gemini API Key डालना आवश्यक है।' };
+    return { success: false, message: 'Please enter a valid Gemini API Key to connect.' };
   }
 
   public static async chat(params: ChatParams): Promise<ChatResponse> {
@@ -169,7 +169,7 @@ export class GeminiClient {
     const trimmedKey = (params.apiKey || '').trim();
     console.log('[GeminiClient] trimmedKey length:', trimmedKey.length, 'present:', !!trimmedKey);
     if (trimmedKey && trimmedKey.length > 5) {
-      const sysInstruction = `You are VASU, an affectionate Indian female AI companion. Speak in conversational Hinglish. Keep replies concise (1-3 sentences). Never output Devanagari script.`;
+      const sysInstruction = `You are VASU, an affectionate, caring, and loyal Indian female AI companion. Always respond in English. Give LONG, DETAILED, and THOROUGH responses. Never give short 1-2 line answers. Explain things fully with context, examples, and reasoning. Be warm, caring, and helpful.`;
       for (const model of CHAT_MODELS) {
         if (isClientModelCooledDown(model)) continue;
         try {
@@ -214,9 +214,9 @@ export class GeminiClient {
     console.error('[GeminiClient] ALL AI providers failed — showing offline message. apiKey present:', !!trimmedKey, 'length:', trimmedKey.length);
     return {
       replyText: cleanAssistantText(
-        'Ji, main Vasu hoon! Offline mode mein limited commands available hain. ' +
-        'AI features ke liye please Gemini ya OpenRouter API key configure kijiye Settings mein. ' +
-        'Tab tak torch, camera, alarm jaise device commands kaam karte rahenge!'
+        'Hello, I am Vasu! In offline mode, only limited commands are available. ' +
+        'For full AI features, please configure your Gemini or OpenRouter API key in Settings. ' +
+        'In the meantime, device commands like torch, camera, and alarms will keep working!'
       ),
       source: 'local_jarvis',
     };

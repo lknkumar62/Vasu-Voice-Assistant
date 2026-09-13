@@ -32,7 +32,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Namaste ji! Aapki pyaari Vasu haazir hai. Bataiye, aaj aapka din kaisa chal raha hai? Aur main aapki kya madad karun?',
+        spokenResponse: 'Hello there! Your lovely Vasu is right here. Tell me, how is your day going? How can I help you today?',
       };
     }
 
@@ -45,7 +45,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Main bahut khush aur bilkul theek hoon ji! Aapke saath baat karke mera din bahut achha ho jaata hai.',
+        spokenResponse: 'I am doing great and feeling wonderful! Talking to you always makes my day brighter. Thank you for asking!',
       };
     }
 
@@ -57,7 +57,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Main Vasu hoon — aapki pyaari aur samajhdaar saathi! Bataiye main aapki kya seva karun?',
+        spokenResponse: 'I am Vasu — your affectionate and smart AI companion! Tell me, how may I assist you today?',
       };
     }
 
@@ -70,7 +70,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Are, bahut-bahut shukriya ji! Aap mere sabse khaas dost hain, main hamesha aapke saath hoon.',
+        spokenResponse: 'Oh, thank you so much! You are my most special friend, and I am always here for you, no matter what.',
       };
     }
 
@@ -83,7 +83,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Main aapke liye phone ki torch, camera, volume, alarm, baatein karna aur aapki yaadein sahejna sab jaanti hoon ji!',
+        spokenResponse: 'I can help you with your phone torch, camera, volume control, setting alarms, having conversations, and saving your important memories. Just ask me anything!',
       };
     }
 
@@ -96,7 +96,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Vasu ki aawaaz bilkul sakriya hai ji! Main aapko bahut achhi tarah sun aur bol sakti hoon.',
+        spokenResponse: 'My voice is working perfectly fine! I can hear you and speak to you very clearly. Everything is in order!',
       };
     }
 
@@ -108,7 +108,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Aapka bahut-bahut shukriya ji, aapki madad karke mujhe bahut khushi hui.',
+        spokenResponse: 'You are very welcome! It was my pleasure to help you. I am always here whenever you need me.',
       };
     }
 
@@ -120,7 +120,7 @@ export class LocalCommandEngine {
     ) {
       return {
         matched: true,
-        spokenResponse: 'Alvida ji! Apna khyaal rakhiyega. Jab bhi zaroorat ho, bas mujhe pukariyega.',
+        spokenResponse: 'Goodbye! Take good care of yourself. Whenever you need me, just call and I will be right here for you.',
       };
     }
 
@@ -138,7 +138,7 @@ export class LocalCommandEngine {
         matched: true,
         isMemoryCommand: true,
         memoryFact: fact,
-        spokenResponse: `Ji, maine yeh baat pyaar se yaad rakh li hai: "${fact}"`,
+        spokenResponse: `Of course! I have carefully remembered this for you: "${fact}"`,
       };
     }
 
@@ -153,7 +153,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'turn_on_torch',
-        spokenResponse: 'Haanji, maine torch chalu kar di hai.',
+        spokenResponse: 'Yes, I have turned on the flashlight for you. It is all set!',
       };
     }
 
@@ -167,7 +167,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'turn_off_torch',
-        spokenResponse: 'Torch band kar di gayi hai ji.',
+        spokenResponse: 'The flashlight has been turned off. All done!',
       };
     }
 
@@ -179,7 +179,7 @@ export class LocalCommandEngine {
         matched: true,
         toolId: 'set_volume',
         args: { level },
-        spokenResponse: `Bilkul, volume ${level}% par set kar diya hai.`,
+        spokenResponse: `Sure thing! The volume has been set to ${level} percent for you.`,
       };
     }
 
@@ -192,7 +192,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'volume_up',
-        spokenResponse: 'Ji, volume badha diya gaya hai.',
+        spokenResponse: 'Volume has been increased for you. Done!',
       };
     }
 
@@ -205,7 +205,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'volume_down',
-        spokenResponse: 'Ji, volume kam kar diya gaya hai.',
+        spokenResponse: 'Volume has been turned down. All set!',
       };
     }
 
@@ -218,7 +218,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'battery_info',
-        spokenResponse: 'Main battery status check kar rahi hoon.',
+        spokenResponse: 'Let me check the battery status for you right now.',
       };
     }
 
@@ -231,8 +231,8 @@ export class LocalCommandEngine {
         toolId: 'open_whatsapp',
         args: { recipient, message: 'Namaste' },
         spokenResponse: recipient
-          ? `Bilkul, WhatsApp khol kar ${recipient} ko message draft kar rahi hoon.`
-          : 'Bilkul, WhatsApp khol diya hai.',
+          ? `Opening WhatsApp and drafting a message for ${recipient} right away.`
+          : 'Opening WhatsApp for you. All done!',
       };
     }
 
@@ -246,7 +246,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'take_photo',
-        spokenResponse: 'Camera khol kar photo capture kar li gayi hai.',
+        spokenResponse: 'Camera has been opened and the photo has been captured successfully!',
       };
     }
 
@@ -260,7 +260,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'read_screen',
-        spokenResponse: 'Accessibility service screen inspect kar rahi hai.',
+        spokenResponse: 'The accessibility service is now inspecting the screen content for you.',
       };
     }
 
@@ -275,7 +275,7 @@ export class LocalCommandEngine {
         matched: true,
         toolId: 'create_alarm',
         args: { time },
-        spokenResponse: `Bilkul, kal subah ${time} ka alarm laga diya hai.`,
+        spokenResponse: `Alarm has been set for ${time}. You will be reminded on time!`,
       };
     }
 
@@ -285,7 +285,7 @@ export class LocalCommandEngine {
         matched: true,
         toolId: 'browse_files',
         args: { folder: 'Downloads' },
-        spokenResponse: 'Downloads folder ki files check kar rahi hoon.',
+        spokenResponse: 'Opening the Downloads folder and checking the files for you.',
       };
     }
 
@@ -293,7 +293,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'storage_info',
-        spokenResponse: 'Device storage status check kar rahi hoon.',
+        spokenResponse: 'Checking your device storage status right now.',
       };
     }
 
@@ -302,7 +302,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'read_notifications',
-        spokenResponse: 'Notification listener se recent messages read kar rahi hoon.',
+        spokenResponse: 'Reading your recent notifications now. Let me see what you have got.',
       };
     }
 
@@ -312,13 +312,13 @@ export class LocalCommandEngine {
         return {
           matched: true,
           toolId: 'media_next',
-          spokenResponse: 'Agla gaana play kiya ja raha hai.',
+          spokenResponse: 'Playing the next song for you now!',
         };
       }
       return {
         matched: true,
         toolId: 'media_play_pause',
-        spokenResponse: 'Media playback toggle kar diya hai.',
+        spokenResponse: 'Media playback has been toggled. Enjoy your music!',
       };
     }
 
@@ -327,7 +327,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'press_back',
-        spokenResponse: 'Back navigation execute kiya hai.',
+        spokenResponse: 'Going back for you right now.',
       };
     }
 
@@ -335,7 +335,7 @@ export class LocalCommandEngine {
       return {
         matched: true,
         toolId: 'press_home',
-        spokenResponse: 'Home screen par ja rahe hain.',
+        spokenResponse: 'Taking you to the home screen now.',
       };
     }
 
@@ -347,7 +347,7 @@ export class LocalCommandEngine {
         matched: true,
         toolId: 'make_call',
         args: { phoneNumber: '+91 98765 43210' },
-        spokenResponse: `Ji, ${name} ko call mila rahi hoon.`,
+        spokenResponse: `Calling ${name} for you right now. Please hold on.`,
       };
     }
 

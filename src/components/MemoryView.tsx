@@ -145,7 +145,7 @@ export const MemoryView: React.FC<MemoryViewProps> = ({
           <div className="text-center py-12 text-slate-500 text-xs">
             <Brain className="w-10 h-10 mx-auto mb-2 opacity-30" />
             <p>No memories saved yet.</p>
-            <p className="mt-1">Say: <span className="text-cyan-400 font-mono">"VASU yaad rakhna mera naam Rahul hai"</span></p>
+            <p className="mt-1">Say: <span className="text-cyan-400 font-mono">"VASU remember my name is Rahul"</span></p>
           </div>
         ) : (
           filteredMemories.map((mem) => (

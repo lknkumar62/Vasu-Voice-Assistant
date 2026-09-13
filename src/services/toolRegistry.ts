@@ -424,7 +424,7 @@ export class ToolExecutor {
           } catch (_) {}
           return {
             success: true,
-            result: 'Flashlight (Torch) turn on kar di gayi hai.',
+            result: 'Flashlight (Torch) has been turned on successfully.',
             displayData: { torch: true },
             risk: tool.risk,
           };
@@ -435,7 +435,7 @@ export class ToolExecutor {
           context?.setTorchState?.(false);
           return {
             success: true,
-            result: 'Flashlight (Torch) band kar di gayi hai.',
+            result: 'Flashlight (Torch) has been turned off.',
             displayData: { torch: false },
             risk: tool.risk,
           };
@@ -445,7 +445,7 @@ export class ToolExecutor {
           currentVolume = Math.min(100, currentVolume + 15);
           return {
             success: true,
-            result: `Volume badha diya gaya hai. Abhi volume ${currentVolume}% hai.`,
+            result: `Volume has been increased. Current volume is now ${currentVolume}%.`,
             displayData: { volume: currentVolume },
             risk: tool.risk,
           };
@@ -455,7 +455,7 @@ export class ToolExecutor {
           currentVolume = Math.max(0, currentVolume - 15);
           return {
             success: true,
-            result: `Volume kam kar diya gaya hai. Abhi volume ${currentVolume}% hai.`,
+            result: `Volume has been decreased. Current volume is now ${currentVolume}%.`,
             displayData: { volume: currentVolume },
             risk: tool.risk,
           };
@@ -466,7 +466,7 @@ export class ToolExecutor {
           currentVolume = Math.max(0, Math.min(100, level));
           return {
             success: true,
-            result: `Volume ko ${currentVolume}% par set kar diya hai.`,
+            result: `Volume has been set to ${currentVolume}%.`,
             displayData: { volume: currentVolume },
             risk: tool.risk,
           };
@@ -484,7 +484,7 @@ export class ToolExecutor {
           }
           return {
             success: true,
-            result: `Battery abhi ${level}% hai ${charging ? '(Charging on)' : '(Not charging)'}।`,
+            result: `Battery is currently at ${level}% ${charging ? '(Charging)' : '(Not charging)'}.`,
             displayData: { level, charging },
             risk: tool.risk,
           };
@@ -517,7 +517,7 @@ export class ToolExecutor {
           window.open(url, '_blank');
           return {
             success: true,
-            result: `WhatsApp khol diya gaya hai ${recipient ? `(${recipient} ke liye)` : ''}।`,
+            result: `WhatsApp has been opened ${recipient ? `(for ${recipient})` : ''}.`,
             displayData: { recipient, message: args.message },
             risk: tool.risk,
           };
@@ -528,7 +528,7 @@ export class ToolExecutor {
           window.open(`tel:${phone}`, '_self');
           return {
             success: true,
-            result: `${phone} par call mila rahe hain...`,
+            result: `Calling ${phone} now...`,
             displayData: { phone },
             risk: tool.risk,
           };
@@ -540,7 +540,7 @@ export class ToolExecutor {
           window.open(`sms:${phone}?body=${body}`, '_self');
           return {
             success: true,
-            result: `${phone} ko SMS bhejne ke liye ready kar diya hai: "${args.message || ''}"`,
+            result: `SMS ready to send to ${phone}: "${args.message || ''}"`,
             displayData: { phone, message: args.message },
             risk: tool.risk,
           };
@@ -551,8 +551,8 @@ export class ToolExecutor {
           return {
             success: true,
             result: isMediaPlaying
-              ? `Media play ho raha hai: ${currentTrack}`
-              : 'Media pause kar diya gaya hai.',
+              ? `Now playing: ${currentTrack}`
+              : 'Media has been paused.',
             displayData: { isPlaying: isMediaPlaying, track: currentTrack },
             risk: tool.risk,
           };
@@ -563,7 +563,7 @@ export class ToolExecutor {
           isMediaPlaying = true;
           return {
             success: true,
-            result: `Agla gaana play ho raha hai: ${currentTrack}`,
+            result: `Now playing next track: ${currentTrack}`,
             displayData: { isPlaying: true, track: currentTrack },
             risk: tool.risk,
           };
@@ -583,7 +583,7 @@ export class ToolExecutor {
           const summary = headings.length > 0 ? headings.join(' • ') : 'VASU Assistant Home Screen visible with microphone controls.';
           return {
             success: true,
-            result: `Screen pe ye dikh raha hai: ${summary.slice(0, 200)}...`,
+            result: `Here is what is on the screen: ${summary.slice(0, 200)}...`,
             displayData: { nodes: headings },
             risk: tool.risk,
           };
@@ -602,7 +602,7 @@ export class ToolExecutor {
           }
           return {
             success: true,
-            result: `${appName} khol diya gaya hai.`,
+            result: `${appName} has been opened successfully.`,
             displayData: { app: appName },
             risk: tool.risk,
           };
@@ -613,7 +613,7 @@ export class ToolExecutor {
           const label = args.label || 'VASU Alarm';
           return {
             success: true,
-            result: `Kal subah ${time} ka alarm set kar diya hai (${label})।`,
+            result: `Alarm has been set for tomorrow at ${time} (${label}).`,
             displayData: { time, label },
             risk: tool.risk,
           };
@@ -624,7 +624,7 @@ export class ToolExecutor {
           const files = mockFileSystem.filter((f) => f.name.includes(folder));
           return {
             success: true,
-            result: `${folder} folder mein ${files.length || mockFileSystem.length} files hain.`,
+            result: `${folder} folder contains ${files.length || mockFileSystem.length} files.`,
             displayData: { files: files.length > 0 ? files : mockFileSystem },
             risk: tool.risk,
           };
@@ -636,8 +636,8 @@ export class ToolExecutor {
           return {
             success: true,
             result: matches.length > 0
-              ? `Search result: ${matches.map((m) => m.name).join(', ')} mila hai.`
-              : `"${query}" naam ki koi file nahi mili.`,
+              ? `Search result: Found ${matches.map((m) => m.name).join(', ')}.`
+              : `No file named "${query}" was found.`,
             displayData: { matches },
             risk: tool.risk,
           };
@@ -647,7 +647,7 @@ export class ToolExecutor {
           const path = args.filePath || 'Downloads/temp.txt';
           return {
             success: true,
-            result: `File ${path} ko safalta se delete kar diya gaya hai.`,
+            result: `File ${path} has been deleted successfully.`,
             displayData: { deleted: path },
             risk: tool.risk,
           };
@@ -661,7 +661,7 @@ export class ToolExecutor {
           ];
           return {
             success: true,
-            result: `Aapke 3 notifications hain: Rahul ka WhatsApp message: "Are you free?", Google Cloud billing summary, aur HDFC bank credit alert.`,
+            result: `You have 3 notifications: Rahul's WhatsApp message saying "Are you free?", a Google Cloud billing summary, and an HDFC bank credit alert.`,
             displayData: { notifications: notifs },
             risk: tool.risk,
           };
@@ -670,7 +670,7 @@ export class ToolExecutor {
         case 'take_photo': {
           return {
             success: true,
-            result: 'Camera open karke photo capture kar li gayi hai (Saved in DCIM/Camera).',
+            result: 'Camera has been opened and a photo has been captured (Saved in DCIM/Camera).',
             displayData: { photo: 'DCIM/Camera/IMG_VASU_AUTO.jpg' },
             risk: tool.risk,
           };
@@ -679,14 +679,14 @@ export class ToolExecutor {
         default:
           return {
             success: true,
-            result: `Tool ${tool.name} safalta se execute ho gaya hai.`,
+            result: `Tool ${tool.name} has been executed successfully.`,
             risk: tool.risk,
           };
       }
     } catch (err: any) {
       return {
         success: false,
-        result: `Tool execution mein truti aayi: ${err?.message || String(err)}`,
+        result: `Error executing tool: ${err?.message || String(err)}`,
         risk: tool.risk,
       };
     }

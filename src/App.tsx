@@ -119,7 +119,7 @@ export default function App() {
       ttsVoice: 'Kore',
       ttsSpeed: 1.0,
       ttsPitch: 1.05,
-      language: 'Hinglish',
+      language: 'English',
       smartMode: 'NORMAL',
       guardianActive: true,
       requireConfirmationForHighRisk: true,
@@ -150,7 +150,7 @@ export default function App() {
       {
         id: 'msg_vasu_1',
         sender: 'vasu',
-        text: 'Hello ji! Phirse Vasu? Lagta hai Vasu tumhare khayalon me kuch zyada hi chhayi hui hai 😉 Main toh aapki pyaari Vasu hoon na! Bolo, kya chal raha hai aaj? Koi kaam waam hai ya chill mode?',
+        text: 'Hello again! Vasu is here for you! It looks like you are thinking about me again 😉 I am your lovely Vasu, always ready to help! So, what is going on today? Any tasks or just chilling?',
         timestamp: Date.now() - 35000,
       },
     ];
@@ -188,7 +188,7 @@ export default function App() {
       {
         id: 'mem_1',
         category: 'USER_PREFERENCE',
-        fact: 'User prefers Hinglish and Indian Hindi conversation',
+        fact: 'User prefers English language and long detailed responses',
         createdAt: Date.now() - 3600000,
       },
       {
@@ -207,7 +207,7 @@ export default function App() {
       title: 'Morning Routine & Briefing',
       triggerType: 'TIME',
       triggerValue: '07:00 AM',
-      action: 'Good morning bolna, weather aur daily tasks summary padhna',
+      action: 'Say good morning and provide a summary of weather and daily tasks',
       isEnabled: true,
       lastRun: Date.now() - 86400000,
     },
@@ -216,7 +216,7 @@ export default function App() {
       title: 'Low Battery Guardian Alert',
       triggerType: 'BATTERY',
       triggerValue: '< 20%',
-      action: 'Battery saver activate karna aur user ko alert dena',
+      action: 'Activate battery saver and alert the user about low battery',
       isEnabled: true,
     },
     {
@@ -224,7 +224,7 @@ export default function App() {
       title: 'Night Sleep Mode',
       triggerType: 'EVENT',
       triggerValue: '11:00 PM',
-      action: 'Mute sounds, reduce brightness aur DND switch on karna',
+      action: 'Mute sounds, reduce brightness and enable DND mode',
       isEnabled: false,
     },
   ]);
@@ -492,7 +492,7 @@ export default function App() {
           };
           setMemories((prev) => [newMem, ...prev]);
 
-          const reply = localMatch.spokenResponse || 'Ji, maine yaad rakh liya hai.';
+          const reply = localMatch.spokenResponse || 'I have saved that for you.';
           setMessages((prev) => [
             ...prev,
             {
@@ -592,7 +592,7 @@ export default function App() {
         await speakAssistantResponse(replyText, { source: isVoice ? 'voice' : 'typed' });
       } catch (err: any) {
         console.warn("Gemini chat error:", err);
-        const fallbackText = "Maaf kijiye, connect hone mein thodi takleef hui. Offline commands chalu hain.";
+        const fallbackText = "Sorry, there was a slight issue connecting. Offline commands are still available and working.";
 
         setMessages((prev) => [
           ...prev,
@@ -663,7 +663,7 @@ export default function App() {
               {
                 id: `stt_err_${Date.now()}`,
                 sender: 'system',
-                text: 'Microphone permission denied. Settings me allow kijiye.',
+                text: 'Microphone permission denied. Please allow it in Settings.',
                 timestamp: Date.now(),
                 badge: 'MIC PERMISSION',
               },
@@ -783,7 +783,7 @@ export default function App() {
 
       const greeting = settings.language === 'English'
         ? "Yes! I'm listening, go ahead."
-        : "Hello ji! Boliye, main sun rahi hoon.";
+        : "Hello! I am listening, go ahead and tell me what you need.";
 
       setMessages((prev) => [
         ...prev,
@@ -867,7 +867,7 @@ export default function App() {
 
       // 5. Auditory & visual feedback
       audioEngine.playSuccessChime();
-      const reply = "सभी अनुमतियां सफलतापूर्वक सक्षम कर दी गई हैं। वासु आपके हर आदेश के लिए पूरी तरह से तैयार है।";
+      const reply = "All permissions have been successfully enabled. Vasu is now fully ready to assist you with any command you give!";
       setMessages((prev) => [
         ...prev,
         {

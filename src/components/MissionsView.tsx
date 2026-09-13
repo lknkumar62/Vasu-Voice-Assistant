@@ -112,7 +112,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({
               type="text"
               value={newAction}
               onChange={(e) => setNewAction(e.target.value)}
-              placeholder="e.g. Good morning bolna aur weather update dena"
+              placeholder="e.g. Say good morning and give a weather update"
               className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-slate-200"
             />
           </div>

@@ -440,7 +440,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <div className="flex justify-start items-center">
                 <div className="bg-[#061827] border border-[#008CFF]/10 rounded-2xl rounded-tl-sm p-3 text-xs text-[#008CFF] font-mono flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#008CFF] animate-ping" />
-                  <span>VASU soch rahi hai...</span>
+                  <span>VASU is thinking...</span>
                 </div>
               </div>
             )}
@@ -814,7 +814,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="text-sm font-semibold">Test Voice</span>
               <button type="button" onClick={() => {
                 audioEngine.unlock();
-                ttsManager.forceSpeak("Namaste ji! Main Vasu hoon, aapki AI sahayak. Aaj aapka din kaisa chal raha hai?", {
+                ttsManager.forceSpeak("Hello! I am Vasu, your AI assistant. How is your day going so far?", {
                   autoSpeak: true, speed: settings.ttsSpeed, pitch: settings.ttsPitch,
                   volume: settings.ttsVolume, apiKey: settings.geminiApiKey || "", source: "replay",
                 });
@@ -893,12 +893,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
                 <label className="text-xs font-semibold text-[#7895B8] block mb-1">Language</label>
-                <select value={settings.language || "Hinglish"}
+                <select value={settings.language || "English"}
                   onChange={(e) => onUpdateSettings({ language: e.target.value as any })}
                   className="w-full bg-[#01060D] border border-[#008CFF]/15 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                  <option value="English">English</option>
                   <option value="Hinglish">Hinglish</option>
                   <option value="Hindi">Hindi</option>
-                  <option value="English">English</option>
                 </select>
               </div>
               <div className="p-3 rounded-[17px] bg-gradient-to-br from-[#061827] to-[#030F1B] border border-[#008CFF]/20">
@@ -950,7 +950,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <SectionTitle>VOICE & LANGUAGE</SectionTitle>
       <div className="grid md:grid-cols-2 gap-2">
         <SettingRow icon={Mic} label="Voice Selection" value={settings.ttsVoice || "Kore"} onClick={() => setPage("voice")} />
-        <SettingRow icon={Languages} label="Voice Language" value={settings.language || "Hinglish"} onClick={() => setPage("voice")} />
+        <SettingRow icon={Languages} label="Voice Language" value={settings.language || "English"} onClick={() => setPage("voice")} />
         <SettingRow icon={Radio} label="Wake Word" value={settings.wakePhrase || "Hello VASU"} onClick={() => setPage("voice")} />
         <SettingRow icon={Volume2} label="Speech Speed" value={`${settings.ttsSpeed || 1}x`} onClick={() => setPage("voice")} />
         <SettingRow icon={Volume2} label="Auto Speak" toggle enabled={settings.autoSpeak !== false}

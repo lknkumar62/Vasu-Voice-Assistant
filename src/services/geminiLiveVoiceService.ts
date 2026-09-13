@@ -255,7 +255,7 @@ export class GeminiLiveVoiceService {
         }
       };
 
-      this.sendTextTurn('Namaste! Ek chhota sa test bol dijiye.');
+      this.sendTextTurn('Hello! This is a quick test. Say something short so I can hear you.');
     });
   }
 }
