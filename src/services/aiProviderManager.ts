@@ -264,8 +264,9 @@ export class AIProviderManager {
         config.lastSuccessfulRequest = Date.now();
         this.saveToStorage();
 
-        // Apply cleanAssistantText to convert Devanagari to phonetic Hinglish
-        const cleaned = toPhoneticHinglish(response).replace(/VASU/gi, 'Vasu');
+        // Keep original text for display (Devanagari/Hindi preserved)
+        // toPhoneticHinglish is only applied in TTS paths, not display
+        const cleaned = response.replace(/VASU/gi, 'Vasu');
 
         return {
           replyText: cleaned,

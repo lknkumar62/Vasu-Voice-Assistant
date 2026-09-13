@@ -33,6 +33,7 @@ import { GeminiClient } from './services/geminiClient';
 import { apiKeyManager } from './services/apiKeyManager';
 import { aiProviderManager } from './services/aiProviderManager';
 import { geminiLiveVoiceService } from './services/geminiLiveVoiceService';
+import { sanitizeForDisplay } from './utils/textSanitizer';
 
 import {
   ShieldAlert,
@@ -415,7 +416,7 @@ export default function App() {
       wakeWordEngine.pause();
       setAssistantState('SPEAKING');
 
-      // Play TTS — with max 12s timeout so it never blocks forever
+      // Play TTS — with max 15s timeout so it never blocks forever
       try {
         await Promise.race([
           ttsManager.speak(text, {
@@ -427,7 +428,11 @@ export default function App() {
             source,
             force,
           }),
-          new Promise<void>((resolve) => setTimeout(() => resolve(), 15000))
+          new Promise<void>((resolve) => setTimeout(() => {
+            // On timeout, stop TTS properly instead of just resolving
+            try { ttsManager.stop(); } catch (_) {}
+            resolve();
+          }, 15000))
         ]);
       } catch (_) {}
 
@@ -586,7 +591,7 @@ export default function App() {
           apiKey: settings.geminiApiKey || undefined,
         });
 
-        const replyText = chatResult.replyText;
+        const replyText = sanitizeForDisplay(chatResult.replyText);
 
         setMessages((prev) => [
           ...prev,

@@ -107,10 +107,12 @@ export class VasuSpeechRecognizer {
     language: 'Hindi' | 'Hinglish' | 'English' = 'Hinglish',
     continuous = true
   ): Promise<boolean> {
-    // Strictly prevent microphone listening while VASU is speaking through speaker or settling
-    if (audioEngine.isSpeaking() || audioEngine.isInSettleDelay()) {
-      console.warn('[SpeechRecognizer] Blocked starting listener because VASU is currently speaking or in post-speech settle delay');
-      return false;
+    // Allow listening during TTS for command queue capture
+    // But set a flag so results are queued instead of executed immediately
+    const isSpeakingDuringTTS = audioEngine.isSpeaking() || audioEngine.isInSettleDelay();
+    if (isSpeakingDuringTTS) {
+      console.log('[SpeechRecognizer] Listening during TTS — results will be queued');
+      // Don't block — allow mic capture for queue
     }
 
     // Set AudioEngine into rigid LISTENING state (explicitly stops any remaining audio output)

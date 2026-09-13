@@ -34,6 +34,16 @@ export type VasuVoiceState =
 
 export type VoiceMode = 'GEMINI_LIVE' | 'TTS' | 'OFFLINE';
 
+export type CommandStatus = 'CAPTURED' | 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'DISCARDED';
+
+export interface QueuedCommand {
+  inputId: string;
+  text: string;
+  source: 'voice' | 'typed';
+  status: CommandStatus;
+  timestamp: number;
+}
+
 export interface VoiceManagerState {
   state: VasuVoiceState;
   selectedVoice: string;
@@ -57,6 +67,8 @@ export class VoiceManager {
   private errorMessage: string | null = null;
   private audioLevel: number = 0;
   private apiKey: string = '';
+  private commandQueue: QueuedCommand[] = [];
+  private isProcessingQueue = false;
 
   private listeners: Set<VoiceStateListener> = new Set();
   private liveService: GeminiLiveVoiceService;
@@ -264,6 +276,8 @@ export class VoiceManager {
           } else {
             this.setState('OFF');
           }
+          // Process next queued command after TTS completes
+          this.processNextQueued();
         }, 350);
         return;
       } catch (e) {
@@ -289,6 +303,8 @@ export class VoiceManager {
             } else {
               this.setState('OFF');
             }
+            // Process next queued command after TTS completes
+            this.processNextQueued();
           }, 350);
         },
       });
@@ -397,6 +413,115 @@ export class VoiceManager {
   public setSelectedVoice(voice: string) {
     this.selectedVoice = voice;
     this.notify();
+  }
+
+  /**
+   * Enqueue a voice command for FIFO processing.
+   * When VASU is speaking, new commands are queued and processed after current TTS completes.
+   */
+  public enqueueCommand(text: string, source: 'voice' | 'typed' = 'voice'): string {
+    const inputId = `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const command: QueuedCommand = {
+      inputId,
+      text,
+      source,
+      status: 'QUEUED',
+      timestamp: Date.now(),
+    };
+    this.commandQueue.push(command);
+    console.log(`[VoiceManager] Queue: +1 (size=${this.commandQueue.length}) | inputId=${inputId} | text="${text.substring(0, 50)}..."`);
+    return inputId;
+  }
+
+  /**
+   * Get the next queued command and mark it as PROCESSING.
+   * Returns null if queue is empty.
+   */
+  public dequeueNext(): QueuedCommand | null {
+    const next = this.commandQueue.find(c => c.status === 'QUEUED');
+    if (!next) return null;
+    next.status = 'PROCESSING';
+    console.log(`[VoiceManager] Dequeue: inputId=${next.inputId} | remaining=${this.commandQueue.filter(c => c.status === 'QUEUED').length}`);
+    return next;
+  }
+
+  /**
+   * Mark a queued command as completed or failed.
+   */
+  public markCommandStatus(inputId: string, status: 'COMPLETED' | 'FAILED' | 'DISCARDED'): void {
+    const cmd = this.commandQueue.find(c => c.inputId === inputId);
+    if (cmd) {
+      cmd.status = status;
+      console.log(`[VoiceManager] Command ${status}: inputId=${inputId}`);
+    }
+    // Clean up old completed/failed commands (keep last 20)
+    this.commandQueue = this.commandQueue.filter(c =>
+      c.status === 'QUEUED' || c.status === 'PROCESSING' ||
+      this.commandQueue.indexOf(c) > this.commandQueue.length - 20
+    );
+  }
+
+  /**
+   * Check if there are queued commands waiting.
+   */
+  public hasQueuedCommands(): boolean {
+    return this.commandQueue.some(c => c.status === 'QUEUED');
+  }
+
+  /**
+   * Get current queue size.
+   */
+  public getQueueSize(): number {
+    return this.commandQueue.filter(c => c.status === 'QUEUED').length;
+  }
+
+  /**
+   * Clear all queued commands (e.g., on emergency stop).
+   */
+  public clearQueue(): void {
+    for (const cmd of this.commandQueue) {
+      if (cmd.status === 'QUEUED') cmd.status = 'DISCARDED';
+    }
+    this.commandQueue = [];
+    this.isProcessingQueue = false;
+    console.log('[VoiceManager] Queue cleared');
+  }
+
+  /**
+   * Process next queued command after current TTS completes.
+   * This is called from TTS completion callbacks.
+   */
+  public async processNextQueued(): Promise<void> {
+    if (this.isProcessingQueue) return;
+    if (!this.hasQueuedCommands()) return;
+
+    this.isProcessingQueue = true;
+    const next = this.dequeueNext();
+    if (!next) {
+      this.isProcessingQueue = false;
+      return;
+    }
+
+    console.log(`[VoiceManager] Processing queued command: inputId=${next.inputId} | text="${next.text.substring(0, 50)}..."`);
+
+    // Execute via the normal command pipeline
+    try {
+      const result = await this.executeCommand(next.text);
+      this.markCommandStatus(next.inputId, 'COMPLETED');
+      if (result.response) {
+        await this.speak(result.response);
+      }
+    } catch (e) {
+      console.error('[VoiceManager] Queued command failed:', e);
+      this.markCommandStatus(next.inputId, 'FAILED');
+    }
+
+    this.isProcessingQueue = false;
+
+    // Continue processing remaining queue
+    if (this.hasQueuedCommands()) {
+      setTimeout(() => this.processNextQueued(), 100);
+    }
   }
 }
 

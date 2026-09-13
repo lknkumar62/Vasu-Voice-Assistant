@@ -1000,7 +1000,7 @@ class AudioEngine {
       try {
         const activeKey = options.apiKey || this.getApiKey();
         if (activeKey && activeKey.length > 5 && geminiLiveWebSocket.isConnected()) {
-          console.log('[AudioEngine] Using Gemini Live WebSocket TTS');
+          console.log('[TTS] Provider: Gemini Live WebSocket | Voice: Kore | Model: gemini-2.5-flash | Format: 24kHz 16-bit mono PCM');
           this.transitionTo('SPEAKING');
           options.onStart?.();
 
@@ -1036,6 +1036,7 @@ class AudioEngine {
     if (!options.preferLocal) {
       try {
         const activeKey = options.apiKey || this.getApiKey();
+        console.log('[TTS] Provider: Gemini REST | Voice: Kore | Model: gemini-3.1-flash-tts-preview | Format: 24kHz WAV');
         const audioUrl = await GeminiClient.generateTTSAudio(cleanText, activeKey);
 
         if (audioUrl) {

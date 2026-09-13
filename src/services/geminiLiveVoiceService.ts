@@ -36,7 +36,7 @@ export class GeminiLiveVoiceService {
 
   private apiKey = '';
   private currentState: LiveConnectionState = 'DISCONNECTED';
-  private selectedVoice: string = 'Aoede';
+  private selectedVoice: string = 'Kore';
   private callbacks: GeminiLiveCallbacks = {};
   private isSpeaking = false;
   private isListening = false;
@@ -61,7 +61,7 @@ export class GeminiLiveVoiceService {
   }
 
   public setSelectedVoice(voice: string) {
-    this.selectedVoice = voice || 'Aoede';
+    this.selectedVoice = voice || 'Kore';
   }
 
   public getSelectedVoice(): string {

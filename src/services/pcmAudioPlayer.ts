@@ -26,14 +26,22 @@ class PcmAudioPlayer {
 
   /**
    * Initialize AudioContext @ 24kHz (like Maya's AudioTrack config)
+   * Reuses existing context if available and not closed
    */
   init(): void {
-    if (this.ctx && this.ctx.state !== 'closed') return;
+    // Reuse existing context if available and not closed
+    if (this.ctx && this.ctx.state !== 'closed') {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return;
+    }
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     this.ctx = new AudioCtx({ sampleRate: SAMPLE_RATE });
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
+    console.log(`[PcmAudioPlayer] AudioContext initialized @ ${SAMPLE_RATE}Hz`);
   }
 
   /**
