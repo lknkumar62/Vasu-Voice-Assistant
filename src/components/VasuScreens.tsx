@@ -757,27 +757,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { name: 'Kore', gender: 'Female', trait: 'Firm (Default)' },
-                  { name: 'Aoede', gender: 'Female', trait: 'Breezy' },
+                  { name: 'Aoede', gender: 'Female', trait: 'Breezy (Default)' },
+                  { name: 'Kore', gender: 'Female', trait: 'Firm' },
                   { name: 'Leda', gender: 'Female', trait: 'Youthful' },
                   { name: 'Zephyr', gender: 'Female', trait: 'Bright' },
+                  { name: 'Laomedeia', gender: 'Female', trait: 'Upbeat' },
                   { name: 'Despina', gender: 'Female', trait: 'Smooth' },
                   { name: 'Erinome', gender: 'Female', trait: 'Clear' },
                   { name: 'Callirrhoe', gender: 'Female', trait: 'Easy-going' },
                   { name: 'Autonoe', gender: 'Female', trait: 'Bright' },
                   { name: 'Gacrux', gender: 'Female', trait: 'Mature' },
+                  { name: 'Pulcherrima', gender: 'Female', trait: 'Forward' },
                   { name: 'Sulafat', gender: 'Female', trait: 'Warm' },
                   { name: 'Vindemiatrix', gender: 'Female', trait: 'Gentle' },
-                  { name: 'Puck', gender: 'Male', trait: 'Upbeat' },
+                  { name: 'Algenib', gender: 'Male', trait: 'Gravelly' },
                   { name: 'Charon', gender: 'Male', trait: 'Informative' },
                   { name: 'Fenrir', gender: 'Male', trait: 'Excitable' },
+                  { name: 'Orus', gender: 'Male', trait: 'Firm' },
+                  { name: 'Puck', gender: 'Male', trait: 'Upbeat' },
+                  { name: 'Schedar', gender: 'Male', trait: 'Even-tempered' },
+                  { name: 'Umbriel', gender: 'Male', trait: 'Easy-going' },
                 ].map((v) => (
                   <button
                     key={v.name}
                     type="button"
                     onClick={() => onUpdateSettings({ ttsVoice: v.name })}
                     className={`p-2 rounded-xl border text-left transition text-xs ${
-                      (settings.ttsVoice || 'Kore') === v.name
+                      (settings.ttsVoice || 'Aoede') === v.name
                         ? 'bg-[#008CFF]/20 border-[#008CFF]/60 text-white'
                         : 'bg-[#01060D] border-[#008CFF]/10 text-[#7895B8] hover:border-[#008CFF]/30'
                     }`}

@@ -32,6 +32,7 @@ import { LocalCommandEngine } from './services/localCommandEngine';
 import { GeminiClient } from './services/geminiClient';
 import { apiKeyManager } from './services/apiKeyManager';
 import { aiProviderManager } from './services/aiProviderManager';
+import { geminiLiveWebSocket } from './services/geminiLiveWebSocket';
 
 import {
   ShieldAlert,
@@ -116,7 +117,7 @@ export default function App() {
       wakePhrase: 'Hello VASU',
       wakeSensitivity: 'MEDIUM',
       backgroundListening: true,
-      ttsVoice: 'Kore',
+      ttsVoice: 'Aoede',
       ttsSpeed: 1.0,
       ttsPitch: 1.05,
       language: 'English',
@@ -295,6 +296,14 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: settings.geminiApiKey }),
       }).catch(() => {});
+
+      // Auto-connect Gemini Live WebSocket for Maya-style voice
+      geminiLiveWebSocket.connect({
+        apiKey: settings.geminiApiKey,
+        model: 'gemini-2.5-flash',
+        voice: 'Aoede',
+        languageCode: 'en-US',
+      });
     }
   }, []);
 
@@ -417,7 +426,7 @@ export default function App() {
             source,
             force,
           }),
-          new Promise<void>((resolve) => setTimeout(() => resolve(), 5000))
+          new Promise<void>((resolve) => setTimeout(() => resolve(), 15000))
         ]);
       } catch (_) {}
 
@@ -1138,7 +1147,7 @@ export default function App() {
           <button
             id="header-btn-voice"
             onClick={() => setActiveTab(activeTab === 'VOICE' ? 'HOME' : 'VOICE')}
-            title="Live Voice Mode (Kore)"
+            title="Live Voice Mode (Aoede)"
             className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
               activeTab === 'VOICE'
                 ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'

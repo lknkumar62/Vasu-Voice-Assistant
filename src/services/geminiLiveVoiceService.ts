@@ -36,7 +36,7 @@ export class GeminiLiveVoiceService {
 
   private apiKey = '';
   private currentState: LiveConnectionState = 'DISCONNECTED';
-  private selectedVoice: string = 'Kore';
+  private selectedVoice: string = 'Aoede';
   private callbacks: GeminiLiveCallbacks = {};
   private isSpeaking = false;
   private isListening = false;
@@ -61,7 +61,7 @@ export class GeminiLiveVoiceService {
   }
 
   public setSelectedVoice(voice: string) {
-    this.selectedVoice = voice || 'Kore';
+    this.selectedVoice = voice || 'Aoede';
   }
 
   public getSelectedVoice(): string {
@@ -103,7 +103,7 @@ export class GeminiLiveVoiceService {
           apiKey: key,
           voice: this.selectedVoice,
           model: 'gemini-2.5-flash',
-          languageCode: 'hi-IN'
+          languageCode: 'en-US'
         },
         {
           onStateChange: (s) => {
@@ -182,7 +182,7 @@ export class GeminiLiveVoiceService {
   public interrupt(): void {
     this.isSpeaking = false;
     pcmAudioPlayer.flush();
-    geminiLiveWebSocket.disconnect();
+    // DO NOT disconnect WebSocket — keep connection alive for next response
     this.setState(this.isListening ? 'LISTENING' : 'CONNECTED');
   }
 

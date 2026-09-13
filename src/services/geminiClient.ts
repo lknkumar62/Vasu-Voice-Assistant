@@ -53,8 +53,9 @@ const CHAT_MODELS = [
 ];
 
 const TTS_MODELS = [
+  'gemini-3.1-flash-tts-preview',
   'gemini-2.5-flash-preview-tts',
-  'gemini-2.0-flash-live-001',
+  'gemini-2.0-flash-exp',
 ];
 
 const clientModelCooldowns = new Map<string, number>();
