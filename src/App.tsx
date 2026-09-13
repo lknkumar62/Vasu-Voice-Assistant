@@ -32,7 +32,7 @@ import { LocalCommandEngine } from './services/localCommandEngine';
 import { GeminiClient } from './services/geminiClient';
 import { apiKeyManager } from './services/apiKeyManager';
 import { aiProviderManager } from './services/aiProviderManager';
-import { geminiLiveWebSocket } from './services/geminiLiveWebSocket';
+import { geminiLiveVoiceService } from './services/geminiLiveVoiceService';
 
 import {
   ShieldAlert,
@@ -120,7 +120,7 @@ export default function App() {
       ttsVoice: 'Aoede',
       ttsSpeed: 1.0,
       ttsPitch: 1.05,
-      language: 'English',
+      language: 'Hindi',
       smartMode: 'NORMAL',
       guardianActive: true,
       requireConfirmationForHighRisk: true,
@@ -189,7 +189,7 @@ export default function App() {
       {
         id: 'mem_1',
         category: 'USER_PREFERENCE',
-        fact: 'User prefers English language and long detailed responses',
+        fact: 'User prefers Hindi language and long detailed responses',
         createdAt: Date.now() - 3600000,
       },
       {
@@ -297,13 +297,8 @@ export default function App() {
         body: JSON.stringify({ apiKey: settings.geminiApiKey }),
       }).catch(() => {});
 
-      // Auto-connect Gemini Live WebSocket for Maya-style voice
-      geminiLiveWebSocket.connect({
-        apiKey: settings.geminiApiKey,
-        model: 'gemini-2.5-flash',
-        voice: 'Aoede',
-        languageCode: 'en-US',
-      });
+      // Auto-connect Gemini Live Voice Service for Maya-style voice
+      geminiLiveVoiceService.connect(settings.geminiApiKey);
     }
   }, []);
 
@@ -808,12 +803,8 @@ export default function App() {
       // 1. First play the crisp wake chime and wait for it to finish (320ms)
       await audioEngine.playWakeChime();
 
-      // 2. Speak the quick greeting with zero-latency local speech
-      await audioEngine.speakWakeGreeting(greeting, {
-        speed: settings.ttsSpeed,
-        pitch: settings.ttsPitch,
-        language: settings.language,
-      });
+      // 2. Speak the greeting through Gemini TTS pipeline (not local robotic voice)
+      await speakAssistantResponse(greeting, { source: 'voice' });
 
       // 3. Start listening after greeting settles
       setTimeout(() => {

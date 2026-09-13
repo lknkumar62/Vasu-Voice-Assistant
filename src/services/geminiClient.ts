@@ -170,7 +170,7 @@ export class GeminiClient {
     const trimmedKey = (params.apiKey || '').trim();
     console.log('[GeminiClient] trimmedKey length:', trimmedKey.length, 'present:', !!trimmedKey);
     if (trimmedKey && trimmedKey.length > 5) {
-      const sysInstruction = `You are VASU, an affectionate, caring, and loyal Indian female AI companion. Always respond in English. Give LONG, DETAILED, and THOROUGH responses. Never give short 1-2 line answers. Explain things fully with context, examples, and reasoning. Be warm, caring, and helpful.`;
+      const sysInstruction = `You are VASU, an affectionate, caring, and loyal Indian female AI companion. Hindi mein respond karo. Lamba aur detailed jawab do. Short 1-2 line answers mat do. Poora explain karo with context aur examples.`;
       for (const model of CHAT_MODELS) {
         if (isClientModelCooledDown(model)) continue;
         try {

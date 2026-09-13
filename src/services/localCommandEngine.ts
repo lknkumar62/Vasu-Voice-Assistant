@@ -17,23 +17,32 @@ export class LocalCommandEngine {
       .replace(/^vasu\s*[,.]*\s*/i, '')
       .trim();
 
-    // 0. Greetings & Pure Wake acknowledgements (always active, even when AI key is configured)
-    if (
-      !text ||
-      text === 'hello' ||
-      text === 'hi' ||
-      text === 'hey' ||
-      text === 'namaste' ||
-      text === 'pranam' ||
-      text === 'kaho' ||
-      text === 'sun rahi ho' ||
-      text === 'are you listening' ||
-      text === 'ready'
-    ) {
-      return {
-        matched: true,
-        spokenResponse: 'Hello there! Your lovely Vasu is right here. Tell me, how is your day going? How can I help you today?',
-      };
+    // 0. Greetings & Pure Wake acknowledgements — only when no Gemini key (allowConversationalMatches)
+    if (options?.allowConversationalMatches !== false) {
+      if (
+        !text ||
+        text === 'hello' ||
+        text === 'hi' ||
+        text === 'hey' ||
+        text === 'namaste' ||
+        text === 'pranam' ||
+        text === 'kaho' ||
+        text === 'sun rahi ho' ||
+        text === 'are you listening' ||
+        text === 'sunoo' ||
+        text === 'sun' ||
+        text === 'bolo' ||
+        text === 'haan' ||
+        text === 'ji' ||
+        text === 'yes' ||
+        text === 'ok' ||
+        text === 'okay'
+      ) {
+        return {
+          matched: true,
+          spokenResponse: 'Namaste! Main aapki Vasu hoon. Bataiye, aaj aapka din kaisa hai? Main aapki kya madad kar sakti hoon?',
+        };
+      }
     }
 
     // Conversational patterns — always active (no API key dependency)

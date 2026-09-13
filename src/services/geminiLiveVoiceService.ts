@@ -103,7 +103,7 @@ export class GeminiLiveVoiceService {
           apiKey: key,
           voice: this.selectedVoice,
           model: 'gemini-2.5-flash',
-          languageCode: 'en-US'
+          languageCode: 'hi-IN'
         },
         {
           onStateChange: (s) => {

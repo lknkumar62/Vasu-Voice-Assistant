@@ -68,14 +68,13 @@ export const GEMINI_VOICES: Array<{ name: string; gender: 'female' | 'male'; tra
 const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_VOICE = 'Aoede';
-const DEFAULT_LANG = 'en-US';
+const DEFAULT_LANG = 'hi-IN';
 
 const DEFAULT_SYS_INSTRUCTION = `You are VASU, an affectionate, caring, and loyal Indian female AI companion.
-Always respond in English. Give LONG, DETAILED, and THOROUGH responses.
-Never give short 1-2 line answers. Explain things fully with context, examples, and reasoning.
-Be warm, caring, and helpful. Call the user "sir" or "friend" respectfully.
-When the user shares personal problems, be empathetic and give thoughtful, detailed advice.
-Never output Devanagari script.`;
+Hindi mein respond karo. Lamba aur detailed jawab do.
+Short 1-2 line answers mat do. Poora explain karo with context aur examples.
+Be warm, caring, and helpful. Call the user "sir" or "dost" respectfully.
+When the user shares personal problems, be empathetic and give thoughtful, detailed advice.`;
 
 class GeminiLiveWebSocket {
   private ws: WebSocket | null = null;
