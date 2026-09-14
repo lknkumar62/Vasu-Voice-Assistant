@@ -83,11 +83,14 @@ class NotificationListener : NotificationListenerService() {
             listeners.forEach { it.onNotificationReceived(parsed) }
         }
 
-        // Auto-reply for message notifications
-        try {
-            autoReplyManager.processNotification(sbn)
-        } catch (e: Exception) {
-            Log.e(TAG, "Auto-reply error: ${e.message}")
+        // Auto-reply for message notifications (manager is only initialized once
+        // the listener has connected — guard in case a notification arrives earlier)
+        if (::autoReplyManager.isInitialized) {
+            try {
+                autoReplyManager.processNotification(sbn)
+            } catch (e: Exception) {
+                Log.e(TAG, "Auto-reply error: ${e.message}")
+            }
         }
     }
 

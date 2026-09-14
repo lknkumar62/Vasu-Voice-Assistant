@@ -133,9 +133,9 @@ class SettingsViewModel @Inject constructor(
             settings.autoAllowEnabled.collect { _uiState.value = _uiState.value.copy(autoAllowEnabled = it) }
         }
         viewModelScope.launch {
-            ttsManager.availableLanguages.collect { locales ->
+            ttsManager.availableLanguages.collect { voices ->
                 _uiState.value = _uiState.value.copy(
-                    installedVoices = locales.map { it.toLanguageTag() }.distinct()
+                    installedVoices = voices.distinct()
                 )
             }
         }

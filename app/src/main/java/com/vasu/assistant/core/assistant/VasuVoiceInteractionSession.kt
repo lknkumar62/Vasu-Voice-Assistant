@@ -1,48 +1,36 @@
 package com.vasu.assistant.core.assistant
 
+import android.app.assist.AssistContent
+import android.app.assist.AssistStructure
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.os.ResultReceiver
 import android.service.voice.VoiceInteractionSession
 import android.util.Log
-import android.view.View
-import android.view.WindowManager
 
 class VasuVoiceInteractionSession(
     private val context: Context,
     private val bundle: Bundle?
 ) : VoiceInteractionSession(context) {
 
-    override fun onCreate(): Unit = Log.d(TAG, "onCreate").let { }
-
-    override fun onStart(p0: Intent?, p1: Int): Unit = Log.d(TAG, "onStart").let { }
-
-    override fun onReady(): Unit = Log.d(TAG, "onReady").let { }
-
-    override fun onFinish(): Unit = Log.d(TAG, "onFinish").let { }
-
-    override fun onDestroy(): Unit = Log.d(TAG, "onDestroy").let { }
-
-    override fun onAssist(
-        data: Bundle?,
-        assistContext: Bundle?,
-        state: Int,
-        activityId: Int
-    ): Bundle? {
-        Log.d(TAG, "onAssist: state=$state, activityId=$activityId")
-        launchOverlay()
-        return null
+    override fun onCreate() {
+        super.onCreate()
+        Log.d(TAG, "onCreate")
     }
 
-    override fun onHandleAssist(data: Bundle?, activityId: Int) {
-        Log.d(TAG, "onHandleAssist: activityId=$activityId")
+    override fun onShow(args: Bundle?, showFlags: Int) {
+        super.onShow(args, showFlags)
+        Log.d(TAG, "onShow: showFlags=$showFlags")
+    }
+
+    override fun onHandleAssist(data: Bundle?, structure: AssistStructure?, content: AssistContent?) {
+        Log.d(TAG, "onHandleAssist")
         launchOverlay()
     }
 
-    override fun onHandleAssistRequest(data: Bundle?, resultReceiver: ResultReceiver?) {
-        Log.d(TAG, "onHandleAssistRequest")
-        launchOverlay()
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "onDestroy")
     }
 
     private fun launchOverlay() {

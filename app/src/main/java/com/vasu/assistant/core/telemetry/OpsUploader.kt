@@ -87,15 +87,11 @@ class OpsUploader(
             jsonArray.put(obj)
         }
 
+        val telemetry = TelemetryManager()
         return JSONObject().apply {
             put("events", jsonArray)
-            put("session_id", TelemetryManager.init::class.java.simpleName)
-            put("device", JSONObject(TelemetryManager.init.let {
-                mapOf(
-                    "sdk" to android.os.Build.VERSION.SDK_INT,
-                    "model" to android.os.Build.MODEL
-                )
-            }))
+            put("session_id", telemetry.getSessionId())
+            put("device", JSONObject(telemetry.getDeviceInfo()))
         }
     }
 

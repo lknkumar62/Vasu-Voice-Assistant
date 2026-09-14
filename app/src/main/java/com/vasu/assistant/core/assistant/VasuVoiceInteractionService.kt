@@ -1,9 +1,7 @@
 package com.vasu.assistant.core.assistant
 
 import android.content.Intent
-import android.os.Bundle
 import android.service.voice.VoiceInteractionService
-import android.service.voice.VoiceInteractionSession
 import android.util.Log
 
 class VasuVoiceInteractionService : VoiceInteractionService() {
@@ -13,18 +11,18 @@ class VasuVoiceInteractionService : VoiceInteractionService() {
         Log.d(TAG, "onCreate: VASU VoiceInteractionService started")
     }
 
-    override fun onAssist(data: Bundle?, activityId: Int) {
-        Log.d(TAG, "onAssist: data=$data, activityId=$activityId")
-        launchOverlay()
+    override fun onReady() {
+        super.onReady()
+        Log.d(TAG, "onReady: VASU VoiceInteractionService ready")
     }
 
-    override fun onHandleAssistRequest(data: Bundle?) {
-        Log.d(TAG, "onHandleAssistRequest: data=$data")
-        launchOverlay()
+    override fun onShutdown() {
+        super.onShutdown()
+        Log.d(TAG, "onShutdown")
     }
 
-    override fun onOpenVoiceInteractionWindow() {
-        Log.d(TAG, "onOpenVoiceInteractionWindow")
+    override fun onLaunchVoiceAssistFromKeyguard() {
+        Log.d(TAG, "onLaunchVoiceAssistFromKeyguard")
         launchOverlay()
     }
 

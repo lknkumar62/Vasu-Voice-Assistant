@@ -28,7 +28,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vasu.assistant.core.network.NetworkState
 import com.vasu.assistant.core.settings.VasuSettings
@@ -46,6 +45,14 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Hoisted UI state for the ADVANCED section. Initialized from persisted
+    // settings so field values survive a recomposition; explicit types keep the
+    // delegate inference unambiguous at the top of the composable body.
+    var chatServerInput by remember { mutableStateOf<String>(state.chatServerUrl) }
+    var googleClientId by remember { mutableStateOf<String>(state.googleClientId) }
+    var githubClientId by remember { mutableStateOf<String>(state.githubClientId) }
+    var discordClientId by remember { mutableStateOf<String>(state.discordClientId) }
 
     var keyInput by remember { mutableStateOf("") }
     var showKey by remember { mutableStateOf(false) }
@@ -387,7 +394,6 @@ fun SettingsScreen(
 
             // --- ADVANCED SECTION ---
             SettingsSection(title = "ADVANCED") {
-                var chatServerInput by remember { mutableStateOf(state.chatServerUrl) }
                 var chatKeyInput by remember { mutableStateOf("") }
                 var showChatKey by remember { mutableStateOf(false) }
 
@@ -434,11 +440,8 @@ fun SettingsScreen(
                     ) { Text("Save Chat Config", fontWeight = FontWeight.Bold) }
                 }
 
-                var googleClientId by remember { mutableStateOf(state.googleClientId) }
-                var githubClientId by remember { mutableStateOf(state.githubClientId) }
                 var githubClientSecret by remember { mutableStateOf("") }
                 var showGithubSecret by remember { mutableStateOf(false) }
-                var discordClientId by remember { mutableStateOf(state.discordClientId) }
 
                 SettingsCard {
                     Text("OAuth Connectors", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)

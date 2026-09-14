@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import com.vasu.assistant.core.voice.VoiceStateManager
@@ -33,7 +32,7 @@ class TTSManager @Inject constructor(
 ) {
     val state: StateFlow<TTSState> get() = androidSpeechService.state
     val activeVoiceSource: StateFlow<ActiveVoiceSource> get() = voiceRouter.currentSource
-    val availableLanguages: StateFlow<List<Locale>> get() = androidSpeechService.availableVoices
+    val availableLanguages: StateFlow<List<String>> get() = androidSpeechService.availableVoices
     val voiceStatus: StateFlow<VoiceStatus> get() = androidSpeechService.voiceStatus
 
     private val _customVoiceStatus = MutableStateFlow(customVoiceEngine.status.value)

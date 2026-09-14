@@ -7,5 +7,5 @@ data class DiagnosticItem(
 )
 
 enum class DiagnosticStatus {
-    OK, WARNING, ERROR, UNKNOWN
+    OK, WARNING, ERROR, UNKNOWN, INFO
 }

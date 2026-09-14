@@ -172,10 +172,6 @@ class SocialAlarmReceiver : BroadcastReceiver() {
         getPrefs(context).edit().putString(KEY_QUEUED_POSTS, json).apply()
     }
 
-    private fun getPrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    }
-
     companion object {
         private const val TAG = "VasuSocialAlarm"
         private const val PREFS_NAME = "vasu_social"
@@ -189,6 +185,10 @@ class SocialAlarmReceiver : BroadcastReceiver() {
 
         const val ACTION_DAILY_STORY = "com.vasu.assistant.social.DAILY_STORY"
         const val ACTION_QUEUED_POST = "com.vasu.assistant.social.QUEUED_POST"
+
+        private fun getPrefs(context: Context): SharedPreferences {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
 
         fun scheduleDailyStory(context: Context, hour: Int = 9, minute: Int = 0) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager

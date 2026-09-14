@@ -92,7 +92,7 @@ class OAuthManager @Inject constructor() {
 
     fun getAccount(context: Context, provider: String): ConnectedAccount? {
         return try {
-            val json = getPrefs(context).getString("account_$provider, null")
+            val json = getPrefs(context).getString("account_$provider", null)
             if (json == null) null
             else {
                 // Simple parsing

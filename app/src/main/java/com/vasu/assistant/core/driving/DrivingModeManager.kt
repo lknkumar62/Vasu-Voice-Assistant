@@ -1,6 +1,7 @@
 package com.vasu.assistant.core.driving
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.SharedPreferences

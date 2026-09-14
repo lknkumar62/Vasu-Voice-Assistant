@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
@@ -11,7 +12,12 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.view.inputmethod.InputConnection
-import androidx.core.app.RemoteInput
+import com.vasu.assistant.core.ai.AiResult
+import com.vasu.assistant.core.ai.GeminiProvider
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +31,22 @@ class NotificationAutoReplyManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs: SharedPreferences by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    /**
+     * Real AI provider (the app's Gemini client) resolved from the Hilt graph.
+     * Null when Hilt is unavailable — callers fall back to canned replies.
+     */
+    private val aiProvider: GeminiProvider? by lazy {
+        try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                AutoReplyAiEntryPoint::class.java
+            ).geminiProvider()
+        } catch (e: Exception) {
+            Log.e(TAG, "AI provider unavailable: ${e.message}")
+            null
+        }
     }
 
     private val autoReplyQueue = ArrayDeque<PendingAutoReply>()
@@ -95,16 +117,12 @@ class NotificationAutoReplyManager(
                 append("Message: \"$messageText\". ")
                 append("Keep it natural, 1-2 lines max. Don't use quotes in the reply.")
             }
-            // Try to use the AI provider manager if available
-            val aiManager = getAIProviderManager()
-            if (aiManager != null) {
-                val response = aiManager.chat(
-                    com.vasu.assistant.src.services.aiProviderManager.ChatParams(
-                        message = prompt,
-                        language = "Hinglish"
-                    )
-                )
-                response.replyText
+            val provider = aiProvider
+            if (provider != null) {
+                when (val result = provider.generate(prompt = prompt)) {
+                    is AiResult.Text -> result.content
+                    else -> getFallbackReply(senderName, messageText)
+                }
             } else {
                 // Fallback replies
                 getFallbackReply(senderName, messageText)
@@ -132,7 +150,7 @@ class NotificationAutoReplyManager(
             val action = notification.actions?.getOrNull(pending.replyActionIndex) ?: return
 
             val remoteInputs = action.getRemoteInputs() ?: return
-            val remoteInput = remoteInputs.firstOrNull() ?: return
+            if (remoteInputs.isEmpty()) return
 
             // Build the reply intent
             val intent = action.actionIntent
@@ -141,15 +159,19 @@ class NotificationAutoReplyManager(
                 return
             }
 
-            val localIntent = intent.cloneFilter()
+            // Fill-in intent that carries the reply results to the app's reply action
+            val localIntent = Intent()
             val resultBundle = Bundle()
 
             for (ri in remoteInputs) {
                 resultBundle.putCharSequence(ri.resultKey, replyText)
             }
 
-            RemoteInput.addResultsToIntent(remoteInputs, localIntent, resultBundle)
-            localIntent.send()
+            // Framework RemoteInput type is used consistently: the array comes from
+            // Notification.Action.getRemoteInputs() and is consumed by the framework
+            // addResultsToIntent helper on the fill-in intent.
+            android.app.RemoteInput.addResultsToIntent(remoteInputs, localIntent, resultBundle)
+            intent.send(context, 0, localIntent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send reply: ${e.message}")
         }
@@ -176,15 +198,6 @@ class NotificationAutoReplyManager(
         prefs.edit().putStringSet(KEY_IGNORED, packages).apply()
     }
 
-    private fun getAIProviderManager(): Any? {
-        return try {
-            val clazz = Class.forName("com.vasu.assistant.src.services.aiProviderManager.AIProviderManager")
-            clazz.getDeclaredMethod("getInstance").invoke(null)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
     companion object {
         private const val TAG = "VasuAutoReply"
         private const val PREFS_NAME = "vasu_auto_reply"
@@ -205,4 +218,11 @@ class NotificationAutoReplyManager(
             "com.vasu.assistant"
         )
     }
+}
+
+/** Hilt entry point exposing the singleton AI client to non-injected classes. */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface AutoReplyAiEntryPoint {
+    fun geminiProvider(): GeminiProvider
 }

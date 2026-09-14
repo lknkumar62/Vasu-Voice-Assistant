@@ -68,6 +68,7 @@ fun DiagnosticsScreen(
                                 DiagnosticStatus.WARNING -> Icons.Default.Warning
                                 DiagnosticStatus.ERROR -> Icons.Default.Error
                                 DiagnosticStatus.INFO -> Icons.Default.Info
+                                DiagnosticStatus.UNKNOWN -> Icons.Default.HelpOutline
                             },
                             contentDescription = null,
                             tint = when (item.status) {
@@ -75,13 +76,14 @@ fun DiagnosticsScreen(
                                 DiagnosticStatus.WARNING -> VasuWarning
                                 DiagnosticStatus.ERROR -> VasuError
                                 DiagnosticStatus.INFO -> VasuCyan
+                                DiagnosticStatus.UNKNOWN -> VasuTextSecondary
                             },
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(item.label, color = VasuTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text(item.value, color = VasuTextSecondary, fontSize = 11.sp)
+                            Text(item.name, color = VasuTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(item.details, color = VasuTextSecondary, fontSize = 11.sp)
                         }
                     }
                 }

@@ -5,8 +5,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class TermuxResultReceiver : BroadcastReceiver() {
+
+    @Inject
+    lateinit var termuxManager: TermuxManager
 
     override fun onReceive(context: Context, intent: Intent) {
         val execId = intent.getIntExtra(EXTRA_EXEC_ID, -1)
@@ -22,7 +28,7 @@ class TermuxResultReceiver : BroadcastReceiver() {
 
         Log.d(TAG, "Received result for exec #$execId: exit=$exitCode")
 
-        TermuxManager.onCommandResult(execId, output, error, exitCode)
+        termuxManager.onCommandResult(execId, output, error, exitCode)
     }
 
     companion object {

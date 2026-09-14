@@ -79,7 +79,7 @@ class VoiceGuardian @Inject constructor(
         val embedding = SpeakerEmbeddingGenerator.generate(audioData)
 
         // Verify against enrolled voices
-        val result = speakerVerifier.verify(embedding)
+        val result = speakerVerifier.verify(embedding, roleManager.listVoices())
 
         when (result) {
             is VerificationResult.Verified -> {

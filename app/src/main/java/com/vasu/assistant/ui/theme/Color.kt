@@ -12,6 +12,7 @@ val MayaGlassWhite = Color(0x1AFFFFFF) // Glassmorphism overlay
 val VasuCyan = MayaElectricCyan
 val VasuPurple = MayaElectricPurple
 val VasuSuccess = MayaNeonGreen
+val VasuGreen = MayaNeonGreen
 val VasuDarkBg = MayaObsidian
 val VasuDarkCard = Color(0xFF0A0A0A) // Slight grey for depth
 val VasuDarkSurface = Color(0xFF050505)
