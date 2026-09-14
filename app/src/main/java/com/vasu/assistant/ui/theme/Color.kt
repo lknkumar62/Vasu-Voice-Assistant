@@ -2,63 +2,54 @@ package com.vasu.assistant.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// VASU Primary Colors — hyper professional (VasuCyan #008CFF)
-val VasuCyan = Color(0xFF008CFF)
-val VasuCyanDark = Color(0xFF0066CC)
-val VasuCyanLight = Color(0xFF4DA8FF)
+// MAYA 4.18.5 EXACT PALETTE
+val MayaObsidian = Color(0xFF000000) // Pure Black Background
+val MayaElectricCyan = Color(0xFF00FFFF) // Neon Cyan Accents
+val MayaElectricPurple = Color(0xFFBF00FF) // Neon Purple
+val MayaNeonGreen = Color(0xFF39FF14) // Neon Green
+val MayaGlassWhite = Color(0x1AFFFFFF) // Glassmorphism overlay
 
-// VASU Secondary Colors
-val VasuPurple = Color(0xFF7C4DFF)
-val VasuPurpleDark = Color(0xFF651FFF)
-val VasuPurpleLight = Color(0xFFB47CFF)
+val VasuCyan = MayaElectricCyan
+val VasuPurple = MayaElectricPurple
+val VasuSuccess = MayaNeonGreen
+val VasuDarkBg = MayaObsidian
+val VasuDarkCard = Color(0xFF0A0A0A) // Slight grey for depth
+val VasuDarkSurface = Color(0xFF050505)
+val VasuDarkElevated = Color(0xFF121212)
 
-// VASU Accent
-val VasuGreen = Color(0xFF00FF88)
-val VasuGreenDark = Color(0xFF00C864)
+val VasuTextPrimary = Color(0xFFFFFFFF)
+val VasuTextSecondary = Color(0xFFB0B0B0)
+val VasuTextMuted = Color(0xFF666666)
 
-// Background Colors — hyper professional deep navy (VasuDarkBg #01060D, cards #061827)
-val VasuDarkBg = Color(0xFF01060D)
-val VasuDarkSurface = Color(0xFF061827)
-val VasuDarkCard = Color(0xFF061827)
-val VasuDarkElevated = Color(0xFF0A2340)
+val VasuError = Color(0xFFFF0040)
+val VasuWarning = Color(0xFFFFD700)
+val VasuInfo = Color(0xFF00BFFF)
 
-// Text Colors
-val VasuTextPrimary = Color(0xFFE6EDF3)
-val VasuTextSecondary = Color(0xFF8B949E)
-val VasuTextMuted = Color(0xFF484F58)
+// Voice Activity
+val VasuListening = MayaElectricCyan
+val VasuSpeaking = MayaElectricPurple
+val VasuThinking = Color(0xFFFFFF00)
+val VasuIdle = Color(0xFF333333)
 
-// Status Colors
-val VasuSuccess = Color(0xFF00FF88)
-val VasuWarning = Color(0xFFFFB74D)
-val VasuError = Color(0xFFFF5252)
-val VasuInfo = Color(0xFF40C4FF)
+// Material 3 Mapping
+val DarkPrimary = MayaElectricCyan
+val DarkOnPrimary = Color(0xFF000000)
+val DarkPrimaryContainer = Color(0xFF003333)
+val DarkOnPrimaryContainer = MayaElectricCyan
 
-// Voice Activity Colors
-val VasuListening = Color(0xFF00E5FF)
-val VasuSpeaking = Color(0xFF7C4DFF)
-val VasuThinking = Color(0xFFFFB74D)
-val VasuIdle = Color(0xFF484F58)
+val DarkSecondary = MayaElectricPurple
+val DarkOnSecondary = Color(0xFF000000)
+val DarkSecondaryContainer = Color(0xFF330033)
+val DarkOnSecondaryContainer = MayaElectricPurple
 
-// Dark Theme Material 3
-val DarkPrimary = VasuCyan
-val DarkOnPrimary = Color(0xFF003544)
-val DarkPrimaryContainer = Color(0xFF004D61)
-val DarkOnPrimaryContainer = VasuCyanLight
-
-val DarkSecondary = VasuPurple
-val DarkOnSecondary = Color(0xFF381E72)
-val DarkSecondaryContainer = Color(0xFF4F378B)
-val DarkOnSecondaryContainer = VasuPurpleLight
-
-val DarkBackground = VasuDarkBg
+val DarkBackground = MayaObsidian
 val DarkOnBackground = VasuTextPrimary
-
-val DarkSurface = VasuDarkSurface
+val DarkSurface = MayaObsidian
 val DarkOnSurface = VasuTextPrimary
-val DarkSurfaceVariant = VasuDarkCard
+val DarkSurfaceVariant = MayaObsidian
 val DarkOnSurfaceVariant = VasuTextSecondary
 
 val DarkError = VasuError
-val DarkOnError = Color(0xFF601410)
-val DarkErrorContainer = Color(0xFF8C1D18)
-val DarkOnErrorContainer = Color(0xFFFFB4AB)
+val DarkOnError = Color(0xFFFFFFFF)
+val DarkErrorContainer = Color(0xFF660000)
+val DarkOnErrorContainer = Color(0xFFFFBABA)
