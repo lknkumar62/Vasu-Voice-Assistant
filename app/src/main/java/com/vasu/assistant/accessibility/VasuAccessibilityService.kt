@@ -165,7 +165,7 @@ class VasuAccessibilityService : AccessibilityService() {
         }
         try {
             takeScreenshot(
-                DISPLAY_ID_DEFAULT,
+                0,
                 mainExecutor,
                 object : TakeScreenshotCallback {
                     override fun onSuccess(result: ScreenshotResult) {

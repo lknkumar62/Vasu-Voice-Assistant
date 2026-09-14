@@ -17,6 +17,18 @@ class DeviceControlManager @Inject constructor(
     private val bluetoothManager: BluetoothManager,
     private val mediaManager: MediaManager
 ) {
+    fun openCamera(): ActionResult {
+        return try {
+            val intent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            ActionResult.success("camera", "Opening camera")
+        } catch (e: Exception) {
+            ActionResult.error("camera", "Failed to open camera", e.message ?: "Unknown")
+        }
+    }
+
     fun getBatteryInfo(): Map<String, Any> {
         val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
             ?: return mapOf("level" to -1, "isCharging" to false)

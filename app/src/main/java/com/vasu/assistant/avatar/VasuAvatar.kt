@@ -20,8 +20,9 @@ class VasuAvatar @Inject constructor(
     )
 
     fun getStateMotion(): String {
-        val state = avatarManager.getCurrentState().name.lowercase()
-        return motionMap[state] ?: "idle_motion"
+        val state = avatarManager.getCurrentState()
+        val stateLower = state.lowercase()
+        return motionMap[stateLower] ?: "idle_motion"
     }
 
     fun setSpeaking() { avatarManager.onSpeaking() }

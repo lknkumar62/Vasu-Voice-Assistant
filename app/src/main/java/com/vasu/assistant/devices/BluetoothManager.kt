@@ -15,6 +15,14 @@ import javax.inject.Singleton
 class BluetoothManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    fun enableBluetooth(): ActionResult {
+        return openBluetoothSettings()
+    }
+
+    fun disableBluetooth(): ActionResult {
+        return openBluetoothSettings()
+    }
+
     fun openBluetoothSettings(): ActionResult {
         return try {
             val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {

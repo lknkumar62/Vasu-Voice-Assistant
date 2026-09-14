@@ -40,6 +40,10 @@ class TorchManager @Inject constructor(
         }
     }
 
+    fun setTorch(enabled: Boolean): ActionResult {
+        return if (enabled) turnOn() else turnOff()
+    }
+
     fun turnOn(): ActionResult {
         val cameraId = getCameraId() ?: return ActionResult.error("torch", "No flashlight hardware detected on this device", "HARDWARE_NOT_FOUND")
         return try {

@@ -176,20 +176,21 @@ fun SettingsScreen(
                             Spacer(Modifier.weight(1f))
                             Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VasuTextSecondary)
                         }
-                        DropdownMenu(
-                            expanded = modelMenuOpen,
-                            onDismissRequest = { modelMenuOpen = false }
-                        ) {
-                            state.availableModels.forEach { model ->
-                                DropdownMenuItem(
-                                    text = { Text(model, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
-                                    onClick = {
-                                        viewModel.setModel(model)
-                                        modelMenuOpen = false
-                                    }
-                                )
+                            DropdownMenu(
+                                expanded = modelMenuOpen,
+                                onDismissRequest = { modelMenuOpen = false }
+                            ) {
+                                for (model in state.availableModels) {
+                                    DropdownMenuItem(
+                                        text = { Text(model, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
+                                        onClick = {
+                                            viewModel.setModel(model)
+                                            modelMenuOpen = false
+                                        }
+                                    )
+                                }
                             }
-                        }
+
                     }
                 }
 
@@ -219,6 +220,7 @@ fun SettingsScreen(
                         ConnectionTest.TESTING -> "Testing Connection..."
                         ConnectionTest.PASSED -> "Connection Verified"
                         ConnectionTest.FAILED -> "Connection Failed"
+                        else -> "Unknown Connection State"
                     },
                     detail = state.connectionMessage.ifBlank { null },
                     color = when (state.connectionTest) {
@@ -341,6 +343,7 @@ fun SettingsScreen(
                         WakeWordState.LISTENING, WakeWordState.DETECTED -> Icons.Default.CheckCircle
                         WakeWordState.MODEL_NOT_AVAILABLE, WakeWordState.ERROR -> Icons.Default.Error
                         WakeWordState.IDLE -> Icons.Default.HelpOutline
+                        else -> Icons.Default.HelpOutline
                     },
                     label = when (state.wakeWordState) {
                         WakeWordState.IDLE -> "Wake Word: Idle"
@@ -348,12 +351,14 @@ fun SettingsScreen(
                         WakeWordState.DETECTED -> "Wake Word: Detected"
                         WakeWordState.MODEL_NOT_AVAILABLE -> "Wake Word: Unavailable"
                         WakeWordState.ERROR -> "Wake Word: Error"
+                        else -> "Wake Word: Unknown"
                     },
                     detail = state.wakeWordReason,
                     color = when (state.wakeWordState) {
                         WakeWordState.LISTENING, WakeWordState.DETECTED -> VasuSuccess
                         WakeWordState.MODEL_NOT_AVAILABLE, WakeWordState.ERROR -> VasuError
                         WakeWordState.IDLE -> VasuTextSecondary
+                        else -> VasuTextSecondary
                     }
                 )
             }
@@ -631,42 +636,6 @@ private fun VoiceGroup(
                     onVoiceSelected(suffix)
                 },
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsToggleItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit
-) {
-    SettingsCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(VasuCyan.copy(alpha = 0.1f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(18.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(title, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(subtitle, color = VasuTextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
-                }
-            }
-            Switch(
-                checked = enabled,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(checkedThumbColor = VasuCyan, checkedTrackColor = VasuCyan.copy(alpha = 0.4f))
             )
         }
     }

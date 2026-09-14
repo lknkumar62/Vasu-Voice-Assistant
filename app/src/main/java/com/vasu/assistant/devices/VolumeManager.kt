@@ -18,6 +18,10 @@ class VolumeManager @Inject constructor(
     private val tag = "VolumeManager"
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
+    fun mute(): ActionResult {
+        return setVolume(0)
+    }
+
     fun setVolume(percentage: Int): ActionResult {
         val am = audioManager ?: return ActionResult.error("volume", "AudioManager not available", "SERVICE_NOT_FOUND")
         return try {

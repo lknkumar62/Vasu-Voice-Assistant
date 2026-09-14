@@ -167,7 +167,7 @@ class GeminiProvider @Inject constructor(
      */
     suspend fun generate(
         prompt: String,
-        systemPrompt: String,
+        systemPrompt: String = "",
         history: List<ChatMessage> = emptyList(),
         tools: List<ToolDefinition> = emptyList(),
         temperature: Float = 0.7f,
