@@ -14,7 +14,7 @@ class BootReceiver : BroadcastReceiver() {
             Log.d(TAG, "Boot completed, starting foreground service")
             try {
                 val serviceIntent = Intent(context, VasuForegroundService::class.java).apply {
-                    action = "BOOT_STANDBY"
+                    setAction("BOOT_STANDBY")
                 }
                 context.startForegroundService(serviceIntent)
             } catch (e: Exception) {

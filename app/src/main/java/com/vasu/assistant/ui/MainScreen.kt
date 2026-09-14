@@ -1,8 +1,11 @@
 package com.vasu.assistant.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Home
@@ -19,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.CurrentDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -28,6 +30,16 @@ import com.vasu.assistant.ui.home.HomeScreen
 import com.vasu.assistant.ui.chat.ChatScreen
 import com.vasu.assistant.ui.tools.ToolsScreen
 import com.vasu.assistant.ui.settings.SettingsScreen
+import com.vasu.assistant.ui.voice.VoiceScreen
+import com.vasu.assistant.ui.guardian.GuardianScreen
+import com.vasu.assistant.ui.missions.MissionsScreen
+import com.vasu.assistant.ui.automation.AutomationScreen
+import com.vasu.assistant.ui.memory.MemoryScreen
+import com.vasu.assistant.ui.permissions.PermissionsScreen
+import com.vasu.assistant.ui.privacy.PrivacyScreen
+import com.vasu.assistant.ui.location.LocationScreen
+import com.vasu.assistant.ui.browser.BrowserScreen
+import com.vasu.assistant.ui.diagnostics.DiagnosticsScreen
 import com.vasu.assistant.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -187,7 +199,3 @@ fun MainScreen() {
 }
 
 data class NavigationItem(val label: String, val route: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
-
-private fun Spacer(modifier: Modifier) {
-    androidx.compose.foundation.layout.Spacer(modifier = modifier)
-}

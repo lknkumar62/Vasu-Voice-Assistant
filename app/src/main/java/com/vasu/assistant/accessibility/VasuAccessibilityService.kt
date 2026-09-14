@@ -86,6 +86,8 @@ class VasuAccessibilityService : AccessibilityService() {
                     if (pkg != null && !pkg.startsWith("inputmethod") && pkg !in ignoredPackages) {
                         foregroundPackage = pkg
                         Log.d(TAG, "Foreground app: $pkg")
+                    } else {
+                        // Do nothing
                     }
                 }
                 AccessibilityEvent.TYPE_VIEW_CLICKED -> {
@@ -140,7 +142,12 @@ class VasuAccessibilityService : AccessibilityService() {
     }
 
     fun openApp(packageName: String): ActionResult {
-        return interactionManager.openApp(packageName)
+        val success = interactionManager.openApp(packageName)
+        return if (success) {
+            ActionResult.success("openApp", "Successfully opened $packageName")
+        } else {
+            ActionResult.error("openApp", "Failed to open $packageName", "App not found or could not be started")
+        }
     }
 
     fun readScreen(): ActionResult {

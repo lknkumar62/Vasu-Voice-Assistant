@@ -802,20 +802,6 @@ fun SettingsItem(
         }
     }
 }
-            Box(
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(VasuCyan.copy(alpha = 0.10f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = title, tint = VasuCyan, modifier = Modifier.size(20.dp))
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text(subtitle, color = VasuTextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
-            }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = VasuTextMuted, modifier = Modifier.size(18.dp))
-        }
-    }
-}
 
 @Composable
 fun SettingsToggleItem(

@@ -117,6 +117,7 @@ class VoiceViewModel @Inject constructor(
                     GeminiVoiceState.SPEAKING -> VoiceUiMode.SPEAKING
                     GeminiVoiceState.DISCONNECTED -> VoiceUiMode.DISCONNECTED
                     GeminiVoiceState.ERROR -> VoiceUiMode.ERROR
+                    else -> VoiceUiMode.IDLE
                 }
 
                 if (liveState == GeminiVoiceState.ERROR) {
