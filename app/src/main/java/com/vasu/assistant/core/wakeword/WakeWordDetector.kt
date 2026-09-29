@@ -9,6 +9,10 @@ import android.media.MediaRecorder
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.vasu.assistant.core.audio.AudioSessionManager
+import com.vasu.assistant.core.security.RoleManager
+import com.vasu.assistant.core.security.SpeakerEmbeddingGenerator
+import com.vasu.assistant.core.security.SpeakerVerifier
+import com.vasu.assistant.core.security.VerificationResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +58,9 @@ class WakeWordDetector @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioSessionManager: AudioSessionManager,
     private val voiceStateManager: com.vasu.assistant.core.voice.VoiceStateManager,
-    private val voiceGuardian: com.vasu.assistant.core.guardian.VoiceGuardian
+    private val voiceGuardian: com.vasu.assistant.core.guardian.VoiceGuardian,
+    private val roleManager: RoleManager,
+    private val speakerVerifier: SpeakerVerifier
 ) {
     companion object {
         private const val TAG = "WakeWordDetector"
@@ -250,10 +256,31 @@ class WakeWordDetector @Inject constructor(
                             voiceStateManager.transitionTo(GeminiVoiceState.WAKE_DETECTED)
                             _state.value = WakeWordState.DETECTED
 
-                            // 2. Verify Owner
+                            // 2. Verify Owner (bundled cohort) + enrolled Voice Guardian voices
                             val isOwner = voiceGuardian.verifyOwner(rollingBuffer)
-                            
-                            if (isOwner) {
+                            var guardianPassed = true
+                            if (isOwner && roleManager.listVoices().isNotEmpty()) {
+                                val embedding = SpeakerEmbeddingGenerator.generate(rollingBuffer)
+                                when (val verdict = speakerVerifier.verify(embedding, roleManager.listVoices())) {
+                                    is VerificationResult.Verified -> {
+                                        roleManager.setCurrentSpeaker(verdict.speaker)
+                                        roleManager.recordVerification(verdict.speaker.id)
+                                        Log.i(
+                                            TAG,
+                                            ">>> [VOICE GUARDIAN] Enrolled speaker verified: " +
+                                                "${verdict.speaker.name} (${verdict.speaker.role.displayName})"
+                                        )
+                                    }
+                                    else -> {
+                                        if (roleManager.guardianEnabled.value) {
+                                            guardianPassed = false
+                                            Log.w(TAG, ">>> [VOICE GUARDIAN] Enrolled voice not verified. Ignoring wake word.")
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isOwner && guardianPassed) {
                                 Log.i(TAG, ">>> [VOICE GUARDIAN] Owner verified. Proceeding to command listening.")
                                 
                                 // 3. Transition to COMMAND_LISTENING and emit event

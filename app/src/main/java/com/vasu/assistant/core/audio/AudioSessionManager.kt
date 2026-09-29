@@ -51,6 +51,7 @@ class AudioSessionManager @Inject constructor(
         GEMINI_LIVE("gemini_live"),
         NATIVE_RECORDER("native_recorder"),
         TTS_PLAYBACK("tts_playback"),
+        ENROLLMENT("voice_enrollment"),
         EXTERNAL_APP("external_app")
     }
 

@@ -1,10 +1,9 @@
 package com.vasu.assistant.core.security
 
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,14 +31,32 @@ data class EnrolledVoice(
     val lastVerified: Long = 0L,
     val verificationCount: Int = 0
 ) {
+    /**
+     * Full-field equality is load-bearing: StateFlow deduplicates on [equals],
+     * so id-only equality used to silently swallow role/verification updates.
+     */
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-        other as EnrolledVoice
-        return id == other.id
+        if (other !is EnrolledVoice) return false
+        return id == other.id &&
+            name == other.name &&
+            role == other.role &&
+            embedding.contentEquals(other.embedding) &&
+            enrolledAt == other.enrolledAt &&
+            lastVerified == other.lastVerified &&
+            verificationCount == other.verificationCount
     }
 
-    override fun hashCode(): Int = id.hashCode()
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + name.hashCode()
+        result = 31 * result + role.hashCode()
+        result = 31 * result + embedding.contentHashCode()
+        result = 31 * result + enrolledAt.hashCode()
+        result = 31 * result + lastVerified.hashCode()
+        result = 31 * result + verificationCount
+        return result
+    }
 }
 
 /**
@@ -54,7 +71,7 @@ data class EnrolledVoice(
  */
 @Singleton
 class RoleManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    private val voiceStore: VoiceStore
 ) {
     private val _enrolledVoices = MutableStateFlow<List<EnrolledVoice>>(emptyList())
     val enrolledVoices: StateFlow<List<EnrolledVoice>> = _enrolledVoices.asStateFlow()
@@ -70,10 +87,12 @@ class RoleManager @Inject constructor(
     }
 
     /**
-     * Enable/disable Voice Guardian
+     * Enable/disable Voice Guardian (persisted — survives restart)
      */
     fun setGuardianEnabled(enabled: Boolean) {
+        if (_guardianEnabled.value == enabled) return
         _guardianEnabled.value = enabled
+        saveEnrolledVoices()
     }
 
     /**
@@ -91,7 +110,7 @@ class RoleManager @Inject constructor(
             embedding = embedding
         )
 
-        _enrolledVoices.value = _enrolledVoices.value + voice
+        _enrolledVoices.update { it + voice }
         saveEnrolledVoices()
         return voice
     }
@@ -101,7 +120,7 @@ class RoleManager @Inject constructor(
      */
     fun removeVoice(id: String): Boolean {
         if (_enrolledVoices.value.none { it.id == id }) return false
-        _enrolledVoices.value = _enrolledVoices.value.filter { it.id != id }
+        _enrolledVoices.update { list -> list.filter { it.id != id } }
         saveEnrolledVoices()
         return true
     }
@@ -110,12 +129,10 @@ class RoleManager @Inject constructor(
      * Update voice role
      */
     fun updateVoiceRole(id: String, newRole: UserRole): Boolean {
-        val voices = _enrolledVoices.value.toMutableList()
-        val index = voices.indexOfFirst { it.id == id }
-        if (index == -1) return false
-
-        voices[index] = voices[index].copy(role = newRole)
-        _enrolledVoices.value = voices
+        if (_enrolledVoices.value.none { it.id == id }) return false
+        _enrolledVoices.update { list ->
+            list.map { if (it.id == id) it.copy(role = newRole) else it }
+        }
         saveEnrolledVoices()
         return true
     }
@@ -163,30 +180,58 @@ class RoleManager @Inject constructor(
      * Update verification count
      */
     fun recordVerification(id: String) {
-        val voices = _enrolledVoices.value.toMutableList()
-        val index = voices.indexOfFirst { it.id == id }
-        if (index != -1) {
-            voices[index] = voices[index].copy(
-                lastVerified = System.currentTimeMillis(),
-                verificationCount = voices[index].verificationCount + 1
-            )
-            _enrolledVoices.value = voices
-            saveEnrolledVoices()
+        if (_enrolledVoices.value.none { it.id == id }) return
+        _enrolledVoices.update { list ->
+            list.map {
+                if (it.id == id) {
+                    it.copy(
+                        lastVerified = System.currentTimeMillis(),
+                        verificationCount = it.verificationCount + 1
+                    )
+                } else it
+            }
         }
+        saveEnrolledVoices()
     }
 
     private fun generateId(): String {
         return "voice_${System.currentTimeMillis()}_${(1000..9999).random()}"
     }
 
+    /** Reads persisted enrollments + guardian toggle (survives app restart). */
     private fun loadEnrolledVoices() {
-        // In Phase 7, this will load from Room database
-        // For now, start with empty list
-        _enrolledVoices.value = emptyList()
+        val snapshot = voiceStore.load()
+        _enrolledVoices.value = snapshot.voices.map { stored ->
+            EnrolledVoice(
+                id = stored.id,
+                name = stored.name,
+                role = UserRole.entries.firstOrNull { it.name == stored.roleName } ?: UserRole.UNKNOWN,
+                embedding = stored.embedding,
+                enrolledAt = stored.enrolledAt,
+                lastVerified = stored.lastVerified,
+                verificationCount = stored.verificationCount
+            )
+        }
+        _guardianEnabled.value = snapshot.guardianEnabled
     }
 
+    /** Writes the full Guardian state after every mutation. */
     private fun saveEnrolledVoices() {
-        // In Phase 7, this will save to Room database
-        // For now, just keep in memory
+        voiceStore.save(
+            VoiceStoreSnapshot(
+                voices = _enrolledVoices.value.map { voice ->
+                    StoredVoice(
+                        id = voice.id,
+                        name = voice.name,
+                        roleName = voice.role.name,
+                        embedding = voice.embedding,
+                        enrolledAt = voice.enrolledAt,
+                        lastVerified = voice.lastVerified,
+                        verificationCount = voice.verificationCount
+                    )
+                },
+                guardianEnabled = _guardianEnabled.value
+            )
+        )
     }
 }

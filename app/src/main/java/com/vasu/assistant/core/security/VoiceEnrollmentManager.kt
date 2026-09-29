@@ -1,8 +1,5 @@
 package com.vasu.assistant.core.security
 
-import android.content.Context
-import com.vasu.assistant.core.stt.STTManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,9 +32,7 @@ sealed class EnrollmentState {
  */
 @Singleton
 class VoiceEnrollmentManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val roleManager: RoleManager,
-    private val sttManager: STTManager
+    private val roleManager: RoleManager
 ) {
     private val _state = MutableStateFlow<EnrollmentState>(EnrollmentState.Idle)
     val state: StateFlow<EnrollmentState> = _state.asStateFlow()
@@ -51,6 +46,7 @@ class VoiceEnrollmentManager @Inject constructor(
     /**
      * Start enrollment process
      */
+    @Synchronized
     fun startEnrollment() {
         collectedSamples.clear()
         _state.value = EnrollmentState.Recording
@@ -60,8 +56,13 @@ class VoiceEnrollmentManager @Inject constructor(
      * Record a voice sample
      * @param audioData Audio sample data
      */
+    @Synchronized
     fun recordSample(audioData: FloatArray) {
-        if (_state.value !is EnrollmentState.Recording) return
+        // SampleRecorded is valid here: the next sample arrives while the state
+        // still reflects the previous one (previously only Recording was
+        // accepted, which made multi-sample enrollment impossible).
+        val current = _state.value
+        if (current !is EnrollmentState.Recording && current !is EnrollmentState.SampleRecorded) return
 
         // Validate sample length
         val durationMs = (audioData.size / 16000.0) * 1000
@@ -95,6 +96,7 @@ class VoiceEnrollmentManager @Inject constructor(
     /**
      * Cancel enrollment
      */
+    @Synchronized
     fun cancelEnrollment() {
         collectedSamples.clear()
         _state.value = EnrollmentState.Idle
@@ -116,6 +118,7 @@ class VoiceEnrollmentManager @Inject constructor(
     /**
      * Complete enrollment with name and role
      */
+    @Synchronized
     fun completeEnrollment(name: String, role: UserRole) {
         if (collectedSamples.size < requiredSamples) {
             _state.value = EnrollmentState.Error("Not enough samples collected.")
@@ -126,6 +129,9 @@ class VoiceEnrollmentManager @Inject constructor(
         val combinedAudio = collectedSamples.flatMap { it.toList() }.toFloatArray()
         val embedding = SpeakerEmbeddingGenerator.generate(combinedAudio)
         val voice = roleManager.enrollVoice(name, role, embedding)
+        // The enroller is physically present at the mic — make them the active
+        // speaker so enabling Guardian doesn't lock tools out until next wake.
+        roleManager.setCurrentSpeaker(voice)
 
         collectedSamples.clear()
         _state.value = EnrollmentState.Completed(voice)
