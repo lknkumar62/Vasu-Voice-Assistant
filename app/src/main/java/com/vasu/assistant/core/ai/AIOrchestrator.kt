@@ -32,11 +32,15 @@ class AIOrchestrator @Inject constructor(
     private val torchManager: TorchManager,
     private val volumeManager: VolumeManager,
     private val bluetoothManager: BluetoothManager,
-    private val deviceControlManager: DeviceControlManager
+    private val deviceControlManager: DeviceControlManager,
+    private val toolRouter: ToolRouter
 ) {
     companion object {
         private const val TAG = "AIOrchestrator"
     }
+
+    /** Tool declarations sent to the LLM so it can request real executions. */
+    private val llmTools: List<ToolDefinition> by lazy { toolRouter.getAvailableTools() }
 
     /**
      * Process arbitrary user text/voice input, executing locally if it matches device commands,
@@ -50,8 +54,12 @@ class AIOrchestrator @Inject constructor(
      * VOICE CONTRACT: the returned string is the single canonical assistant
      * response for this turn — callers issue exactly ONE TTS request for it
      * after the response is complete (never per stream chunk).
+     *
+     * HISTORY: [history] is prior conversation (oldest first) so cloud turns
+     * keep context; callers cap the length to bound prompt size/latency.
      */
-    suspend fun processInput(rawInput: String): String = withContext(Dispatchers.IO) {
+    suspend fun processInput(rawInput: String, history: List<ChatMessage> = emptyList()): String =
+        withContext(Dispatchers.IO) {
         val input = rawInput.trim()
         if (input.isEmpty()) return@withContext ""
 
@@ -86,7 +94,9 @@ class AIOrchestrator @Inject constructor(
             if (geminiProvider.isConfigured) {
                 val result = geminiProvider.generate(
                     prompt = input,
-                    systemPrompt = systemPrompt
+                    systemPrompt = systemPrompt,
+                    history = history,
+                    tools = llmTools
                 )
 
                 return@withContext when (result) {
@@ -95,14 +105,7 @@ class AIOrchestrator @Inject constructor(
                         Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=gemini style=${detected.style}")
                         canonical
                     }
-                    is AiResult.FunctionCall -> scriptPick(
-                        detected,
-                        roman = "Kaam poora kiya ja raha hai.",
-                        deva = "कार्य पूरा किया जा रहा है।",
-                        eng = "Working on it."
-                    ).also {
-                        Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=function_call style=${detected.style}")
-                    }
+                    is AiResult.FunctionCall -> executeFunctionCall(result, input, detected, requestId)
                     is AiResult.Failure -> {
                         Log.w(TAG, "Gemini call failed: ${result.message} (${result.kind})")
                         geminiFailureMessage(result.kind, detected).also {
@@ -113,7 +116,9 @@ class AIOrchestrator @Inject constructor(
             } else if (claudeProvider.isConfigured) {
                 val result = claudeProvider.generate(
                     prompt = input,
-                    systemPrompt = systemPrompt
+                    systemPrompt = systemPrompt,
+                    history = history,
+                    tools = llmTools
                 )
                 return@withContext when (result) {
                     is AiResult.Text -> {
@@ -121,14 +126,7 @@ class AIOrchestrator @Inject constructor(
                         Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=claude style=${detected.style}")
                         canonical
                     }
-                    is AiResult.FunctionCall -> scriptPick(
-                        detected,
-                        roman = "Kaam poora kiya ja raha hai.",
-                        deva = "कार्य पूरा किया जा रहा है।",
-                        eng = "Working on it."
-                    ).also {
-                        Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=function_call style=${detected.style}")
-                    }
+                    is AiResult.FunctionCall -> executeFunctionCall(result, input, detected, requestId)
                     is AiResult.Failure -> scriptPick(
                         detected,
                         roman = "Maaf kijiye, jawab milne mein samasya aayi.",
@@ -157,6 +155,38 @@ class AIOrchestrator @Inject constructor(
                 eng = "Sorry, something went wrong."
             ).also {
                 Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=exception style=${detected.style}")
+            }
+        }
+    }
+
+    /**
+     * Executes an LLM-requested tool for real via [ToolRouter] (risk gate
+     * included) and returns the canonical assistant reply for this turn.
+     * Success reports the actual action result; failure reports why it was
+     * refused — never a generic "working on it" placeholder.
+     */
+    private suspend fun executeFunctionCall(
+        call: AiResult.FunctionCall,
+        input: String,
+        detected: DetectedLanguage,
+        requestId: String
+    ): String {
+        // Log tool name and argument keys only — values may contain messages,
+        // contacts, or file paths (privacy rule: nothing sensitive in logs).
+        Log.i(TAG, "FunctionCall requestId=$requestId tool=${call.name} argKeys=${call.args.keys}")
+        val execution = toolRouter.executeTool(call.name, call.args)
+        return if (execution.success) {
+            Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=function_call tool=${call.name} status=ok")
+            normalizer.normalize(execution.message, input)
+        } else {
+            Log.w(TAG, "FunctionCall failed requestId=$requestId tool=${call.name} error=${execution.error}")
+            scriptPick(
+                detected,
+                roman = "Yeh kaam nahi ho saka: ${execution.error}",
+                deva = "यह काम नहीं हो सका: ${execution.error}",
+                eng = "I could not do that: ${execution.error}"
+            ).also {
+                Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=function_call_failed tool=${call.name}")
             }
         }
     }

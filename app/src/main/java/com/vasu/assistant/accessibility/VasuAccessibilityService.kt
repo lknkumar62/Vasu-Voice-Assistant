@@ -163,6 +163,11 @@ class VasuAccessibilityService : AccessibilityService() {
             callback(null)
             return
         }
+        takeScreenshotApi30(callback)
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private fun takeScreenshotApi30(callback: (Bitmap?) -> Unit) {
         try {
             takeScreenshot(
                 0,

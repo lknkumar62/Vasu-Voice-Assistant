@@ -36,7 +36,7 @@ fun MemoryScreen(
                     Text(
                         text = "VASU Memory (${uiState.totalCount})",
                         fontWeight = FontWeight.Bold,
-                        color = VasuCyan
+                        color = VasuCrimson
                     )
                 },
                 navigationIcon = {
@@ -65,7 +65,7 @@ fun MemoryScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
-                containerColor = VasuCyan,
+                containerColor = VasuCrimson,
                 contentColor = VasuDarkBg
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Memory")
@@ -88,7 +88,7 @@ fun MemoryScreen(
                     .padding(vertical = 8.dp),
                 placeholder = { Text("Search memories...", color = VasuTextMuted) },
                 leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = VasuCyan)
+                    Icon(Icons.Default.Search, contentDescription = null, tint = VasuCrimson)
                 },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
@@ -102,7 +102,7 @@ fun MemoryScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = VasuTextPrimary,
                     unfocusedTextColor = VasuTextPrimary,
-                    focusedBorderColor = VasuCyan,
+                    focusedBorderColor = VasuCrimson,
                     unfocusedBorderColor = VasuDarkCard,
                     focusedContainerColor = VasuDarkSurface,
                     unfocusedContainerColor = VasuDarkSurface
@@ -129,7 +129,7 @@ fun MemoryScreen(
                                 imageVector = Icons.Default.Psychology,
                                 contentDescription = null,
                                 modifier = Modifier.size(56.dp),
-                                tint = VasuCyan
+                                tint = VasuCrimson
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(
@@ -172,13 +172,13 @@ fun MemoryScreen(
                                         Icon(
                                             Icons.Default.Bookmark,
                                             contentDescription = null,
-                                            tint = VasuCyan,
+                                            tint = VasuCrimson,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
                                             text = memory.key,
                                             style = MaterialTheme.typography.titleSmall,
-                                            color = VasuCyan,
+                                            color = VasuCrimson,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
@@ -263,7 +263,7 @@ fun MemoryScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = VasuTextPrimary,
                             unfocusedTextColor = VasuTextPrimary,
-                            focusedBorderColor = VasuCyan,
+                            focusedBorderColor = VasuCrimson,
                             unfocusedBorderColor = VasuTextMuted
                         )
                     )
@@ -274,7 +274,7 @@ fun MemoryScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = VasuTextPrimary,
                             unfocusedTextColor = VasuTextPrimary,
-                            focusedBorderColor = VasuCyan,
+                            focusedBorderColor = VasuCrimson,
                             unfocusedBorderColor = VasuTextMuted
                         )
                     )
@@ -288,7 +288,7 @@ fun MemoryScreen(
                             showAddDialog = false
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = VasuCyan)
+                    colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson)
                 ) {
                     Text("Save", color = VasuDarkBg, fontWeight = FontWeight.Bold)
                 }
@@ -318,7 +318,7 @@ fun MemoryScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = VasuTextPrimary,
                         unfocusedTextColor = VasuTextPrimary,
-                        focusedBorderColor = VasuCyan,
+                        focusedBorderColor = VasuCrimson,
                         unfocusedBorderColor = VasuTextMuted
                     )
                 )
@@ -331,7 +331,7 @@ fun MemoryScreen(
                             editingItem = null
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = VasuCyan)
+                    colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson)
                 ) {
                     Text("Update", color = VasuDarkBg, fontWeight = FontWeight.Bold)
                 }

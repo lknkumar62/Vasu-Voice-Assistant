@@ -126,12 +126,23 @@ class AccessibilityActions(
      * Type text by field label
      */
     fun typeTextByLabel(label: String, text: String): ActionResult {
+        val root = service.rootInActiveWindow
+            ?: return ActionResult.error("type_label", "No active window", "Root not available")
+
+        // Blank label: type into the focused input, else the first editable field.
+        if (label.isBlank()) {
+            val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                ?: nodeFinder.findEditableFields(root).firstOrNull()
+                ?: return ActionResult.error("type_label", "No editable field", "No editable field found")
+            return typeText(focused, text)
+        }
+
         // Find editable field near the label
-        val labelNode = nodeFinder.findNodeContainingText(service.rootInActiveWindow, label)
+        val labelNode = nodeFinder.findNodeContainingText(root, label)
             ?: return ActionResult.error("type_label", "Label not found: $label", "Label node not found")
 
         // Find parent or sibling editable field
-        val editableFields = nodeFinder.findEditableFields(service.rootInActiveWindow)
+        val editableFields = nodeFinder.findEditableFields(root)
         if (editableFields.isEmpty()) {
             return ActionResult.error("type_label", "No editable fields found", "No editable fields")
         }

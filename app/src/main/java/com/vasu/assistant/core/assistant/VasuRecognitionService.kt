@@ -13,7 +13,7 @@ class VasuRecognitionService : RecognitionService() {
     override fun onStartListening(intent: Intent?, callback: Callback?) {
         Log.d(TAG, "onStartListening: Redirecting to VASU pipeline")
         try {
-            callback?.error(8) // ERROR_CLIENT
+            callback?.error(android.speech.SpeechRecognizer.ERROR_CLIENT)
         } catch (e: Exception) {
             Log.e(TAG, "onStartListening error: ${e.message}")
         }

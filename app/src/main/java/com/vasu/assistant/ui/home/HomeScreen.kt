@@ -61,14 +61,14 @@ fun HomeScreen(
             icon = Icons.Default.Chat,
             label = "Chat",
             action = "chat",
-            color = VasuCyan,
+            color = VasuCrimson,
             description = "Talk to VASU"
         ),
         HomeGridItem(
             icon = Icons.Default.Mic,
             label = "Voice",
             action = "voice",
-            color = VasuPurple,
+            color = VasuElectric,
             description = "Voice commands"
         ),
         HomeGridItem(
@@ -96,14 +96,14 @@ fun HomeScreen(
             icon = Icons.Default.Memory,
             label = "Memory",
             action = "memory",
-            color = VasuPurple,
+            color = VasuElectric,
             description = "Remember things"
         ),
         HomeGridItem(
             icon = Icons.Default.Build,
             label = "Tools",
             action = "tools",
-            color = VasuCyan,
+            color = VasuCrimson,
             description = "Available actions"
         ),
         HomeGridItem(
@@ -150,7 +150,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .clickable { viewModel.toggleWakeWord() },
                 containerColor = if (uiState.isWakeWordActive) VasuGreen.copy(alpha = 0.12f) else VasuDarkCard,
-                borderColor = if (uiState.isWakeWordActive) VasuGreen else VasuCyan,
+                borderColor = if (uiState.isWakeWordActive) VasuGreen else VasuCrimson,
                 borderAlpha = if (uiState.isWakeWordActive) 0.25f else 0.12f
             ) {
                 Row(
@@ -207,8 +207,8 @@ fun HomeScreen(
                     .background(
                         animateColorAsState(
                             when {
-                                uiState.isListening -> VasuCyan.copy(alpha = 0.2f)
-                                uiState.isSpeaking -> VasuPurple.copy(alpha = 0.2f)
+                                uiState.isListening -> VasuCrimson.copy(alpha = 0.2f)
+                                uiState.isSpeaking -> VasuElectric.copy(alpha = 0.2f)
                                 uiState.isThinking -> VasuWarning.copy(alpha = 0.2f)
                                 uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen.copy(alpha = 0.1f)
                                 else -> VasuDarkCard
@@ -222,8 +222,8 @@ fun HomeScreen(
                     contentDescription = "VASU Orb",
                     modifier = Modifier.size(80.dp),
                     tint = when {
-                        uiState.isListening -> VasuCyan
-                        uiState.isSpeaking -> VasuPurple
+                        uiState.isListening -> VasuCrimson
+                        uiState.isSpeaking -> VasuElectric
                         uiState.isThinking -> VasuWarning
                         uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
                         else -> VasuTextSecondary
@@ -245,9 +245,9 @@ fun HomeScreen(
                     else -> "Ready"
                 },
                 color = when {
-                    uiState.isListening -> VasuCyan
+                    uiState.isListening -> VasuCrimson
                     uiState.isThinking -> VasuWarning
-                    uiState.isSpeaking -> VasuPurple
+                    uiState.isSpeaking -> VasuElectric
                     uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
                     uiState.wakeWordState == WakeWordState.DETECTED -> VasuGreen
                     uiState.wakeWordState == WakeWordState.MODEL_NOT_AVAILABLE -> VasuError

@@ -30,7 +30,7 @@ fun PrivacyScreen(
                     Text(
                         text = "Privacy & Notifications",
                         fontWeight = FontWeight.Bold,
-                        color = VasuCyan
+                        color = VasuCrimson
                     )
                 },
                 navigationIcon = {
@@ -69,7 +69,7 @@ fun PrivacyScreen(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = "OTP Protection",
-                                tint = VasuCyan,
+                                tint = VasuCrimson,
                                 modifier = Modifier.size(24.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
@@ -115,7 +115,7 @@ fun PrivacyScreen(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = "Info",
-                            tint = VasuCyan,
+                            tint = VasuCrimson,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))

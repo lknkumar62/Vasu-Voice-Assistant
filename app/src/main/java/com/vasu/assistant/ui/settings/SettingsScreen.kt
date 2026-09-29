@@ -62,7 +62,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.Bold, color = VasuCyan, fontSize = 18.sp) },
+                title = { Text("Settings", fontWeight = FontWeight.Bold, color = VasuCrimson, fontSize = 18.sp) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = VasuTextSecondary)
@@ -119,11 +119,11 @@ fun SettingsScreen(
                             }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VasuCyan,
+                            focusedBorderColor = VasuCrimson,
                             unfocusedBorderColor = VasuTextMuted,
                             focusedTextColor = VasuTextPrimary,
                             unfocusedTextColor = VasuTextPrimary,
-                            cursorColor = VasuCyan
+                            cursorColor = VasuCrimson
                         )
                     )
 
@@ -138,7 +138,7 @@ fun SettingsScreen(
                             },
                             enabled = keyInput.isNotBlank(),
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = VasuCyan, contentColor = VasuDarkBg),
+                            colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson, contentColor = VasuDarkBg),
                             shape = RoundedCornerShape(12.dp)
                         ) { Text("Save Key", fontWeight = FontWeight.Bold) }
 
@@ -151,7 +151,7 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 if (state.connectionTest == ConnectionTest.TESTING) "Testing..." else "Test connection",
-                                color = VasuCyan,
+                                color = VasuCrimson,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -166,9 +166,9 @@ fun SettingsScreen(
                     ) {
                         Text("Model selection", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         TextButton(onClick = viewModel::refreshModels) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Refresh, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Refresh", color = VasuCyan, fontSize = 12.sp)
+                            Text("Refresh", color = VasuCrimson, fontSize = 12.sp)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -303,7 +303,7 @@ fun SettingsScreen(
                         Button(
                             onClick = viewModel::testVoice,
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = VasuCyan, contentColor = VasuDarkBg),
+                            colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson, contentColor = VasuDarkBg),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -315,7 +315,7 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("TTS Settings", color = VasuCyan, fontWeight = FontWeight.Medium)
+                            Text("TTS Settings", color = VasuCrimson, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -407,8 +407,8 @@ fun SettingsScreen(
                         placeholder = { Text("wss://chat.vasu.app/ws", color = VasuTextMuted) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
-                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                            focusedBorderColor = VasuCrimson, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCrimson
                         )
                     )
                     Spacer(Modifier.height(16.dp))
@@ -427,15 +427,15 @@ fun SettingsScreen(
                             }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
-                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                            focusedBorderColor = VasuCrimson, unfocusedBorderColor = VasuTextMuted,
+                            focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCrimson
                         )
                     )
                     Spacer(Modifier.height(16.dp))
                     Button(
                         onClick = { viewModel.saveChatConfig(chatServerInput, chatKeyInput) },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = VasuCyan, contentColor = VasuDarkBg),
+                        colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson, contentColor = VasuDarkBg),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Save Chat Config", fontWeight = FontWeight.Bold) }
                 }
@@ -467,7 +467,7 @@ fun SettingsScreen(
                     Button(
                         onClick = { viewModel.saveOAuthConfig(googleClientId, githubClientId, githubClientSecret, discordClientId) },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = VasuCyan, contentColor = VasuDarkBg),
+                        colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson, contentColor = VasuDarkBg),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Save Connector Config", fontWeight = FontWeight.Bold) }
                 }
@@ -506,8 +506,8 @@ private fun ConnectorField(
                 }
             } else null,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = VasuCyan, unfocusedBorderColor = VasuTextMuted,
-                focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCyan
+                focusedBorderColor = VasuCrimson, unfocusedBorderColor = VasuTextMuted,
+                focusedTextColor = VasuTextPrimary, unfocusedTextColor = VasuTextPrimary, cursorColor = VasuCrimson
             )
         )
     }
@@ -533,7 +533,7 @@ private fun VasuVoiceSelector(
     val selectedSuffix = selectedVoice.ifBlank { "Kore" }
     val selectedFull = VasuSettings.MAYA_VOICES.firstOrNull { it.substringAfter("_") == selectedSuffix } ?: "maya_Kore"
     val currentTrait = voiceTraits[selectedSuffix] ?: "Studio"
-    val currentPersona = if (selectedFull.startsWith("friday")) "FRIDAY" else if (selectedFull.startsWith("venom")) "VENOM" else "MAYA"
+    val currentPersona = if (selectedFull.startsWith("friday")) "FRIDAY" else if (selectedFull.startsWith("venom")) "VENOM" else "VASU"
 
     SettingsCard {
         // Header Card
@@ -541,13 +541,13 @@ private fun VasuVoiceSelector(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(VasuCyan.copy(alpha = 0.08f))
-                .border(1.dp, VasuCyan.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                .background(VasuCrimson.copy(alpha = 0.08f))
+                .border(1.dp, VasuCrimson.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(VasuCyan),
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(VasuCrimson),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.RecordVoiceOver, contentDescription = null, tint = VasuDarkBg, modifier = Modifier.size(20.dp))
@@ -558,7 +558,7 @@ private fun VasuVoiceSelector(
                 Text("Trait: $currentTrait", color = VasuTextSecondary, fontSize = 12.sp)
             }
             Spacer(Modifier.weight(1f))
-            Text("43", color = VasuCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("43", color = VasuCrimson, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -571,7 +571,7 @@ private fun VasuVoiceSelector(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuTextPrimary),
                 border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp)
             ) {
-                Icon(Icons.Default.Mic, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Mic, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(12.dp))
                 Text("Change Vasu Voice", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
@@ -582,7 +582,7 @@ private fun VasuVoiceSelector(
                 onDismissRequest = { expanded = false },
                 modifier = Modifier
                     .background(VasuDarkElevated, RoundedCornerShape(16.dp))
-                    .border(1.dp, VasuCyan.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+                    .border(1.dp, VasuCrimson.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
             ) {
                 Column(
                     modifier = Modifier
@@ -590,11 +590,11 @@ private fun VasuVoiceSelector(
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 8.dp)
                 ) {
-                    VoiceGroup("FRIDAY - SWEET", VasuCyan, VasuSettings.MAYA_VOICES.filter { it.startsWith("friday") }, selectedSuffix, voiceTraits, onVoiceSelected)
-                    HorizontalDivider(color = VasuCyan.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 8.dp))
+                    VoiceGroup("FRIDAY - SWEET", VasuCrimson, VasuSettings.MAYA_VOICES.filter { it.startsWith("friday") }, selectedSuffix, voiceTraits, onVoiceSelected)
+                    HorizontalDivider(color = VasuCrimson.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 8.dp))
                     VoiceGroup("WARM - MAYA", VasuSuccess, VasuSettings.MAYA_VOICES.filter { it.startsWith("maya") }, selectedSuffix, voiceTraits, onVoiceSelected)
-                    HorizontalDivider(color = VasuCyan.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 8.dp))
-                    VoiceGroup("VENOM - DEEP", VasuPurple, VasuSettings.MAYA_VOICES.filter { it.startsWith("venom") }, selectedSuffix, voiceTraits, onVoiceSelected)
+                    HorizontalDivider(color = VasuCrimson.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 8.dp))
+                    VoiceGroup("VENOM - DEEP", VasuElectric, VasuSettings.MAYA_VOICES.filter { it.startsWith("venom") }, selectedSuffix, voiceTraits, onVoiceSelected)
                 }
             }
         }
@@ -630,7 +630,7 @@ private fun VoiceGroup(
                         )
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(suffix, color = if (isSelected) VasuCyan else VasuTextPrimary, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 13.sp)
+                            Text(suffix, color = if (isSelected) VasuCrimson else VasuTextPrimary, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 13.sp)
                             Text(traits[suffix] ?: "Studio", color = VasuTextSecondary, fontSize = 10.sp)
                         }
                     }
@@ -660,7 +660,7 @@ private fun SliderCard(
             Text(label, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(
                 String.format("%.2f", value),
-                color = VasuCyan,
+                color = VasuCrimson,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace
@@ -672,8 +672,8 @@ private fun SliderCard(
             onValueChange = onChange,
             valueRange = range,
             colors = SliderDefaults.colors(
-                thumbColor = VasuCyan,
-                activeTrackColor = VasuCyan,
+                thumbColor = VasuCrimson,
+                activeTrackColor = VasuCrimson,
                 inactiveTrackColor = VasuTextMuted.copy(alpha = 0.3f)
             )
         )
@@ -726,11 +726,11 @@ fun SettingsSection(title: String, content: @Composable () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
             ) {
-                Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(VasuCyan))
+                Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(VasuCrimson))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = title,
-                    color = VasuCyan,
+                    color = VasuCrimson,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.2.sp
@@ -753,7 +753,7 @@ fun SettingsItem(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCrimson.copy(alpha = 0.12f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -761,10 +761,10 @@ fun SettingsItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(VasuCyan.copy(alpha = 0.1f)),
+                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(VasuCrimson.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(18.dp))
+                Icon(icon, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(18.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -788,7 +788,7 @@ fun SettingsToggleItem(
         colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCrimson.copy(alpha = 0.12f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -796,10 +796,10 @@ fun SettingsToggleItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (enabled) VasuCyan.copy(alpha = 0.15f) else VasuTextMuted.copy(alpha = 0.10f)),
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (enabled) VasuCrimson.copy(alpha = 0.15f) else VasuTextMuted.copy(alpha = 0.10f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = title, tint = if (enabled) VasuCyan else VasuTextSecondary, modifier = Modifier.size(20.dp))
+                Icon(icon, contentDescription = title, tint = if (enabled) VasuCrimson else VasuTextSecondary, modifier = Modifier.size(20.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -810,8 +810,8 @@ fun SettingsToggleItem(
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = VasuDarkBg,
-                    checkedTrackColor = VasuCyan,
-                    checkedBorderColor = VasuCyan,
+                    checkedTrackColor = VasuCrimson,
+                    checkedBorderColor = VasuCrimson,
                     uncheckedThumbColor = VasuTextMuted,
                     uncheckedTrackColor = VasuDarkElevated,
                     uncheckedBorderColor = VasuTextMuted.copy(alpha = 0.3f)

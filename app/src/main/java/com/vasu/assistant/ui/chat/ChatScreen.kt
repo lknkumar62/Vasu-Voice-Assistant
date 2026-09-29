@@ -99,14 +99,14 @@ fun ChatScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(VasuCyan.copy(alpha = 0.15f))
-                                .border(1.dp, VasuCyan.copy(alpha = 0.4f), CircleShape),
+                                .background(VasuCrimson.copy(alpha = 0.15f))
+                                .border(1.dp, VasuCrimson.copy(alpha = 0.4f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.SmartToy,
                                 contentDescription = "VASU",
-                                tint = VasuCyan,
+                                tint = VasuCrimson,
                                 modifier = Modifier.size(22.dp)
                             )
                             // Online Dot
@@ -136,7 +136,7 @@ fun ChatScreen(
                                     else -> "Online & Ready"
                                 },
                                 fontSize = 11.sp,
-                                color = if (speakingId != null || uiState.isLoading || uiState.isListening) VasuCyan else VasuTextMuted
+                                color = if (speakingId != null || uiState.isLoading || uiState.isListening) VasuCrimson else VasuTextMuted
                             )
                         }
                     }
@@ -213,9 +213,9 @@ fun ChatScreen(
                 placeholder = { Text("Search conversations...", color = VasuTextMuted, fontSize = 12.sp) },
                 leadingIcon = {
                     Box(
-                        modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.12f)),
+                        modifier = Modifier.size(28.dp).clip(CircleShape).background(VasuCrimson.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Filled.Search, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(14.dp)) }
+                    ) { Icon(Icons.Filled.Search, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(14.dp)) }
                 },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
@@ -225,11 +225,11 @@ fun ChatScreen(
                     }
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = VasuCyan,
-                    unfocusedBorderColor = VasuCyan.copy(alpha = 0.15f),
+                    focusedBorderColor = VasuCrimson,
+                    unfocusedBorderColor = VasuCrimson.copy(alpha = 0.15f),
                     focusedTextColor = VasuTextPrimary,
                     unfocusedTextColor = VasuTextPrimary,
-                    cursorColor = VasuCyan,
+                    cursorColor = VasuCrimson,
                     focusedContainerColor = VasuDarkCard,
                     unfocusedContainerColor = VasuDarkCard
                 ),
@@ -259,14 +259,14 @@ fun ChatScreen(
                                 modifier = Modifier
                                     .size(64.dp)
                                     .clip(CircleShape)
-                                    .background(VasuCyan.copy(alpha = 0.1f))
-                                    .border(1.dp, VasuCyan.copy(alpha = 0.3f), CircleShape),
+                                    .background(VasuCrimson.copy(alpha = 0.1f))
+                                    .border(1.dp, VasuCrimson.copy(alpha = 0.3f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.SmartToy,
                                     contentDescription = null,
-                                    tint = VasuCyan,
+                                    tint = VasuCrimson,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -329,9 +329,9 @@ fun ChatScreen(
                             horizontalArrangement = Arrangement.End
                         ) {
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = VasuCyan.copy(alpha = 0.15f)),
+                                colors = CardDefaults.cardColors(containerColor = VasuCrimson.copy(alpha = 0.15f)),
                                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.3f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, VasuCrimson.copy(alpha = 0.3f)),
                                 modifier = Modifier.widthIn(max = 300.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
@@ -340,12 +340,12 @@ fun ChatScreen(
                                             modifier = Modifier
                                                 .size(6.dp)
                                                 .clip(CircleShape)
-                                                .background(VasuCyan)
+                                                .background(VasuCrimson)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Icon(Icons.Filled.Mic, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(12.dp))
+                                        Icon(Icons.Filled.Mic, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(12.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text(text = "Listening...", fontSize = 11.sp, color = VasuCyan, fontWeight = FontWeight.Medium)
+                                        Text(text = "Listening...", fontSize = 11.sp, color = VasuCrimson, fontWeight = FontWeight.Medium)
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
@@ -411,11 +411,11 @@ fun ChatScreen(
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("Ask VASU anything...", color = VasuTextMuted, fontSize = 13.sp) },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VasuCyan,
-                            unfocusedBorderColor = VasuCyan.copy(alpha = 0.15f),
+                            focusedBorderColor = VasuCrimson,
+                            unfocusedBorderColor = VasuCrimson.copy(alpha = 0.15f),
                             focusedTextColor = VasuTextPrimary,
                             unfocusedTextColor = VasuTextPrimary,
-                            cursorColor = VasuCyan,
+                            cursorColor = VasuCrimson,
                             focusedContainerColor = VasuDarkElevated,
                             unfocusedContainerColor = VasuDarkElevated
                         ),
@@ -426,11 +426,11 @@ fun ChatScreen(
                     )
 
                     IconButton(onClick = { viewModel.toggleListening() }) {
-                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(if (uiState.isListening) VasuError.copy(alpha = 0.15f) else VasuCyan.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(if (uiState.isListening) VasuError.copy(alpha = 0.15f) else VasuCrimson.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = if (uiState.isListening) Icons.Default.Stop else Icons.Default.Mic,
                                 contentDescription = if (uiState.isListening) "Stop" else "Mic",
-                                tint = if (uiState.isListening) VasuError else VasuCyan,
+                                tint = if (uiState.isListening) VasuError else VasuCrimson,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -441,7 +441,7 @@ fun ChatScreen(
                         enabled = uiState.inputText.isNotBlank() && !uiState.isLoading
                     ) {
                         Box(
-                            modifier = Modifier.size(36.dp).clip(CircleShape).background(if (uiState.inputText.isNotBlank()) VasuCyan else VasuTextMuted.copy(alpha = 0.15f)),
+                            modifier = Modifier.size(36.dp).clip(CircleShape).background(if (uiState.inputText.isNotBlank()) VasuCrimson else VasuTextMuted.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -503,12 +503,12 @@ private fun ThinkingBubble() {
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(VasuCyan.copy(alpha = alpha))
+                        .background(VasuCrimson.copy(alpha = alpha))
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "VASU is thinking...",
-                    color = VasuCyan,
+                    color = VasuCrimson,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -564,8 +564,8 @@ private fun PillChip(
     Surface(
         modifier = Modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        color = if (isActive) VasuCyan else VasuDarkCard,
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) VasuCyan else VasuCyan.copy(alpha = 0.15f)),
+        color = if (isActive) VasuCrimson else VasuDarkCard,
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) VasuCrimson else VasuCrimson.copy(alpha = 0.15f)),
         shadowElevation = if (isActive) 6.dp else 0.dp
     ) {
         Row(
@@ -575,7 +575,7 @@ private fun PillChip(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isActive) VasuDarkBg else VasuCyan,
+                tint = if (isActive) VasuDarkBg else VasuCrimson,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -618,13 +618,13 @@ private fun SuggestionGrid(onSuggestionClick: (String) -> Unit) {
                             .clickable { onSuggestionClick(command) },
                         colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
                         shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.15f))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, VasuCrimson.copy(alpha = 0.15f))
                     ) {
                         Column(
                             modifier = Modifier.padding(10.dp),
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(icon, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(18.dp))
+                            Icon(icon, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = VasuTextPrimary)
                             Text(text = command, fontSize = 9.sp, color = VasuTextMuted, maxLines = 1)
@@ -677,8 +677,8 @@ fun ChatBubble(
 ) {
     val isUser = message.isUser
     val alignment = if (isUser) Alignment.End else Alignment.Start
-    val bgColor = if (isUser) VasuCyan.copy(alpha = 0.15f) else VasuDarkCard
-    val textColor = if (isUser) VasuCyan else VasuTextPrimary
+    val bgColor = if (isUser) VasuCrimson.copy(alpha = 0.15f) else VasuDarkCard
+    val textColor = if (isUser) VasuCrimson else VasuTextPrimary
     val hasTool = message.isToolExecution || message.toolName != null
 
     Column(
@@ -689,8 +689,8 @@ fun ChatBubble(
             colors = CardDefaults.cardColors(containerColor = bgColor),
             shape = if (isUser) RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
             else RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
-            border = if (isUser) androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.3f))
-            else androidx.compose.foundation.BorderStroke(1.dp, VasuCyan.copy(alpha = 0.12f)),
+            border = if (isUser) androidx.compose.foundation.BorderStroke(1.dp, VasuCrimson.copy(alpha = 0.3f))
+            else androidx.compose.foundation.BorderStroke(1.dp, VasuCrimson.copy(alpha = 0.12f)),
             modifier = Modifier
                 .padding(horizontal = 4.dp)
                 .widthIn(max = 320.dp)
@@ -710,7 +710,7 @@ fun ChatBubble(
                         Icon(
                             imageVector = Icons.Filled.Terminal,
                             contentDescription = null,
-                            tint = VasuCyan,
+                            tint = VasuCrimson,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -760,7 +760,7 @@ fun ChatBubble(
                             Icon(
                                 imageVector = if (isSpeaking) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = if (isSpeaking) "Stop" else "Speak",
-                                tint = if (isSpeaking) VasuCyan else VasuTextMuted,
+                                tint = if (isSpeaking) VasuCrimson else VasuTextMuted,
                                 modifier = Modifier.size(16.dp)
                             )
                         }

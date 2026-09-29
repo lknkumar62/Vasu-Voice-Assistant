@@ -26,7 +26,7 @@ fun MissionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Missions", fontWeight = FontWeight.Bold, color = VasuCyan) },
+                title = { Text("Missions", fontWeight = FontWeight.Bold, color = VasuCrimson) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = VasuTextSecondary)

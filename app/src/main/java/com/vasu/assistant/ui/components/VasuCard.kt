@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.vasu.assistant.ui.theme.VasuCyan
+import com.vasu.assistant.ui.theme.VasuCrimson
 import com.vasu.assistant.ui.theme.VasuDarkCard
 
 /**
@@ -22,7 +22,7 @@ import com.vasu.assistant.ui.theme.VasuDarkCard
 fun VasuCard(
     modifier: Modifier = Modifier,
     containerColor: Color = VasuDarkCard,
-    borderColor: Color = VasuCyan,
+    borderColor: Color = VasuCrimson,
     borderAlpha: Float = 0.12f,
     shape: Shape = RoundedCornerShape(16.dp),
     contentPadding: Dp = 16.dp,

@@ -27,7 +27,7 @@ fun DiagnosticsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Diagnostics", fontWeight = FontWeight.Bold, color = VasuCyan) },
+                title = { Text("Diagnostics", fontWeight = FontWeight.Bold, color = VasuCrimson) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = VasuTextSecondary)
@@ -35,7 +35,7 @@ fun DiagnosticsScreen(
                 },
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = VasuCyan)
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = VasuCrimson)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = VasuDarkBg)
@@ -75,7 +75,7 @@ fun DiagnosticsScreen(
                                 DiagnosticStatus.OK -> VasuSuccess
                                 DiagnosticStatus.WARNING -> VasuWarning
                                 DiagnosticStatus.ERROR -> VasuError
-                                DiagnosticStatus.INFO -> VasuCyan
+                                DiagnosticStatus.INFO -> VasuCrimson
                                 DiagnosticStatus.UNKNOWN -> VasuTextSecondary
                             },
                             modifier = Modifier.size(20.dp)

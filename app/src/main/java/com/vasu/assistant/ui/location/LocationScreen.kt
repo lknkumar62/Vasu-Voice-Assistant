@@ -24,7 +24,7 @@ fun LocationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Location", fontWeight = FontWeight.Bold, color = VasuCyan) },
+                title = { Text("Location", fontWeight = FontWeight.Bold, color = VasuCrimson) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = VasuTextSecondary)
@@ -52,7 +52,7 @@ fun LocationScreen(
             }
             if (uiState.latitude != 0.0) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Lat: ${uiState.latitude}, Lng: ${uiState.longitude}", color = VasuCyan, fontSize = 12.sp)
+                Text("Lat: ${uiState.latitude}, Lng: ${uiState.longitude}", color = VasuCrimson, fontSize = 12.sp)
             }
         }
     }

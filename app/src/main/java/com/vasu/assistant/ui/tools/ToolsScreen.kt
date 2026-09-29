@@ -50,7 +50,7 @@ fun ToolsScreen(
                     Text(
                         text = "AI Tool Matrix",
                         fontWeight = FontWeight.Bold,
-                        color = VasuCyan,
+                        color = VasuCrimson,
                         fontSize = 18.sp
                     )
                 },
@@ -84,10 +84,10 @@ fun ToolsScreen(
                 placeholder = { Text("Search tools...", color = VasuTextMuted, fontSize = 13.sp) },
                 leadingIcon = {
                     Box(
-                        modifier = Modifier.size(32.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.12f)),
+                        modifier = Modifier.size(32.dp).clip(CircleShape).background(VasuCrimson.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Search, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(16.dp))
                     }
                 },
                 trailingIcon = {
@@ -102,11 +102,11 @@ fun ToolsScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = VasuTextPrimary,
                     unfocusedTextColor = VasuTextPrimary,
-                    focusedBorderColor = VasuCyan,
-                    unfocusedBorderColor = VasuCyan.copy(alpha = 0.15f),
+                    focusedBorderColor = VasuCrimson,
+                    unfocusedBorderColor = VasuCrimson.copy(alpha = 0.15f),
                     focusedContainerColor = VasuDarkCard,
                     unfocusedContainerColor = VasuDarkCard,
-                    cursorColor = VasuCyan
+                    cursorColor = VasuCrimson
                 ),
                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
             )
@@ -126,13 +126,13 @@ fun ToolsScreen(
                         onClick = { viewModel.selectCategory(catKey) },
                         label = { Text(catLabel, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = VasuCyan,
+                            selectedContainerColor = VasuCrimson,
                             selectedLabelColor = VasuDarkBg,
                             containerColor = VasuDarkCard,
                             labelColor = VasuTextSecondary
                         ),
                         border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (isSelected) VasuCyan else VasuDarkSurface,
+                            borderColor = if (isSelected) VasuCrimson else VasuDarkSurface,
                             enabled = true,
                             selected = isSelected
                         )
@@ -154,10 +154,10 @@ fun ToolsScreen(
                     Column(modifier = Modifier.fillMaxWidth().padding(end = 56.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(
-                                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(VasuCyan.copy(alpha = 0.12f)),
+                                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(VasuCrimson.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Star, contentDescription = null, tint = VasuCyan, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Default.Star, contentDescription = null, tint = VasuCrimson, modifier = Modifier.size(14.dp))
                             }
                             Text(
                                 text = "Smart Tools",
@@ -176,8 +176,8 @@ fun ToolsScreen(
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Badge(
-                                containerColor = VasuCyan.copy(alpha = 0.12f),
-                                contentColor = VasuCyan,
+                                containerColor = VasuCrimson.copy(alpha = 0.12f),
+                                contentColor = VasuCrimson,
                                 modifier = Modifier.height(20.dp)
                             ) {
                                 Text("${uiState.totalCount} Total Tools", modifier = Modifier.padding(horizontal = 6.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -192,13 +192,13 @@ fun ToolsScreen(
                         }
                     }
                     Box(
-                        modifier = Modifier.align(Alignment.TopEnd).size(40.dp).clip(CircleShape).background(VasuCyan.copy(alpha = 0.08f)).border(1.dp, VasuCyan.copy(alpha = 0.12f), CircleShape),
+                        modifier = Modifier.align(Alignment.TopEnd).size(40.dp).clip(CircleShape).background(VasuCrimson.copy(alpha = 0.08f)).border(1.dp, VasuCrimson.copy(alpha = 0.12f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = VasuCyan.copy(alpha = 0.85f),
+                            tint = VasuCrimson.copy(alpha = 0.85f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -212,7 +212,7 @@ fun ToolsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(VasuDarkCard).border(1.dp, VasuCyan.copy(alpha = 0.15f), CircleShape), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(VasuDarkCard).border(1.dp, VasuCrimson.copy(alpha = 0.15f), CircleShape), contentAlignment = Alignment.Center) {
                             Icon(Icons.Default.Search, contentDescription = null, tint = VasuTextMuted, modifier = Modifier.size(24.dp))
                         }
                         Text(
@@ -269,7 +269,7 @@ fun ToolsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = "Action: ${result.action}",
-                        color = VasuCyan,
+                        color = VasuCrimson,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
@@ -310,7 +310,7 @@ fun ToolsScreen(
             confirmButton = {
                 Button(
                     onClick = viewModel::clearTestResult,
-                    colors = ButtonDefaults.buttonColors(containerColor = VasuCyan)
+                    colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson)
                 ) {
                     Text("Close", color = VasuDarkBg, fontWeight = FontWeight.Bold)
                 }
@@ -326,7 +326,7 @@ fun ToolsScreen(
             title = {
                 Text(
                     text = tool.name,
-                    color = VasuCyan,
+                    color = VasuCrimson,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -382,7 +382,7 @@ fun ToolsScreen(
                                         ) {
                                             Text(
                                                 text = param.name + if (param.required) " *" else "",
-                                                color = VasuCyan,
+                                                color = VasuCrimson,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = FontFamily.Monospace,
                                                 fontSize = 12.sp
@@ -412,7 +412,7 @@ fun ToolsScreen(
                         selectedToolForDetails = null
                         viewModel.executeTest(name)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = VasuCyan),
+                    colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Test Tool", color = VasuDarkBg, fontWeight = FontWeight.Bold)
@@ -440,7 +440,7 @@ fun ToolCardItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        borderColor = VasuCyan,
+        borderColor = VasuCrimson,
         borderAlpha = 0.15f
     ) {
         Column(
@@ -512,7 +512,7 @@ fun ToolCardItem(
                 shape = RoundedCornerShape(12.dp),
                 contentPadding = PaddingValues(vertical = 6.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = VasuCyan,
+                    containerColor = VasuCrimson,
                     contentColor = VasuDarkBg
                 )
             ) {
@@ -548,15 +548,15 @@ fun RiskBadge(riskLevel: RiskLevel) {
 
 fun getCategoryColor(category: String): Color {
     return when (category) {
-        "DEVICE" -> VasuCyan
-        "FILES" -> VasuPurple
+        "DEVICE" -> VasuCrimson
+        "FILES" -> VasuElectric
         "VISION" -> VasuGreen
         "ACCESSIBILITY" -> VasuInfo
-        "COMMUNICATION" -> VasuPurple
-        "LOCATION" -> VasuCyan
-        "SMART_MODE" -> VasuPurple
-        "UTILITIES" -> VasuCyan
-        else -> VasuCyan
+        "COMMUNICATION" -> VasuElectric
+        "LOCATION" -> VasuCrimson
+        "SMART_MODE" -> VasuElectric
+        "UTILITIES" -> VasuCrimson
+        else -> VasuCrimson
     }
 }
 

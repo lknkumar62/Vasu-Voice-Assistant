@@ -116,11 +116,21 @@ class ChatViewModel @Inject constructor(
 
             try {
                 _uiState.value = _uiState.value.copy(inputText = "", isLoading = true)
+
+                // Prior turns only (this turn rides in as the prompt). Capped at
+                // the last 8 messages so prompt size — and latency — stay bounded.
+                val history = _uiState.value.messages.takeLast(8).map { m ->
+                    com.vasu.assistant.core.ai.ChatMessage(
+                        role = if (m.isUser) "user" else "assistant",
+                        content = m.content
+                    )
+                }
+
                 addMessage(ChatMessage(content = text, isUser = true))
 
                 val requestId = "req_${System.currentTimeMillis()}_${text.hashCode()}"
                 Log.d(TAG, "AI_REQUEST requestId=$requestId chatTurn")
-                val response = aiOrchestrator.processInput(text)
+                val response = aiOrchestrator.processInput(text, history)
                 val responseMsg = ChatMessage(content = response, isUser = false)
                 addMessage(responseMsg)
                 _uiState.value = _uiState.value.copy(isLoading = false)

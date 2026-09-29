@@ -35,7 +35,7 @@ fun BrowserScreen(
                     Text(
                         text = "Browser & Apps",
                         fontWeight = FontWeight.Bold,
-                        color = VasuCyan
+                        color = VasuCrimson
                     )
                 },
                 navigationIcon = {
@@ -65,9 +65,9 @@ fun BrowserScreen(
                     .fillMaxWidth()
                     .padding(16.dp),
                 placeholder = { Text("Search or browse...", color = VasuTextMuted) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = VasuCyan) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = VasuCrimson) },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = VasuCyan,
+                    focusedBorderColor = VasuCrimson,
                     unfocusedBorderColor = VasuTextSecondary,
                     focusedTextColor = VasuTextPrimary
                 ),
@@ -115,7 +115,7 @@ fun BrowserScreen(
                             Icon(
                                 imageVector = icon,
                                 contentDescription = label,
-                                tint = VasuCyan,
+                                tint = VasuCrimson,
                                 modifier = Modifier.size(24.dp)
                             )
                             Text(
@@ -146,7 +146,7 @@ fun BrowserScreen(
                     .fillMaxWidth()
                     .padding(16.dp)
                     .height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = VasuCyan),
+                colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Icon(

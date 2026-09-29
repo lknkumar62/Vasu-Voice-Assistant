@@ -23,7 +23,7 @@ class DrivingModeReceiver : BroadcastReceiver() {
                     @Suppress("DEPRECATION")
                     intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                 }
-                val deviceName = device?.name ?: "Unknown Device"
+                val deviceName = try { device?.name } catch (e: SecurityException) { null } ?: "Unknown Device"
                 val deviceAddress = device?.address ?: "??"
 
                 Log.d(TAG, "Bluetooth connected: $deviceName ($deviceAddress)")
@@ -40,7 +40,7 @@ class DrivingModeReceiver : BroadcastReceiver() {
                     @Suppress("DEPRECATION")
                     intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                 }
-                val deviceName = device?.name ?: "Unknown Device"
+                val deviceName = try { device?.name } catch (e: SecurityException) { null } ?: "Unknown Device"
                 val deviceAddress = device?.address ?: "??"
 
                 Log.d(TAG, "Bluetooth disconnected: $deviceName ($deviceAddress)")

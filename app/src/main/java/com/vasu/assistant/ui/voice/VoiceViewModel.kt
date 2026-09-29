@@ -280,6 +280,9 @@ class VoiceViewModel @Inject constructor(
     private var lastProcessedCommand: String? = null
     private var lastProcessedAtMs: Long = 0L
 
+    /** Rolling voice-conversation context sent to the LLM (capped at 8 messages). */
+    private val voiceHistory = ArrayDeque<com.vasu.assistant.core.ai.ChatMessage>()
+
     /** Tracks last spoken response ID to prevent duplicate TTS. */
     private var lastSpokenResponseId: String? = null
 
@@ -476,7 +479,12 @@ class VoiceViewModel @Inject constructor(
                 lastResponse = "सोच रही हूँ..."
             )
 
-            val response = aiOrchestrator.processInput(trimmed)
+            // Rolling voice-conversation context (last 8 messages, bounded).
+            val history = voiceHistory.toList()
+            val response = aiOrchestrator.processInput(trimmed, history)
+            voiceHistory.addLast(com.vasu.assistant.core.ai.ChatMessage("user", trimmed))
+            voiceHistory.addLast(com.vasu.assistant.core.ai.ChatMessage("assistant", response))
+            while (voiceHistory.size > 8) voiceHistory.removeFirst()
 
             _uiState.value = _uiState.value.copy(
                 isThinking = false,

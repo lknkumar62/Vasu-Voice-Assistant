@@ -86,6 +86,9 @@ class DrivingModeManager @Inject constructor(
                     return device.name
                 }
             }
+        } catch (e: SecurityException) {
+            // BLUETOOTH_CONNECT can be revoked at runtime — fail soft, not crash.
+            Log.w(TAG, "Bluetooth permission denied: ${e.message}")
         } catch (e: Exception) {
             Log.e(TAG, "Error checking Bluetooth: ${e.message}")
         }

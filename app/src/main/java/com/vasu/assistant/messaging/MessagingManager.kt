@@ -34,44 +34,65 @@ class MessagingManager @Inject constructor(
     private val contactManager: ContactManager
 ) {
     /**
-     * Send an SMS message
+     * Send an SMS message (opens the composer prefilled — the OS-level send
+     * button is the final confirmation). Accepts a contact name or raw number.
      */
     fun sendSms(contactName: String, message: String): ActionResult {
-        val contact = findContactForMessaging(contactName)
+        val (name, number) = resolveAddress(contactName)
             ?: return ActionResult.error("send_sms", "Contact not found: $contactName", "Contact not found")
 
         return try {
             val intent = Intent(Intent.ACTION_SENDTO).apply {
-                data = Uri.parse("smsto:${contact.phoneNumber}")
+                data = Uri.parse("smsto:$number")
                 putExtra("sms_body", message)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-            ActionResult.success("send_sms", "Opening SMS to ${contact.name}")
+            ActionResult.success("send_sms", "Opening SMS to $name — press send to deliver")
         } catch (e: Exception) {
-            ActionResult.error("send_sms", "Failed to send SMS to ${contact.name}", e.message ?: "Unknown error")
+            ActionResult.error("send_sms", "Failed to open SMS for $name", e.message ?: "Unknown error")
         }
     }
 
     /**
-     * Open WhatsApp chat with a contact
+     * Place a phone call (opens the dialer pre-filled via ACTION_DIAL, so the
+     * user always gives the final OS-level confirmation before the call starts).
+     * Accepts either a raw phone number or a contact name.
+     */
+    fun makeCall(contactOrNumber: String): ActionResult {
+        val (name, number) = resolveAddress(contactOrNumber)
+            ?: return ActionResult.error("make_call", "Contact not found: $contactOrNumber", "Contact not found")
+
+        return try {
+            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            ActionResult.success("make_call", "Dialing $name ($number)")
+        } catch (e: Exception) {
+            ActionResult.error("make_call", "Failed to place call", e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Open WhatsApp chat with a contact (accepts a contact name or raw number)
      */
     fun openWhatsApp(contactName: String, message: String = ""): ActionResult {
-        val contact = findContactForMessaging(contactName)
+        val (name, number) = resolveAddress(contactName)
             ?: return ActionResult.error("whatsapp", "Contact not found: $contactName", "Contact not found")
 
         return try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 val url = if (message.isNotBlank()) {
-                    "https://wa.me/${contact.phoneNumber}?text=${Uri.encode(message)}"
+                    "https://wa.me/$number?text=${Uri.encode(message)}"
                 } else {
-                    "https://wa.me/${contact.phoneNumber}"
+                    "https://wa.me/$number"
                 }
                 data = Uri.parse(url)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-            ActionResult.success("whatsapp", "Opening WhatsApp for ${contact.name}")
+            ActionResult.success("whatsapp", "Opening WhatsApp for $name")
         } catch (e: Exception) {
             ActionResult.error("whatsapp", "Failed to open WhatsApp", e.message ?: "Unknown error")
         }
@@ -140,5 +161,21 @@ class MessagingManager @Inject constructor(
      */
     private fun findContactForMessaging(name: String): ContactInfo? {
         return contactManager.findBestMatch(name)
+    }
+
+    /**
+     * Resolves a contact name OR a raw phone number to (display, number).
+     * Strings containing letters go through the contacts provider; anything
+     * else is treated as a number the user typed directly.
+     */
+    private fun resolveAddress(contactOrNumber: String): Pair<String, String>? {
+        val trimmed = contactOrNumber.trim()
+        if (trimmed.isEmpty()) return null
+        return if (trimmed.any { it.isLetter() }) {
+            val contact = findContactForMessaging(trimmed) ?: return null
+            contact.name to contact.phoneNumber
+        } else {
+            trimmed to trimmed
+        }
     }
 }

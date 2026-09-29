@@ -58,7 +58,7 @@ fun PermissionsScreen(
                     Text(
                         text = "Permissions Center",
                         fontWeight = FontWeight.Bold,
-                        color = VasuCyan
+                        color = VasuCrimson
                     )
                 },
                 navigationIcon = {
@@ -100,7 +100,7 @@ fun PermissionsScreen(
                     Text(
                         "Granted: ${uiState.grantedCount} / ${uiState.totalCount}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (uiState.grantedCount == uiState.totalCount) VasuGreen else VasuCyan
+                        color = if (uiState.grantedCount == uiState.totalCount) VasuGreen else VasuCrimson
                     )
 
                     val progress = if (uiState.totalCount > 0) uiState.grantedCount.toFloat() / uiState.totalCount else 0f
@@ -110,7 +110,7 @@ fun PermissionsScreen(
                             .fillMaxWidth()
                             .height(6.dp)
                             .padding(top = 10.dp),
-                        color = if (progress >= 1f) VasuGreen else VasuCyan,
+                        color = if (progress >= 1f) VasuGreen else VasuCrimson,
                         trackColor = VasuDarkSurface
                     )
                 }
@@ -139,7 +139,7 @@ fun PermissionsScreen(
                     .fillMaxWidth()
                     .padding(16.dp)
                     .height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = VasuCyan),
+                colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Icon(
@@ -193,7 +193,7 @@ fun PermissionRowCard(
                 },
                 contentDescription = item.title,
                 modifier = Modifier.size(28.dp),
-                tint = if (item.isGranted) VasuGreen else VasuCyan
+                tint = if (item.isGranted) VasuGreen else VasuCrimson
             )
 
             Column(modifier = Modifier.weight(1f)) {
@@ -230,7 +230,7 @@ fun PermissionRowCard(
             } else {
                 Button(
                     onClick = onClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = VasuCyan),
+                    colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.height(32.dp)

@@ -1,26 +1,52 @@
-# VASU Assistant (Voice & Vision Agent)
+# VASU — Voice Assistant (Android)
 
-VASU is an intelligent bilingual (Hindi / English / Hinglish) voice assistant web application inspired by Jarvis, featuring hands-free voice recognition, wake-word activation, offline-first command parsing, Gemini AI integration, and speech synthesis.
+VASU is a bilingual (Hindi / English / Hinglish) Jarvis-class voice assistant for Android: wake word, on-device fast-path commands, Gemini/Claude tool calling, voice-print Guardian security, accessibility automation, and local memory.
 
-## Key Features
+Kotlin · Jetpack Compose (Material 3) · MVVM + Clean · Hilt · Coroutines/Flow · Room · DataStore · WorkManager
 
-- **Hands-free Wake Word Detection**: Listens for `"Hello VASU"` or `"Hey VASU"`.
-- **Bilingual & Hinglish Brain**: Powered by Google Gemini with multi-model fallback cascade (`gemini-flash-latest`, `gemini-3.1-flash-lite`, `gemini-3.8-flash`, etc.).
-- **Natural Voice Synthesis (TTS)**: High-quality Hindi/Hinglish speech output using Gemini TTS and Web Speech synthesis fallback.
-- **Hardware & Tool Controls**: Torch/flashlight toggle, volume controls, camera inspection, alarms, contact shortcuts, and local persistent memories.
-- **Jarvis Continuous Conversation Mode**: Keeps the microphone listening after responses for natural conversational back-and-forth.
+- Package: `com.vasu.assistant`
+- minSdk 26 · targetSdk 35 · compileSdk 34
 
-## Setup & Running
+## Build
 
 ```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-
-# Build production bundle
-npm run build
+# Requires JDK 17 + Android SDK. local.properties must contain sdk.dir=<path>.
+./gradlew assembleDebug          # APK -> app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest      # unit tests
+./gradlew lintDebug              # lint
 ```
 
-The application runs on port 3000.
+> On aarch64 Linux hosts, `gradle.properties` pins `android.aapt2FromMavenOverride=/usr/bin/aapt2`
+> because the SDK's x86_64 aapt2 cannot run natively.
+
+## Architecture
+
+```
+app/src/main/java/com/vasu/assistant/
+├── core/
+│   ├── ai/          AIOrchestrator, GeminiProvider, ClaudeProvider, PromptManager, ToolRouter
+│   ├── automation/  MissionEngine, TaskExecutor, ActionResult
+│   ├── security/    RoleManager, VoiceGuardian, RiskLevel/UserRole model
+│   ├── stt|tts/     STTManager, TTSManager, VoiceRouter
+│   ├── wakeword/    WakeWordDetector (hello_vasu.tflite)
+│   └── settings/    VasuSettings (DataStore/SharedPreferences)
+├── devices/         Torch, Volume, Bluetooth, Media, DeviceControl managers
+├── messaging/       ContactManager, MessagingManager (SMS/WhatsApp/calls)
+├── accessibility/   VasuAccessibilityService + screen interaction
+├── notifications/   NotificationListener + parser
+└── ui/              Compose screens (home, chat, voice, guardian, tools, …)
+```
+
+### Command flow
+
+1. **Fast path** — `AIOrchestrator.executeFastDeviceCommand` runs torch/volume/bluetooth/battery/time/camera commands on-device in <50 ms, script-aware confirmations (Roman/Devanagari/English).
+2. **Tool calling** — everything else goes to Gemini/Claude with the full tool schema. A returned `FunctionCall` is executed for real by `ToolRouter.executeTool` (risk-gated, runs on `Dispatchers.IO`); the actual result is spoken. No placeholder successes: unknown tools, missing args, or a disconnected accessibility service return explicit errors.
+3. **Risk gate** — every tool carries a `RiskLevel`; `RiskLevel.requiredRole` is checked against `RoleManager.hasPermission` before any side effect. HIGH (call / SMS / delete) demands owner voice verification while Voice Guardian is enabled; OTPs are never spoken, logged, or sent to the LLM.
+
+## Permissions
+
+Mic, camera, contacts, SMS, call log, phone state, notifications (listener), accessibility, overlay, external media/storage, exact alarms, location, Bluetooth. HIGH-risk actions additionally require Voice Guardian enrollment.
+
+## Status
+
+Phase 1 baseline: build green, unit tests green, real tool execution wired. See `AGENTS.md` for the team workflow used during development.

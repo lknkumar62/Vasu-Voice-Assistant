@@ -2,18 +2,16 @@ package com.vasu.assistant.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// MAYA 4.18.5 EXACT PALETTE
-val MayaObsidian = Color(0xFF000000) // Pure Black Background
-val MayaElectricCyan = Color(0xFF00FFFF) // Neon Cyan Accents
-val MayaElectricPurple = Color(0xFFBF00FF) // Neon Purple
-val MayaNeonGreen = Color(0xFF39FF14) // Neon Green
-val MayaGlassWhite = Color(0x1AFFFFFF) // Glassmorphism overlay
+// VASU ORIGINAL PALETTE — deep black + crimson/electric accent, glassmorphism
+val VasuObsidian = Color(0xFF000000) // Pure Black Background
+val VasuCrimson = Color(0xFFE11D48) // Crimson accent — primary brand
+val VasuElectric = Color(0xFF00E5FF) // Electric accent — secondary
+val VasuNeonGreen = Color(0xFF39FF14) // Neon Green — success
+val VasuGlassWhite = Color(0x1AFFFFFF) // Glassmorphism overlay
 
-val VasuCyan = MayaElectricCyan
-val VasuPurple = MayaElectricPurple
-val VasuSuccess = MayaNeonGreen
-val VasuGreen = MayaNeonGreen
-val VasuDarkBg = MayaObsidian
+val VasuSuccess = VasuNeonGreen
+val VasuGreen = VasuNeonGreen
+val VasuDarkBg = VasuObsidian
 val VasuDarkCard = Color(0xFF0A0A0A) // Slight grey for depth
 val VasuDarkSurface = Color(0xFF050505)
 val VasuDarkElevated = Color(0xFF121212)
@@ -24,30 +22,30 @@ val VasuTextMuted = Color(0xFF666666)
 
 val VasuError = Color(0xFFFF0040)
 val VasuWarning = Color(0xFFFFD700)
-val VasuInfo = Color(0xFF00BFFF)
+val VasuInfo = VasuElectric
 
 // Voice Activity
-val VasuListening = MayaElectricCyan
-val VasuSpeaking = MayaElectricPurple
+val VasuListening = VasuCrimson
+val VasuSpeaking = VasuElectric
 val VasuThinking = Color(0xFFFFFF00)
 val VasuIdle = Color(0xFF333333)
 
 // Material 3 Mapping
-val DarkPrimary = MayaElectricCyan
+val DarkPrimary = VasuCrimson
 val DarkOnPrimary = Color(0xFF000000)
-val DarkPrimaryContainer = Color(0xFF003333)
-val DarkOnPrimaryContainer = MayaElectricCyan
+val DarkPrimaryContainer = Color(0xFF3A0010)
+val DarkOnPrimaryContainer = VasuCrimson
 
-val DarkSecondary = MayaElectricPurple
+val DarkSecondary = VasuElectric
 val DarkOnSecondary = Color(0xFF000000)
-val DarkSecondaryContainer = Color(0xFF330033)
-val DarkOnSecondaryContainer = MayaElectricPurple
+val DarkSecondaryContainer = Color(0xFF003040)
+val DarkOnSecondaryContainer = VasuElectric
 
-val DarkBackground = MayaObsidian
+val DarkBackground = VasuObsidian
 val DarkOnBackground = VasuTextPrimary
-val DarkSurface = MayaObsidian
+val DarkSurface = VasuObsidian
 val DarkOnSurface = VasuTextPrimary
-val DarkSurfaceVariant = MayaObsidian
+val DarkSurfaceVariant = VasuObsidian
 val DarkOnSurfaceVariant = VasuTextSecondary
 
 val DarkError = VasuError

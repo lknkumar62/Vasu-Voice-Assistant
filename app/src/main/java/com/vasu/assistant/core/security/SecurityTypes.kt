@@ -3,7 +3,9 @@ package com.vasu.assistant.core.security
 enum class RiskLevel(val displayName: String, val requiredRole: UserRole) {
     LOW("Low", UserRole.GUEST),
     MEDIUM("Medium", UserRole.FRIEND),
-    HIGH("High", UserRole.FAMILY),
+    // HIGH = delete files / send messages / SOS: spec section 4 requires
+    // confirmation AND voice authentication, which only the owner (BOSS) passes.
+    HIGH("High", UserRole.BOSS),
     CRITICAL("Critical", UserRole.BOSS)
 }
 

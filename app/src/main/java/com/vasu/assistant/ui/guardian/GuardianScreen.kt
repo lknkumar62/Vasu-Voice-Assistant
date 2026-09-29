@@ -21,7 +21,7 @@ fun GuardianScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Voice Guardian", fontWeight = FontWeight.Bold, color = VasuCyan) },
+                title = { Text("Voice Guardian", fontWeight = FontWeight.Bold, color = VasuCrimson) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = VasuTextSecondary)

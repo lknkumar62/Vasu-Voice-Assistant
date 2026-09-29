@@ -115,7 +115,7 @@ class ProactiveContextReceiver @Inject constructor() {
                         @Suppress("DEPRECATION")
                         intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                     }
-                    val name = device?.name ?: "Unknown"
+                    val name = try { device?.name } catch (e: SecurityException) { null } ?: "Unknown"
                     updateState { it.copy(connectedBluetoothDevice = name) }
                     emitEvent("bluetooth_connected", mapOf("device" to name))
                 }

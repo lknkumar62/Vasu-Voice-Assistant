@@ -71,7 +71,7 @@ fun MainScreen() {
                             text = "VASU",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 20.sp,
-                            color = VasuCyan
+                            color = VasuCrimson
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -90,7 +90,7 @@ fun MainScreen() {
         bottomBar = {
             NavigationBar(
                 containerColor = VasuDarkBg,
-                contentColor = VasuCyan
+                contentColor = VasuCrimson
             ) {
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = backStackEntry?.destination
@@ -118,9 +118,9 @@ fun MainScreen() {
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = VasuCyan.copy(alpha = 0.2f),
-                            selectedIconColor = VasuCyan,
-                            selectedTextColor = VasuCyan,
+                            indicatorColor = VasuCrimson.copy(alpha = 0.2f),
+                            selectedIconColor = VasuCrimson,
+                            selectedTextColor = VasuCrimson,
                             unselectedIconColor = VasuTextMuted,
                             unselectedTextColor = VasuTextMuted
                         )

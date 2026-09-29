@@ -6,6 +6,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioRecordingConfiguration
 import android.media.MediaRecorder
+import android.os.Build
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -124,9 +125,11 @@ class AudioSessionManager @Inject constructor(
 
     private val recordingCallback = object : AudioManager.AudioRecordingCallback() {
         override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>?) {
-            val externalRecording = configs?.any {
-                it.isClientSilenced()
-            } ?: false
+            val externalRecording = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                configs?.any {
+                    it.isClientSilenced()
+                } ?: false
+            } else false
 
             val otherAppRecording = configs?.any { config ->
                 // Check if any non-VASU app is recording
