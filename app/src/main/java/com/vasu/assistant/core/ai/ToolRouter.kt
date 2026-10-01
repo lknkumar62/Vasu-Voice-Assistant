@@ -8,6 +8,7 @@ import android.os.StatFs
 import android.util.Log
 import com.vasu.assistant.accessibility.VasuAccessibilityService
 import com.vasu.assistant.camera.OcrManager
+import com.vasu.assistant.camera.VisionProcessor
 import com.vasu.assistant.core.automation.ActionResult
 import com.vasu.assistant.core.automation.MissionEngine
 import com.vasu.assistant.core.browser.BrowserManager
@@ -52,6 +53,7 @@ class ToolRouter @Inject constructor(
     private val contactManager: ContactManager,
     private val messagingManager: MessagingManager,
     private val ocrManager: OcrManager,
+    private val visionProcessor: VisionProcessor,
     private val roleManager: RoleManager,
     private val missionEngine: MissionEngine
 ) {
@@ -134,6 +136,22 @@ class ToolRouter @Inject constructor(
             ),
             ToolDefinition(
                 "ocr_extract", "Extract text from screen using OCR",
+                parameters = listOf(
+                    ToolParameter("path", "string", "Absolute image file path", required = false),
+                    ToolParameter("uri", "string", "content:// image uri", required = false)
+                ),
+                riskLevel = RiskLevel.MEDIUM
+            ),
+            ToolDefinition(
+                "describe_image", "Detect and describe objects in a photo or screenshot",
+                parameters = listOf(
+                    ToolParameter("path", "string", "Absolute image file path", required = false),
+                    ToolParameter("uri", "string", "content:// image uri", required = false)
+                ),
+                riskLevel = RiskLevel.MEDIUM
+            ),
+            ToolDefinition(
+                "scan_qr", "Read the QR code in a photo and return its contents",
                 parameters = listOf(
                     ToolParameter("path", "string", "Absolute image file path", required = false),
                     ToolParameter("uri", "string", "content:// image uri", required = false)
@@ -286,6 +304,8 @@ class ToolRouter @Inject constructor(
         "scroll_up" -> withAccessibility("scroll_up") { it.scrollUp() }
         "open_app" -> openApp(params)
         "ocr_extract" -> ocrExtract(params)
+        "describe_image" -> describeImage(params)
+        "scan_qr" -> scanQr(params)
         "browse_files" -> browseFiles(params)
         "search_files" -> searchFiles(params)
         "delete_file" -> deleteFile(params)
@@ -396,14 +416,30 @@ class ToolRouter @Inject constructor(
             ?.activityInfo?.packageName
     }
 
-    private fun ocrExtract(params: Map<String, Any>): ActionResult {
+    private fun imageTarget(params: Map<String, Any>): Uri? {
         val uri = paramStr(params, listOf("uri"))
+        if (uri.isNotEmpty()) return Uri.parse(uri)
         val path = paramStr(params, listOf("path", "file"))
-        return when {
-            uri.isNotEmpty() -> ocrManager.extractText(Uri.parse(uri))
-            path.isNotEmpty() -> ocrManager.extractTextFromImageFile(path)
-            else -> ActionResult.error("ocr_extract", "No image given", "Provide 'path' or 'uri'")
-        }
+        if (path.isNotEmpty()) return Uri.parse("file://$path")
+        return null
+    }
+
+    private suspend fun ocrExtract(params: Map<String, Any>): ActionResult {
+        val target = imageTarget(params)
+            ?: return ActionResult.error("ocr_extract", "No image given", "Provide 'path' or 'uri'")
+        return ocrManager.extractText(target)
+    }
+
+    private suspend fun describeImage(params: Map<String, Any>): ActionResult {
+        val target = imageTarget(params)
+            ?: return ActionResult.error("describe_image", "No image given", "Provide 'path' or 'uri'")
+        return visionProcessor.analyzeImage(target)
+    }
+
+    private suspend fun scanQr(params: Map<String, Any>): ActionResult {
+        val target = imageTarget(params)
+            ?: return ActionResult.error("scan_qr", "No image given", "Provide 'path' or 'uri'")
+        return visionProcessor.scanQrCode(target)
     }
 
     private fun browseFiles(params: Map<String, Any>): ActionResult {

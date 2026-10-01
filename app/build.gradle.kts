@@ -87,6 +87,8 @@ dependencies {
 
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation("com.google.mlkit:object-detection:17.0.1")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
 
     implementation("com.github.bumptech.glide:glide:4.16.0")
     kapt("com.github.bumptech.glide:compiler:4.16.0")

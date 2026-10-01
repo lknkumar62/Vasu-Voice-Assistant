@@ -2,6 +2,7 @@ package com.vasu.assistant.core.ai
 
 import android.content.Context
 import android.util.Log
+import com.vasu.assistant.core.tts.SentenceSplitter
 import com.vasu.assistant.devices.BluetoothManager
 import com.vasu.assistant.devices.DeviceControlManager
 import com.vasu.assistant.devices.TorchManager
@@ -53,7 +54,9 @@ class AIOrchestrator @Inject constructor(
      *
      * VOICE CONTRACT: the returned string is the single canonical assistant
      * response for this turn — callers issue exactly ONE TTS request for it
-     * after the response is complete (never per stream chunk).
+     * after the response is complete (never per stream chunk). For
+     * sentence-level first-chunk speech use [processInputStreaming]; both
+     * paths return the same canonical text.
      *
      * HISTORY: [history] is prior conversation (oldest first) so cloud turns
      * keep context; callers cap the length to bound prompt size/latency.
@@ -157,6 +160,39 @@ class AIOrchestrator @Inject constructor(
                 Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=exception style=${detected.style}")
             }
         }
+    }
+
+    /**
+     * Streaming counterpart of [processInput]: same canonical response text,
+     * but each completed sentence is delivered to [onSentence] as soon as the
+     * splitter finds a confident boundary, so callers can enqueue speech for
+     * the first sentence before the rest of the reply is played/handled.
+     *
+     * NOTE: the current cloud providers return the full text in one shot, so
+     * sentences are emitted right after the response completes; the moment a
+     * provider exposes chunked generation this method emits the first
+     * sentence early. First-sentence latency (response start -> first
+     * sentence handed to TTS) is logged for diagnostics.
+     */
+    suspend fun processInputStreaming(
+        rawInput: String,
+        history: List<ChatMessage> = emptyList(),
+        onSentence: (String) -> Unit
+    ): String {
+        val startNs = System.nanoTime()
+        val response = processInput(rawInput, history)
+        val splitter = SentenceSplitter()
+        val sentences = mutableListOf<String>()
+        sentences.addAll(splitter.feed(response))
+        splitter.flush()?.let { sentences.add(it) }
+        sentences.forEachIndexed { index, sentence ->
+            onSentence(sentence)
+            if (index == 0) {
+                val latencyMs = (System.nanoTime() - startNs) / 1_000_000
+                Log.i(TAG, "TTS_FIRST_SENTENCE latencyMs=$latencyMs")
+            }
+        }
+        return response
     }
 
     /**

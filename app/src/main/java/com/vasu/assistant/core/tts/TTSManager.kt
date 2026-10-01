@@ -71,6 +71,29 @@ class TTSManager @Inject constructor(
     }
 
     /**
+     * Enqueues each sentence as its own queued item so the first sentence
+     * starts synthesizing/playing immediately instead of handing the entire
+     * response to the engine as one request. [onComplete] fires exactly once,
+     * after the LAST sentence finishes (or immediately when the list is
+     * empty). Per-item responseId is null so SpeechQueue's consecutive
+     * responseId de-dupe never collapses distinct sentences.
+     */
+    fun speakQueuedBatch(sentences: List<String>, onComplete: (() -> Unit)? = null) {
+        val clean = sentences.map { it.trim() }.filter { it.isNotEmpty() }
+        if (clean.isEmpty()) {
+            onComplete?.invoke()
+            return
+        }
+        clean.forEachIndexed { index, sentence ->
+            speakQueued(
+                sentence,
+                responseId = null,
+                onComplete = if (index == clean.lastIndex) onComplete else null
+            )
+        }
+    }
+
+    /**
      * Enqueue one complete assistant response for serial playback.
      * [onComplete] fires exactly once when this item's audio completes
      * (or fails), letting owners drain command queues FIFO without overlap.

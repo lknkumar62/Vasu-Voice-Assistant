@@ -481,7 +481,10 @@ class VoiceViewModel @Inject constructor(
 
             // Rolling voice-conversation context (last 8 messages, bounded).
             val history = voiceHistory.toList()
-            val response = aiOrchestrator.processInput(trimmed, history)
+            val spokenSentences = mutableListOf<String>()
+            val response = aiOrchestrator.processInputStreaming(trimmed, history) { sentence ->
+                spokenSentences.add(sentence)
+            }
             voiceHistory.addLast(com.vasu.assistant.core.ai.ChatMessage("user", trimmed))
             voiceHistory.addLast(com.vasu.assistant.core.ai.ChatMessage("assistant", response))
             while (voiceHistory.size > 8) voiceHistory.removeFirst()
@@ -493,10 +496,12 @@ class VoiceViewModel @Inject constructor(
 
             // Speak response — only once per response. The queued next
             // command starts only after this TTS actually completes.
+            // Sentence-level enqueue: first sentence plays immediately,
+            // remaining sentences pipeline behind it in SpeechQueue FIFO.
             val responseId = "${trimmed.hashCode()}_${response.hashCode()}"
             if (lastSpokenResponseId != responseId) {
                 lastSpokenResponseId = responseId
-                ttsManager.speakQueued(response) {
+                ttsManager.speakQueuedBatch(spokenSentences) {
                     voiceBusy = false
                     drainPendingCommands()
                 }
