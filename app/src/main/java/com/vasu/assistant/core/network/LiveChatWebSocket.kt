@@ -84,7 +84,7 @@ class LiveChatWebSocket @Inject constructor() {
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.d(TAG, "Message received: ${text.take(100)}")
+                Log.d(TAG, "Message received: chars=${text.length}")
                 scope.launch {
                     try {
                         val event = parseMessage(text)
@@ -133,7 +133,7 @@ class LiveChatWebSocket @Inject constructor() {
 
         val sent = webSocket?.send(message.toString())
         if (sent == true) {
-            Log.d(TAG, "Message sent: ${text.take(50)}")
+            Log.d(TAG, "Message sent: chars=${text.length}")
         } else {
             Log.e(TAG, "Failed to send message")
         }

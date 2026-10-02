@@ -91,7 +91,7 @@ class VasuAccessibilityService : AccessibilityService() {
                     }
                 }
                 AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                    Log.d(TAG, "View clicked: ${it.text}")
+                    Log.d(TAG, "View clicked: type=${it.eventType} className=${it.className}")
                 }
                 else -> { /* ignore */ }
             }

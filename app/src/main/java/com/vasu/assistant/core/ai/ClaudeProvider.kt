@@ -2,6 +2,12 @@ package com.vasu.assistant.core.ai
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -29,7 +35,7 @@ import javax.inject.Singleton
 @Singleton
 class ClaudeProvider @Inject constructor(
     private val keyStore: SecureKeyStore
-) {
+) : AIProviderStream {
     val isConfigured: Boolean get() = keyStore.hasClaudeKey()
 
     private val client = OkHttpClient.Builder()
@@ -105,6 +111,65 @@ class ClaudeProvider @Inject constructor(
             AiResult.Failure(AiErrorKind.UNKNOWN, "Unexpected error: ${e.message}")
         }
     }
+
+    /**
+     * Chunked generation: yields incremental text deltas as they arrive.
+     * Empty body yields no items; failures throw AiError or return an empty flow —
+     * match existing error conventions in AIProvider.kt.
+     */
+    override suspend fun generateStream(prompt: String, history: List<ChatMessage>, model: String?): Flow<String> =
+        flow {
+            val apiKey = keyStore.getClaudeKey()
+                ?: throw AiError(AiErrorKind.NOT_CONFIGURED, "Claude/OmniRoute API key is missing. Add your API key in Settings.")
+            val resolvedModel = model?.takeIf { it.isNotBlank() } ?: keyStore.claudeModel
+            val baseUrl = keyStore.claudeBaseUrl.trimEnd('/')
+            val payload = buildMessagesPayload(
+                model = resolvedModel,
+                systemPrompt = "",
+                prompt = prompt,
+                history = history,
+                tools = emptyList(),
+                temperature = 0.7f,
+                maxTokens = 1024
+            ).apply { put("stream", true) }
+            val request = Request.Builder()
+                .url("$baseUrl/messages")
+                .addHeader("x-api-key", apiKey)
+                .addHeader("anthropic-version", "2023-06-01")
+                .addHeader("content-type", "application/json")
+                .addHeader("Accept", "text/event-stream")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val call = client.newCall(request)
+            try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val errBody = response.body?.string().orEmpty()
+                        val kind = classifyHttpError(response.code, errBody)
+                        throw AiError(kind, parseErrorMessage(errBody, response.code, resolvedModel))
+                    }
+                    val reader = response.body?.byteStream()?.bufferedReader()
+                        ?: throw AiError(AiErrorKind.MALFORMED_RESPONSE, "Claude returned no stream body")
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val line = reader.readLine() ?: break
+                        StreamTextParser.parseChunk(line).forEach { emit(it) }
+                    }
+                }
+            } catch (e: IOException) {
+                if (!(call.isCanceled() || !currentCoroutineContext().isActive)) {
+                    val kind = when (e) {
+                        is UnknownHostException -> AiErrorKind.OFFLINE
+                        is SocketTimeoutException -> AiErrorKind.TIMEOUT
+                        else -> AiErrorKind.UNKNOWN
+                    }
+                    throw AiError(kind, e.message ?: "Network error reaching Claude")
+                }
+                // Cancelled mid-read: end the stream quietly.
+            } finally {
+                if (!call.isCanceled()) call.cancel()
+            }
+        }.flowOn(Dispatchers.IO)
 
     suspend fun testConnection(): AiResult = withContext(Dispatchers.IO) {
         val apiKey = keyStore.getClaudeKey()

@@ -2,7 +2,13 @@ package com.vasu.assistant.core.ai
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -87,7 +93,7 @@ sealed class AiResult {
 @Singleton
 class GeminiProvider @Inject constructor(
     private val keyStore: SecureKeyStore
-) {
+) : AIProviderStream {
     private val config = AiProviderConfig.GEMINI
 
     private val http: OkHttpClient by lazy {
@@ -211,6 +217,56 @@ class GeminiProvider @Inject constructor(
 
         record(noUsableModel(catalog))
     }
+
+    /**
+     * Chunked generation: yields incremental text deltas as they arrive.
+     * Empty body yields no items; failures throw AiError or return an empty flow —
+     * match existing error conventions in AIProvider.kt.
+     */
+    override suspend fun generateStream(prompt: String, history: List<ChatMessage>, model: String?): Flow<String> =
+        flow {
+            val key = keyStore.getGeminiKey()
+                ?: throw AiError(AiErrorKind.NOT_CONFIGURED, "No Gemini API key saved. Add one in Settings > AI Provider.")
+            val resolvedModel = model?.takeIf { it.isNotBlank() } ?: keyStore.geminiModel
+            val settings = effectiveConfig()
+            val payload = buildPayload(prompt, "", history, emptyList(), 0.7f, 1024).toString()
+            val request = Request.Builder()
+                .url("${settings.baseUrl}/models/$resolvedModel:streamGenerateContent?alt=sse")
+                .addHeader("x-goog-api-key", key)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "text/event-stream")
+                .post(payload.toRequestBody(JSON))
+                .build()
+            val call = http.newCall(request)
+            try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val errBody = response.body?.string().orEmpty()
+                        val failure = mapGeminiHttpError(response.code, errBody, resolvedModel)
+                        throw AiError(failure.kind, failure.message)
+                    }
+                    val reader = response.body?.byteStream()?.bufferedReader()
+                        ?: throw AiError(AiErrorKind.MALFORMED_RESPONSE, "Gemini returned no stream body")
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val line = reader.readLine() ?: break
+                        StreamTextParser.parseChunk(line).forEach { emit(it) }
+                    }
+                }
+            } catch (e: IOException) {
+                if (!(call.isCanceled() || !currentCoroutineContext().isActive)) {
+                    val kind = when (e) {
+                        is UnknownHostException -> AiErrorKind.OFFLINE
+                        is SocketTimeoutException -> AiErrorKind.TIMEOUT
+                        else -> AiErrorKind.UNKNOWN
+                    }
+                    throw AiError(kind, e.message ?: "Network error reaching Gemini")
+                }
+                // Cancelled mid-read: end the stream quietly.
+            } finally {
+                if (!call.isCanceled()) call.cancel()
+            }
+        }.flowOn(Dispatchers.IO)
 
     /**
      * The models this key may use, cached after the first lookup.

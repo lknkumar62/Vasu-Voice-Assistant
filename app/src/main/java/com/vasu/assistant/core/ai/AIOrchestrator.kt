@@ -8,7 +8,10 @@ import com.vasu.assistant.devices.DeviceControlManager
 import com.vasu.assistant.devices.TorchManager
 import com.vasu.assistant.devices.VolumeManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -38,6 +41,9 @@ class AIOrchestrator @Inject constructor(
 ) {
     companion object {
         private const val TAG = "AIOrchestrator"
+
+        /** Cap on a single tool-result summary fed back into the model history. */
+        private const val TOOL_RESULT_MAX_CHARS = 500
     }
 
     /** Tool declarations sent to the LLM so it can request real executions. */
@@ -95,50 +101,53 @@ class AIOrchestrator @Inject constructor(
 
         try {
             if (geminiProvider.isConfigured) {
-                val result = geminiProvider.generate(
-                    prompt = input,
-                    systemPrompt = systemPrompt,
-                    history = history,
-                    tools = llmTools
-                )
-
-                return@withContext when (result) {
-                    is AiResult.Text -> {
-                        val canonical = normalizer.normalize(result.content, input)
-                        Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=gemini style=${detected.style}")
-                        canonical
-                    }
-                    is AiResult.FunctionCall -> executeFunctionCall(result, input, detected, requestId)
-                    is AiResult.Failure -> {
-                        Log.w(TAG, "Gemini call failed: ${result.message} (${result.kind})")
-                        geminiFailureMessage(result.kind, detected).also {
+                return@withContext runToolCallLoop(
+                    source = "gemini",
+                    input = input,
+                    initialHistory = history,
+                    detected = detected,
+                    requestId = requestId,
+                    generate = { prompt, loopHistory ->
+                        geminiProvider.generate(
+                            prompt = prompt,
+                            systemPrompt = systemPrompt,
+                            history = loopHistory,
+                            tools = llmTools
+                        )
+                    },
+                    failureReply = { failure ->
+                        Log.w(TAG, "Gemini call failed: ${failure.message} (${failure.kind})")
+                        geminiFailureMessage(failure.kind, detected).also {
                             Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=gemini_error style=${detected.style}")
                         }
                     }
-                }
-            } else if (claudeProvider.isConfigured) {
-                val result = claudeProvider.generate(
-                    prompt = input,
-                    systemPrompt = systemPrompt,
-                    history = history,
-                    tools = llmTools
                 )
-                return@withContext when (result) {
-                    is AiResult.Text -> {
-                        val canonical = normalizer.normalize(result.content, input)
-                        Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=claude style=${detected.style}")
-                        canonical
+            } else if (claudeProvider.isConfigured) {
+                return@withContext runToolCallLoop(
+                    source = "claude",
+                    input = input,
+                    initialHistory = history,
+                    detected = detected,
+                    requestId = requestId,
+                    generate = { prompt, loopHistory ->
+                        claudeProvider.generate(
+                            prompt = prompt,
+                            systemPrompt = systemPrompt,
+                            history = loopHistory,
+                            tools = llmTools
+                        )
+                    },
+                    failureReply = {
+                        scriptPick(
+                            detected,
+                            roman = "Maaf kijiye, jawab milne mein samasya aayi.",
+                            deva = "माफ़ कीजिए, उत्तर प्राप्त करने में समस्या आई।",
+                            eng = "Sorry, I could not get an answer."
+                        ).also {
+                            Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=claude_error style=${detected.style}")
+                        }
                     }
-                    is AiResult.FunctionCall -> executeFunctionCall(result, input, detected, requestId)
-                    is AiResult.Failure -> scriptPick(
-                        detected,
-                        roman = "Maaf kijiye, jawab milne mein samasya aayi.",
-                        deva = "माफ़ कीजिए, उत्तर प्राप्त करने में समस्या आई।",
-                        eng = "Sorry, I could not get an answer."
-                    ).also {
-                        Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=claude_error style=${detected.style}")
-                    }
-                }
+                )
             } else {
                 return@withContext scriptPick(
                     detected,
@@ -149,6 +158,9 @@ class AIOrchestrator @Inject constructor(
                     Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=not_configured style=${detected.style}")
                 }
             }
+        } catch (e: CancellationException) {
+            // A cancelled turn stops the tool loop immediately; it is not an error.
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error in AI generation", e)
             return@withContext scriptPick(
@@ -200,6 +212,9 @@ class AIOrchestrator @Inject constructor(
      * included) and returns the canonical assistant reply for this turn.
      * Success reports the actual action result; failure reports why it was
      * refused — never a generic "working on it" placeholder.
+     *
+     * Single-round behavior is unchanged; [runToolCallLoop] reuses
+     * [formatToolResult] for its terminal turn so the wording stays identical.
      */
     private suspend fun executeFunctionCall(
         call: AiResult.FunctionCall,
@@ -211,6 +226,85 @@ class AIOrchestrator @Inject constructor(
         // contacts, or file paths (privacy rule: nothing sensitive in logs).
         Log.i(TAG, "FunctionCall requestId=$requestId tool=${call.name} argKeys=${call.args.keys}")
         val execution = toolRouter.executeTool(call.name, call.args)
+        return formatToolResult(call, execution, input, detected, requestId)
+    }
+
+    /**
+     * Multi-step tool-call loop shared by the Gemini and Claude paths.
+     *
+     * Round 1 asks the provider with the user's prompt. While the model keeps
+     * answering with function calls, each call is executed for real through
+     * [ToolRouter] (risk gate included) and a plain-text summary line
+     * ("Tool <name> → <result>") is appended to the turn history as the next
+     * user message — both providers serialize history as plain role/content
+     * text, so this works without a functionResponse wire format. The loop
+     * stops on a text answer, provider failure, cancellation, or when
+     * [ToolCallLoopPlanner] reports max rounds; in the last case the final
+     * executed tool result is spoken exactly as the single-round path did.
+     */
+    private suspend fun runToolCallLoop(
+        source: String,
+        input: String,
+        initialHistory: List<ChatMessage>,
+        detected: DetectedLanguage,
+        requestId: String,
+        generate: suspend (prompt: String, history: List<ChatMessage>) -> AiResult,
+        failureReply: (AiResult.Failure) -> String
+    ): String {
+        val workingHistory = initialHistory.toMutableList()
+        var prompt = input
+        var completedRounds = 0
+
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            when (val result = generate(prompt, workingHistory.toList())) {
+                is AiResult.Text -> {
+                    val canonical = normalizer.normalize(result.content, input)
+                    Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=$source style=${detected.style}")
+                    return canonical
+                }
+                is AiResult.Failure -> return failureReply(result)
+                is AiResult.FunctionCall -> {
+                    // Log tool name and argument keys only — values may contain
+                    // messages, contacts, or file paths (privacy rule).
+                    Log.i(TAG, "FunctionCall requestId=$requestId tool=${result.name} argKeys=${result.args.keys}")
+                    val execution = toolRouter.executeTool(result.name, result.args)
+                    val decision = ToolCallLoopPlanner.decide(
+                        completedRounds = completedRounds + 1,
+                        maxRounds = ToolCallLoopPlanner.MAX_TOOL_ROUNDS,
+                        hasText = false,
+                        lastError = false,
+                        cancelled = false
+                    )
+                    if (decision != ToolCallLoopPlanner.Decision.CONTINUE) {
+                        return formatToolResult(result, execution, input, detected, requestId)
+                    }
+                    completedRounds++
+                    val summary = if (execution.success) {
+                        execution.message
+                    } else {
+                        "FAILED: ${execution.error ?: execution.message}"
+                    }
+                    Log.i(TAG, "ToolLoop requestId=$requestId tool=${result.name} round=$completedRounds success=${execution.success}")
+                    workingHistory += ChatMessage("assistant", "Tool call: ${result.name}")
+                    prompt = "Tool ${result.name} → ${summary.take(TOOL_RESULT_MAX_CHARS)}"
+                }
+            }
+        }
+    }
+
+    /**
+     * Canonical reply text for an executed tool: success reports the actual
+     * action result, failure reports why it was refused. Shared by the
+     * single-round path and the loop's terminal turn.
+     */
+    private fun formatToolResult(
+        call: AiResult.FunctionCall,
+        execution: com.vasu.assistant.core.automation.ActionResult,
+        input: String,
+        detected: DetectedLanguage,
+        requestId: String
+    ): String {
         return if (execution.success) {
             Log.i(TAG, "AI_RESPONSE_COMPLETE requestId=$requestId source=function_call tool=${call.name} status=ok")
             normalizer.normalize(execution.message, input)
@@ -387,5 +481,43 @@ class AIOrchestrator @Inject constructor(
         }
 
         return null
+    }
+}
+
+/**
+ * Pure-Kotlin policy for the multi-step tool-call loop: given how many tool
+ * executions have completed and the latest turn state, decide whether the
+ * loop continues or stops, and why. No Android dependencies so the policy is
+ * unit-testable on the JVM.
+ *
+ * Precedence is deliberate: cancellation beats errors, errors beat text,
+ * text beats the round cap — a turn that already has an answer never burns
+ * another provider call, and a cancelled turn never reports a result.
+ */
+object ToolCallLoopPlanner {
+
+    /** Hard cap on tool-execution rounds per user turn. */
+    const val MAX_TOOL_ROUNDS = 3
+
+    enum class Decision {
+        CONTINUE,
+        STOP_TEXT,
+        STOP_MAX_ROUNDS,
+        STOP_ERROR,
+        STOP_CANCELLED
+    }
+
+    fun decide(
+        completedRounds: Int,
+        maxRounds: Int = MAX_TOOL_ROUNDS,
+        hasText: Boolean = false,
+        lastError: Boolean = false,
+        cancelled: Boolean = false
+    ): Decision = when {
+        cancelled -> Decision.STOP_CANCELLED
+        lastError -> Decision.STOP_ERROR
+        hasText -> Decision.STOP_TEXT
+        completedRounds >= maxRounds -> Decision.STOP_MAX_ROUNDS
+        else -> Decision.CONTINUE
     }
 }

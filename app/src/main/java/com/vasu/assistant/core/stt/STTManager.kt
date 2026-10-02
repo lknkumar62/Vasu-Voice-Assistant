@@ -431,7 +431,7 @@ class STTManager @Inject constructor(
             val primaryText = matches[0]
             val primaryConfidence = confidences?.getOrNull(0) ?: 0f
 
-            Log.i(TAG, "[STT_RESULT] text=\"$primaryText\", final=$isFinal, confidence=$primaryConfidence")
+            Log.i(TAG, "[STT_RESULT] final=$isFinal, confidence=$primaryConfidence, length=${primaryText.length}")
 
             val alternatives = matches.drop(1).mapIndexed { index, text ->
                 RecognitionResult.AlternativeResult(

@@ -77,7 +77,7 @@ class NotificationAutoReplyManager(
         } ?: return
         val replyIndex = notification.actions.indexOf(replyAction)
 
-        Log.d(TAG, "Auto-reply candidate: $title from ${sbn.packageName}: ${text.take(50)}")
+        Log.d(TAG, "Auto-reply candidate: titleLen=${title.length} from ${sbn.packageName}")
 
         val reply = PendingAutoReply(
             packageName = sbn.packageName,
@@ -103,7 +103,7 @@ class NotificationAutoReplyManager(
             }
 
             sendReply(pending, replyText)
-            Log.d(TAG, "Auto-replied to ${pending.senderName}: $replyText")
+            Log.d(TAG, "Auto-replied to ${pending.senderName}, chars=${replyText.length}")
         } catch (e: Exception) {
             Log.e(TAG, "Auto-reply failed: ${e.message}")
         }

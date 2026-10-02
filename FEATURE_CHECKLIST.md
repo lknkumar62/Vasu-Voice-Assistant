@@ -29,6 +29,19 @@ claims below.
   splits the canonical response and enqueues per-sentence speech via
   `TTSManager.speakQueuedBatch`; works in Chat and Voice.
 - **85 JVM unit tests** (was 34), all green.
+- **Multi-step tool loop in AIOrchestrator** — up to 3 tool rounds per
+  user turn (`ToolCallLoopPlanner.MAX_TOOL_ROUNDS = 3`), each tool result
+  fed back as a text turn before the next model call.
+- **Chunked provider streaming** — `AIProviderStream.generateStream` (Flow<String>)
+  implemented for Gemini and Claude, with `StreamTextParser` decoding
+  streamed chunks/deltas.
+- **Mission/macro engine hardening** — per-step timeout, 60s mission budget
+  (`DEFAULT_MISSION_TIMEOUT_MS = 60_000L`), `MAX_STEPS = 50`, cancellation-safe
+  via `withTimeoutOrNull`, precondition fail-fast rejection.
+- **Security audit added** — `SECURITY_AUDIT_2026-10-02.md`; High/Medium
+  logging leaks patched: notification text (now title length + package only),
+  accessibility click text (now event type + class only), live-chat payload
+  (now char counts only), STT transcript (now confidence + length only).
 
 ### Corrected claims ⚠️
 - "Zero stubs" (line ~361) was **not true** when originally written — the
@@ -40,22 +53,22 @@ claims below.
   green, APK artifact uploaded, 85 tests passing**.
 
 ### Known remaining gaps (honest list)
-1. **Multi-step tool loop** — `AIOrchestrator` executes one tool-call round
-   per user turn; chained tool reasoning ("compute then message then reminder") is not repeated automatically.
+1. **Tool loop scope** — 1 → multi-step tool loop now executes up to 3
+   tool rounds; still no dedicated agent process with budgets.
 2. **Token-level streaming from providers** — Gemini/Claude providers are
-   single-shot; "streaming TTS" currently splits the completed response
-   into sentences. Provider chunked generation would make first-sentence
-   latency drop to near-real-time.
-3. **Agent runtime groundwork** — missions/automation exist, but there is no
-   dedicated agent process with timeouts/cancellation/allowance budget.
-4. **Guardian post-restart UX** — guardian ON + enrollments persist, but the
+   single-shot by default; "streaming TTS" currently splits the completed
+   response into sentences. `AIProviderStream.generateStream` now exists as
+   an additive path, but token-level streaming remains the big external
+   dependency note (full provider chunking adopted across all call sites
+   pending).
+3. **Guardian post-restart UX** — guardian ON + enrollments persist, but the
    speaker is session-only by design; tools deny until the next wake-word
    verification. Intended fail-closed behavior; document for users.
-5. **Guardian consent details** — enrollment is user-initiated, but there is
+4. **Guardian consent details** — enrollment is user-initiated, but there is
    no explicit guardian consent screen / audit log yet.
-6. **OTP/PIN tool audit** — ToolRouter logs param keys only; no password/OTP
+5. **OTP/PIN tool audit** — ToolRouter logs param keys only; no password/OTP
    values should reach logs — verify with a quick grep before release.
-7. **App-side asset honesty** — `cohort.bin` powers wake-word owner check;
+6. **App-side asset honesty** — `cohort.bin` powers wake-word owner check;
    VASU ships one bundled owner cohort. Multi-owner "family" wake via the
    TFLite path is not wired (roles use the ML-embedding path instead).
 

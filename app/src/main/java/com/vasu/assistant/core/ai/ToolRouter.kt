@@ -25,6 +25,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -217,7 +218,16 @@ class ToolRouter @Inject constructor(
         // Log keys only — values may carry messages, contacts, or file paths.
         Log.i(TAG, "Executing tool: $name with params: ${params.keys}")
         return try {
-            withContext(Dispatchers.IO) { dispatch(name, params) }
+            withContext(Dispatchers.IO) {
+                // A hung tool (dead accessibility node, stuck OEM service) must
+                // not wedge the caller's tool-call loop; time out instead.
+                withTimeoutOrNull(TOOL_TIMEOUT_MS) { dispatch(name, params) }
+                    ?: ActionResult.error(
+                        name,
+                        "Tool timed out",
+                        "'$name' did not finish within ${TOOL_TIMEOUT_MS / 1000}s"
+                    )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -565,5 +575,8 @@ class ToolRouter @Inject constructor(
         private const val MAX_SEARCH_DEPTH = 4
         private const val MAX_SEARCH_RESULTS = 50
         private const val SEARCH_TIME_BUDGET_MS = 1500L
+
+        /** Max wall time for a single tool dispatch before it is abandoned. */
+        private const val TOOL_TIMEOUT_MS = 30_000L
     }
 }

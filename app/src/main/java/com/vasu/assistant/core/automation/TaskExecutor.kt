@@ -9,11 +9,11 @@ import javax.inject.Singleton
 @Singleton
 class TaskExecutor @Inject constructor(
     private val toolRouterProvider: Provider<ToolRouter>
-) {
+) : StepExecutor {
     private val toolRouter: ToolRouter
         get() = toolRouterProvider.get()
 
-    suspend fun executeStep(step: MissionStep): ActionResult {
+    override suspend fun executeStep(step: MissionStep): ActionResult {
         val params = if (step.parameters.isNotEmpty()) step.parameters else step.params
         // Alias legacy mission actions onto real tool names so every step goes
         // through ToolRouter's risk gate (no direct accessibility bypass).
