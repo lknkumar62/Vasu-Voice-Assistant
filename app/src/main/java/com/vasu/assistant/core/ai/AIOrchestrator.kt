@@ -180,11 +180,13 @@ class AIOrchestrator @Inject constructor(
      * splitter finds a confident boundary, so callers can enqueue speech for
      * the first sentence before the rest of the reply is played/handled.
      *
-     * NOTE: the current cloud providers return the full text in one shot, so
-     * sentences are emitted right after the response completes; the moment a
-     * provider exposes chunked generation this method emits the first
-     * sentence early. First-sentence latency (response start -> first
-     * sentence handed to TTS) is logged for diagnostics.
+     * When the active cloud provider implements [AIProviderStream] the reply is
+     * fed token-by-token into the [SentenceSplitter], so the first sentence is
+     * emitted on true first-chunk latency. Otherwise (fake/fallback provider,
+     * or a configured provider without streaming support) this degrades to the
+     * legacy "generate full response, then split" behavior, and
+     * [processInput] — including its multi-step tool loop — is the single
+     * source of the canonical text.
      */
     suspend fun processInputStreaming(
         rawInput: String,
@@ -192,18 +194,76 @@ class AIOrchestrator @Inject constructor(
         onSentence: (String) -> Unit
     ): String {
         val startNs = System.nanoTime()
-        val response = processInput(rawInput, history)
-        val splitter = SentenceSplitter()
-        val sentences = mutableListOf<String>()
-        sentences.addAll(splitter.feed(response))
-        splitter.flush()?.let { sentences.add(it) }
-        sentences.forEachIndexed { index, sentence ->
+        val input = rawInput.trim()
+        if (input.isEmpty()) return ""
+
+        val detected = LanguageDetector.detect(input)
+        var firstSentenceLogged = false
+        fun emitSentence(sentence: String) {
             onSentence(sentence)
-            if (index == 0) {
+            if (!firstSentenceLogged) {
+                firstSentenceLogged = true
                 val latencyMs = (System.nanoTime() - startNs) / 1_000_000
                 Log.i(TAG, "TTS_FIRST_SENTENCE latencyMs=$latencyMs")
             }
         }
+
+        // Local/fast turns bypass the cloud; stream their canned reply through
+        // the splitter so callers still get sentence-level delivery.
+        val localReply = normalizer.checkLanguageSwitchCommand(input)
+            ?: normalizer.getConversationalResponse(input)
+            ?: executeFastDeviceCommand(input, detected)
+        if (localReply != null) {
+            val splitter = SentenceSplitter()
+            splitter.feed(localReply).forEach(::emitSentence)
+            splitter.flush()?.let(::emitSentence)
+            return localReply
+        }
+
+        // Mirror processInput's provider priority: gemini first, then claude.
+        // A provider that is configured but not stream-capable falls back to
+        // the full-response path rather than switching providers.
+        val streamingProvider: AIProviderStream? = when {
+            geminiProvider.isConfigured -> geminiProvider as? AIProviderStream
+            claudeProvider.isConfigured -> claudeProvider as? AIProviderStream
+            else -> null
+        }
+
+        if (streamingProvider != null) {
+            val splitter = SentenceSplitter()
+            val full = StringBuilder()
+            var emittedAny = false
+            try {
+                streamingProvider.generateStream(input, history).collect { chunk ->
+                    full.append(chunk)
+                    splitter.feed(chunk).forEach { sentence ->
+                        emittedAny = true
+                        emitSentence(sentence)
+                    }
+                }
+                splitter.flush()?.let {
+                    emittedAny = true
+                    emitSentence(it)
+                }
+                return full.toString()
+            } catch (e: CancellationException) {
+                // A cancelled turn stops streaming immediately; not an error.
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Streaming generation failed; falling back", e)
+                if (emittedAny || full.isNotEmpty()) {
+                    // Keep what we already streamed; do not replay it.
+                    if (!emittedAny) splitter.flush()?.let(::emitSentence)
+                    return full.toString()
+                }
+                // Nothing was emitted yet: safe to fall back to the full path.
+            }
+        }
+
+        val response = processInput(rawInput, history)
+        val splitter = SentenceSplitter()
+        splitter.feed(response).forEach(::emitSentence)
+        splitter.flush()?.let(::emitSentence)
         return response
     }
 

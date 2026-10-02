@@ -345,7 +345,7 @@ class GeminiTtsEngine @Inject constructor(
             playPcmViaAudioTrack(audio.bytes, audio.sampleRate, ttsId, onStart, onDone, onError)
         } else {
             // Container payload (WAV/MP3): MediaPlayer path. Never AudioTrack.
-            playContainerViaMediaPlayer(audio.bytes, ttsId, onStart, onDone, onError)
+            playContainerViaMediaPlayer(audio.bytes, audio.sampleRate, ttsId, onStart, onDone, onError)
         }
     }
 
@@ -435,6 +435,7 @@ class GeminiTtsEngine @Inject constructor(
 
         withContext(Dispatchers.Main) { onStart?.invoke() }
         Log.i(TAG, "PLAYBACK_STARTED ttsId=$ttsId")
+        Log.i(TAG, "AUDIO_TRUTH ttsId=$ttsId rate=${sampleRate}Hz encoding=PCM_16BIT channels=MONO path=AudioTrack")
 
         // Stream the complete PCM; write() blocks until the hardware drains,
         // so returning from the loop means the audio actually finished.
@@ -487,6 +488,7 @@ class GeminiTtsEngine @Inject constructor(
     /** WAV/MP3 container playback (MediaPlayer). Never used for raw PCM. */
     private suspend fun playContainerViaMediaPlayer(
         audioBytes: ByteArray,
+        sampleRate: Int,
         ttsId: String,
         onStart: (() -> Unit)?,
         onDone: (() -> Unit)?,
@@ -544,6 +546,7 @@ class GeminiTtsEngine @Inject constructor(
 
             synchronized(audioOwnerLock) { activeMediaPlayer = player }
             Log.i(TAG, "PLAYBACK_STARTED ttsId=$ttsId engine=MediaPlayer")
+            Log.i(TAG, "AUDIO_TRUTH ttsId=$ttsId rate=${sampleRate}Hz encoding=CONTAINER(WAV/MP3) channels=N/A path=MediaPlayer")
             player.start()
             onStart?.invoke()
             true
