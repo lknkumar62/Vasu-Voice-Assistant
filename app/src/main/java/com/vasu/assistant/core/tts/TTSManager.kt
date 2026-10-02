@@ -45,18 +45,28 @@ class TTSManager @Inject constructor(
     private var lastSpokenResponseId: String? = null
 
     fun initialize() {
-        androidSpeechService.initialize()
-        // Pre-warm Android fallback TTS so voice is ready even when Gemini fails
         try {
-            // Access via VoiceRouter's lazy dependency — initialize eagerly
-            // We use a coroutine to avoid blocking
-            CoroutineScope(Dispatchers.Main).launch {
-                // Force init of fallback engine via reflection-free call
-                // VoiceRouter will lazily init it anyway, but we warm it now
-                androidSpeechService.initialize()
+            androidSpeechService.initialize()
+            // Pre-warm Android fallback TTS so voice is ready even when Gemini fails
+            try {
+                CoroutineScope(Dispatchers.Main).launch {
+                    try {
+                        androidSpeechService.initialize()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "TTS fallback warm failed", e)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "TTS fallback warm launch failed", e)
             }
-        } catch (_: Exception) {}
-        _customVoiceStatus.value = customVoiceEngine.status.value
+        } catch (e: Exception) {
+            Log.e(TAG, "TTS initialize failed — degrading to silent", e)
+        }
+        try {
+            _customVoiceStatus.value = customVoiceEngine.status.value
+        } catch (e: Exception) {
+            Log.e(TAG, "customVoiceStatus read failed", e)
+        }
     }
 
     fun speak(text: String) {

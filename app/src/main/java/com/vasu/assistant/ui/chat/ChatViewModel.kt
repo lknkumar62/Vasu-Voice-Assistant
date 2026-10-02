@@ -64,41 +64,80 @@ class ChatViewModel @Inject constructor(
     private var lastSpokenResponseId: String? = null
 
     init {
-        ttsManager.initialize()
+        try {
+            ttsManager.initialize()
+        } catch (e: Exception) {
+            Log.e(TAG, "ttsManager.initialize failed", e)
+            _uiState.value = _uiState.value.copy(
+                messages = _uiState.value.messages + ChatMessage(
+                    content = "System: Voice setup unavailable",
+                    isUser = false,
+                    toolName = "system"
+                )
+            )
+        }
 
         // Load chat history — does NOT trigger TTS
-        loadConversationHistory()
+        try {
+            loadConversationHistory()
+        } catch (e: Exception) {
+            Log.e(TAG, "loadConversationHistory failed", e)
+        }
 
         viewModelScope.launch {
-            sttManager.state.collect { sttState ->
-                _uiState.value = _uiState.value.copy(
-                    isListening = sttState == STTState.LISTENING
-                )
+            try {
+                sttManager.state.collect { sttState ->
+                    _uiState.value = _uiState.value.copy(
+                        isListening = sttState == STTState.LISTENING
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "stt state collector failed", e)
             }
         }
 
         viewModelScope.launch {
-            sttManager.partialResults.collect { transcript ->
-                _uiState.value = _uiState.value.copy(partialTranscript = transcript)
+            try {
+                sttManager.partialResults.collect { transcript ->
+                    _uiState.value = _uiState.value.copy(partialTranscript = transcript)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "stt partial collector failed", e)
             }
         }
 
         // STT final results — do NOT auto-send. User must explicitly press Send or Mic.
         // Only update the input field so user can review before sending.
         viewModelScope.launch {
-            sttManager.results.collect { result ->
-                if (result.isFinal && result.text.isNotBlank()) {
-                    Log.d(TAG, "STT final result: ${result.text}")
-                    _uiState.value = _uiState.value.copy(partialTranscript = "")
-                    // Just fill the input field — do NOT auto-send
-                    updateInput(result.text)
+            try {
+                sttManager.results.collect { result ->
+                    if (result.isFinal && result.text.isNotBlank()) {
+                        Log.d(TAG, "STT final result: ${result.text}")
+                        _uiState.value = _uiState.value.copy(partialTranscript = "")
+                        // Just fill the input field — do NOT auto-send
+                        updateInput(result.text)
+                    }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "stt results collector failed", e)
             }
         }
 
         viewModelScope.launch {
-            sttManager.errors.collect { error ->
-                addMessage(ChatMessage(content = error.message, isUser = false))
+            try {
+                sttManager.errors.collect { error ->
+                    addMessage(ChatMessage(content = error.message, isUser = false))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "stt errors collector failed", e)
             }
         }
     }
@@ -147,6 +186,17 @@ class ChatViewModel @Inject constructor(
                 } else {
                     Log.d(TAG, "Response ${responseMsg.id} already spoken, skipping TTS")
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "sendMessage failed", e)
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                addMessage(
+                    ChatMessage(
+                        content = "Sorry, I couldn't process that: ${e.message ?: "unknown error"}",
+                        isUser = false
+                    )
+                )
             } finally {
                 sendMutex.unlock()
             }
@@ -154,15 +204,23 @@ class ChatViewModel @Inject constructor(
     }
 
     fun toggleListening() {
-        if (_uiState.value.isListening) {
-            sttManager.stopListening()
-        } else {
-            sttManager.startListening()
+        try {
+            if (_uiState.value.isListening) {
+                sttManager.stopListening()
+            } else {
+                sttManager.startListening()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "toggleListening failed", e)
         }
     }
 
     fun stopSpeaking() {
-        ttsManager.stop()
+        try {
+            ttsManager.stop()
+        } catch (e: Exception) {
+            Log.e(TAG, "stopSpeaking failed", e)
+        }
     }
 
     /**
@@ -172,7 +230,11 @@ class ChatViewModel @Inject constructor(
      */
     fun replayMessage(text: String) {
         if (text.isBlank()) return
-        ttsManager.speakQueued(text)
+        try {
+            ttsManager.speakQueued(text)
+        } catch (e: Exception) {
+            Log.e(TAG, "replayMessage failed", e)
+        }
     }
 
     fun clearChat() {
@@ -203,21 +265,28 @@ class ChatViewModel @Inject constructor(
         )
         // Save to database
         viewModelScope.launch {
-            conversationDao.insertMessage(
-                com.vasu.assistant.database.ConversationMessageEntity(
-                    conversationId = currentConversationId,
-                    role = if (message.isUser) "user" else "assistant",
-                    content = message.content,
-                    toolName = message.toolName,
-                    toolResult = message.toolResult,
-                    timestamp = message.timestamp
+            try {
+                conversationDao.insertMessage(
+                    com.vasu.assistant.database.ConversationMessageEntity(
+                        conversationId = currentConversationId,
+                        role = if (message.isUser) "user" else "assistant",
+                        content = message.content,
+                        toolName = message.toolName,
+                        toolResult = message.toolResult,
+                        timestamp = message.timestamp
+                    )
                 )
-            )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "insertMessage failed", e)
+            }
         }
     }
 
     private fun loadConversationHistory() {
         viewModelScope.launch {
+            try {
             val messages = conversationDao.getGlobalRecentMessages(limit = 50).reversed()
             if (messages.isNotEmpty()) {
                 val chatMessages = mutableListOf<ChatMessage>()
@@ -238,8 +307,21 @@ class ChatViewModel @Inject constructor(
                         )
                     )
                 }
-                _uiState.value = _uiState.value.copy(messages = chatMessages)
+                _uiState.value = _uiState.value.copy(messages = chatMessages                )
             } else {
+                _uiState.value = _uiState.value.copy(
+                    messages = listOf(
+                        ChatMessage(
+                            content = "नमस्ते! मैं वासु हूँ, आपकी वॉइस असिस्टेंट। आज मैं आपकी क्या मदद करूँ?",
+                            isUser = false
+                        )
+                    )
+                )
+            }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "history load failed", e)
                 _uiState.value = _uiState.value.copy(
                     messages = listOf(
                         ChatMessage(
@@ -254,7 +336,7 @@ class ChatViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        sttManager.stopListening()
-        ttsManager.stop()
+        try { sttManager.stopListening() } catch (_: Exception) {}
+        try { ttsManager.stop() } catch (_: Exception) {}
     }
 }
