@@ -205,9 +205,10 @@ class ToolRouter @Inject constructor(
      */
     suspend fun executeTool(name: String, params: Map<String, Any>): ActionResult {
         val tool = findTool(name)
-            ?: return ActionResult.error(name, "Unknown tool", "No tool named '$name'")
+            ?: return ActionResult.error(name, "Unknown tool", "No tool named '$name'").also { com.vasu.assistant.core.logging.ErrorLog.log("COMMAND", "unknown tool: $name") }
 
         if (!roleManager.hasPermission(tool.requiredRole)) {
+            com.vasu.assistant.core.logging.ErrorLog.log("COMMAND", "denied: $name needs ${tool.requiredRole} (risk=${tool.riskLevel})")
             return ActionResult.error(
                 name,
                 "Permission denied",
@@ -226,12 +227,13 @@ class ToolRouter @Inject constructor(
                         name,
                         "Tool timed out",
                         "'$name' did not finish within ${TOOL_TIMEOUT_MS / 1000}s"
-                    )
+                    ).also { com.vasu.assistant.core.logging.ErrorLog.log("COMMAND", "timeout: $name") }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Tool execution failed: $name", e)
+            com.vasu.assistant.core.logging.ErrorLog.log("COMMAND", "tool $name failed: ${e.message}", e)
             ActionResult.error(name, "Tool '$name' failed", e.message ?: "Unknown error")
         }
     }

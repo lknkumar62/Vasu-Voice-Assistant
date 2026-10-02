@@ -61,6 +61,7 @@ class TTSManager @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "TTS initialize failed — degrading to silent", e)
+            com.vasu.assistant.core.logging.ErrorLog.log("VOICE", "TTS init failed: ${e.message}", e)
         }
         try {
             _customVoiceStatus.value = customVoiceEngine.status.value

@@ -349,6 +349,7 @@ class STTManager @Inject constructor(
         override fun onError(error: Int) {
             val diagnostic = explainErrorCode(error)
             Log.e(TAG, "[STT_ERROR] onError: code=$error ($diagnostic)")
+            com.vasu.assistant.core.logging.ErrorLog.log("VOICE", "STT error code=$error: $diagnostic")
 
             // Suppress retry if user manually stopped — prevents tap-tap loop
             if (manuallyStopped) {

@@ -119,7 +119,7 @@ class MissionEngine @Inject constructor(
                 "Mission '${mission.name}' timed out after ${missionTimeoutMs}ms ($stepsCompleted/${mission.steps.size} steps completed)",
                 "MISSION_TIMEOUT",
                 data = mapOf("stepsCompleted" to stepsCompleted, "stepsTotal" to mission.steps.size)
-            )
+            ).also { com.vasu.assistant.core.logging.ErrorLog.log("MISSION", "${mission.name}: ${it.message}") }
         } catch (ce: CancellationException) {
             val job = currentCoroutineContext()[Job]
             if (job != null && !job.isActive) {
@@ -135,6 +135,7 @@ class MissionEngine @Inject constructor(
                 )
             )
         } catch (aborted: MissionAborted) {
+            com.vasu.assistant.core.logging.ErrorLog.log("MISSION", "${mission.name}: ${aborted.message}")
             ActionResult.error(
                 "run_mission",
                 aborted.message ?: "Mission '${mission.name}' aborted",

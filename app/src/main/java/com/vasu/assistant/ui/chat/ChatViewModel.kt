@@ -197,6 +197,7 @@ class ChatViewModel @Inject constructor(
                         isUser = false
                     )
                 )
+                com.vasu.assistant.core.logging.ErrorLog.log("CHAT", "sendMessage failed: ${e.message}", e)
             } finally {
                 sendMutex.unlock()
             }
