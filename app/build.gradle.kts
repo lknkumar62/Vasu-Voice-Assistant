@@ -21,8 +21,50 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        create("release") {
+            // Release keystore credentials come from gradle.properties or environment:
+            // RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD.
+            // Never commit a real keystore; CI injects these as secrets.
+            val releaseStoreFileProp =
+                (project.findProperty("RELEASE_STORE_FILE") as String?)
+                    ?: System.getenv("RELEASE_STORE_FILE")
+            val releaseStorePasswordProp =
+                (project.findProperty("RELEASE_STORE_PASSWORD") as String?)
+                    ?: System.getenv("RELEASE_STORE_PASSWORD")
+            val releaseKeyAliasProp =
+                (project.findProperty("RELEASE_KEY_ALIAS") as String?)
+                    ?: System.getenv("RELEASE_KEY_ALIAS")
+            val releaseKeyPasswordProp =
+                (project.findProperty("RELEASE_KEY_PASSWORD") as String?)
+                    ?: System.getenv("RELEASE_KEY_PASSWORD")
+            if (!releaseStoreFileProp.isNullOrBlank() && file(releaseStoreFileProp).exists()) {
+                storeFile = file(releaseStoreFileProp)
+                storePassword = releaseStorePasswordProp
+                keyAlias = releaseKeyAliasProp
+                keyPassword = releaseKeyPasswordProp
+            }
+            // WARNING: when RELEASE_* credentials/file are absent, this signingConfig is
+            // left incomplete and the `release` buildType below falls back to the debug
+            // keystore. That fallback is for local testing ONLY — never ship to Play
+            // with a debug signature. Provide a real keystore via gradle.properties
+            // (local, git-ignored) or RELEASE_* env vars (CI secrets) for any public release.
+            // No real keystore is committed to this repo.
+        }
+    }
+
     buildTypes {
         getByName("release") {
+            // Uses the `release` signingConfig above when a valid keystore file is
+            // supplied, otherwise falls back to the debug key for local testing only
+            // (see WARNING above — never publish a debug-signed release build).
+            val hasReleaseKeystore =
+                ((project.findProperty("RELEASE_STORE_FILE") as String?)
+                    ?: System.getenv("RELEASE_STORE_FILE"))
+                    ?.let { file(it).exists() } == true
+            signingConfig =
+                if (hasReleaseKeystore) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

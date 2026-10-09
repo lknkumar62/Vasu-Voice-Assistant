@@ -8,6 +8,7 @@ val VasuCrimson = Color(0xFFE11D48) // Crimson accent — primary brand
 val VasuElectric = Color(0xFF00E5FF) // Electric accent — secondary
 val VasuNeonGreen = Color(0xFF39FF14) // Neon Green — success
 val VasuGlassWhite = Color(0x1AFFFFFF) // Glassmorphism overlay
+val VasuGlassBorder = Color(0x29FFFFFF) // Glassmorphism 1dp light border (~16% white)
 
 val VasuSuccess = VasuNeonGreen
 val VasuGreen = VasuNeonGreen

@@ -92,6 +92,8 @@ fun VoiceScreen(
             StatusDisplayCard(
                 mode = uiState.mode,
                 isListening = uiState.isListening,
+                isSpeaking = uiState.isSpeaking,
+                activeSpeaker = if (uiState.isSpeaking) uiState.geminiVoice.ifBlank { "Kore" } else null,
                 onReconnect = viewModel::reconnect
             )
 
@@ -115,18 +117,31 @@ fun VoiceScreen(
                 ) {
                     WaveformVisualizer(
                         isListening = uiState.isListening,
-                        rmsLevel = uiState.rmsLevel
+                        rmsLevel = uiState.rmsLevel,
+                        isSpeaking = uiState.isSpeaking
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    MicLevelMeter(
+                        rmsLevel = uiState.rmsLevel,
+                        isListening = uiState.isListening,
+                        isSpeaking = uiState.isSpeaking
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    VoiceStatePills(mode = uiState.mode)
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
                         text = uiState.statusMessage,
                         color = when (uiState.mode) {
-                            VoiceUiMode.LISTENING -> VasuCrimson
-                            VoiceUiMode.SPEAKING -> VasuElectric
-                            VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> VasuWarning
-                            VoiceUiMode.CONNECTING, VoiceUiMode.CONNECTED -> VasuCrimson
+                            VoiceUiMode.LISTENING -> VasuListening
+                            VoiceUiMode.SPEAKING -> VasuSpeaking
+                            VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> VasuThinking
+                            VoiceUiMode.CONNECTING, VoiceUiMode.CONNECTED -> VasuListening
                             VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE, VoiceUiMode.ERROR -> VasuError
                             else -> VasuTextSecondary
                         },
@@ -147,6 +162,14 @@ fun VoiceScreen(
                 ) {
                     if (uiState.transcript.isNotEmpty()) {
                         Text(
+                            text = "You",
+                            color = VasuListening,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
                             text = uiState.transcript,
                             color = VasuCrimson,
                             fontSize = 18.sp,
@@ -165,7 +188,15 @@ fun VoiceScreen(
                     if (uiState.lastResponse.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
                         HorizontalDivider(color = VasuCrimson.copy(alpha = 0.1f))
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Vasu",
+                            color = VasuSpeaking,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = uiState.lastResponse,
                             color = VasuTextPrimary,
@@ -181,6 +212,7 @@ fun VoiceScreen(
             VoiceMicButton(
                 isListening = uiState.isListening,
                 isSpeaking = uiState.isSpeaking,
+                rmsLevel = uiState.rmsLevel,
                 onClick = { viewModel.toggleListening() }
             )
 
@@ -287,18 +319,32 @@ private fun ModelVoiceBadgesRow(
 private fun StatusDisplayCard(
     mode: VoiceUiMode,
     isListening: Boolean,
-    onReconnect: () -> Unit
+    onReconnect: () -> Unit,
+    isSpeaking: Boolean = false,
+    activeSpeaker: String? = null
 ) {
     val (dotColor, label, showReconnect) = when (mode) {
-        VoiceUiMode.SPEAKING -> Triple(VasuElectric, "SPEAKING (Kore)", false)
-        VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> Triple(VasuWarning, "THINKING...", false)
-        VoiceUiMode.LISTENING -> Triple(VasuCrimson, "LISTENING", false)
+        VoiceUiMode.SPEAKING -> Triple(VasuSpeaking, "SPEAKING (${activeSpeaker ?: "Kore"})", false)
+        VoiceUiMode.THINKING, VoiceUiMode.PROCESSING -> Triple(VasuThinking, "THINKING...", false)
+        VoiceUiMode.LISTENING -> Triple(VasuListening, "LISTENING (You)", false)
         VoiceUiMode.CONNECTED -> Triple(VasuSuccess, "CONNECTED & READY", false)
         VoiceUiMode.CONNECTING -> Triple(VasuInfo, "CONNECTING...", false)
+        VoiceUiMode.OFFLINE_MODE, VoiceUiMode.GEMINI_UNAVAILABLE -> Triple(VasuWarning, "OFFLINE MODE", true)
         VoiceUiMode.ERROR, VoiceUiMode.PERMISSION_REQUIRED, VoiceUiMode.MIC_UNAVAILABLE -> Triple(VasuError, "SYSTEM ERROR", true)
         VoiceUiMode.DISCONNECTED -> Triple(VasuTextMuted, "DISCONNECTED", true)
-        else -> Triple(VasuTextMuted, "IDLE", true)
+        else -> Triple(VasuIdle, "IDLE", true)
     }
+    // Gentle pulse for the live states (listening / speaking) only.
+    val infiniteTransition = rememberInfiniteTransition(label = "status_dot")
+    val dotAlpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (isListening || isSpeaking || mode == VoiceUiMode.SPEAKING || mode == VoiceUiMode.LISTENING) 0.35f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot_alpha"
+    )
 
     VasuCard(
         modifier = Modifier.fillMaxWidth()
@@ -309,9 +355,9 @@ private fun StatusDisplayCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor.copy(alpha = dotAlpha)))
                 Spacer(modifier = Modifier.width(10.dp))
-                Text(text = label, color = VasuTextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                Text(text = label, color = dotColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
             }
             if (showReconnect) {
                 OutlinedButton(
@@ -341,7 +387,7 @@ private fun ErrorBannerCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF3A0F0F).copy(alpha = 0.95f)),
+        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, VasuError.copy(alpha = 0.6f))
     ) {
@@ -350,7 +396,7 @@ private fun ErrorBannerCard(
                 Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = VasuError, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Live Connection Notice:", color = Color(0xFFFF8A80), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Live Connection Notice:", color = VasuError, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(message, color = VasuTextPrimary.copy(alpha = 0.95f), fontSize = 12.sp, lineHeight = 16.sp)
                 }
@@ -361,12 +407,12 @@ private fun ErrorBannerCard(
             Spacer(modifier = Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onOpenSettings) {
-                    Text("Settings", color = Color(0xFFFF8A80), fontSize = 11.sp)
+                    Text("Settings", color = VasuTextSecondary, fontSize = 11.sp)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = VasuError.copy(alpha = 0.9f), contentColor = Color.White),
+                    colors = ButtonDefaults.buttonColors(containerColor = VasuError.copy(alpha = 0.9f), contentColor = VasuTextPrimary),
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
@@ -374,6 +420,77 @@ private fun ErrorBannerCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MicLevelMeter(
+    rmsLevel: Float,
+    isListening: Boolean,
+    isSpeaking: Boolean
+) {
+    // Live RMS mic meter while recording; idle placeholder otherwise.
+    // rmsLevel is 0..1 from the existing STT flow — UI-only rendering.
+    val level = rmsLevel.coerceIn(0f, 1f)
+    val meterColor = when {
+        isListening -> VasuListening
+        isSpeaking -> VasuSpeaking
+        else -> VasuTextMuted
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        LinearProgressIndicator(
+            progress = level,
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+            color = meterColor,
+            trackColor = VasuDarkElevated
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = when {
+                isListening -> "Mic level — live"
+                isSpeaking -> "Vasu is speaking"
+                else -> "Mic idle"
+            },
+            color = VasuTextMuted,
+            fontSize = 10.sp
+        )
+    }
+}
+
+@Composable
+private fun VoiceStatePills(mode: VoiceUiMode) {
+    // Clear IDLE vs LISTENING vs SPEAKING indicator with theme colors.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StatePill(label = "IDLE", active = mode == VoiceUiMode.IDLE || mode == VoiceUiMode.CONNECTED || mode == VoiceUiMode.DISCONNECTED, activeColor = VasuTextMuted)
+        StatePill(label = "LISTENING", active = mode == VoiceUiMode.LISTENING, activeColor = VasuListening)
+        StatePill(label = "SPEAKING", active = mode == VoiceUiMode.SPEAKING, activeColor = VasuSpeaking)
+    }
+}
+
+@Composable
+private fun StatePill(label: String, active: Boolean, activeColor: androidx.compose.ui.graphics.Color) {
+    Surface(
+        shape = RoundedCornerShape(50.dp),
+        color = if (active) activeColor.copy(alpha = 0.15f) else VasuDarkElevated,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (active) activeColor.copy(alpha = 0.5f) else VasuTextMuted.copy(alpha = 0.2f)
+        )
+    ) {
+        Text(
+            text = label,
+            color = if (active) activeColor else VasuTextMuted,
+            fontSize = 10.sp,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -466,9 +583,16 @@ private fun DiagnosticsRow(label: String, value: String, valueColor: Color, isBo
 @Composable
 fun WaveformVisualizer(
     isListening: Boolean,
-    rmsLevel: Float = 0f
+    rmsLevel: Float = 0f,
+    isSpeaking: Boolean = false
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    val active = isListening || isSpeaking
+    val barColor = when {
+        isListening -> VasuListening
+        isSpeaking -> VasuSpeaking
+        else -> VasuTextMuted.copy(alpha = 0.3f)
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth().height(80.dp),
@@ -477,8 +601,14 @@ fun WaveformVisualizer(
     ) {
         repeat(25) { index ->
             val delay = index * 80
-            val baseHeight = if (isListening) (15f + (index % 5) * 10f) else 6f
-            val rmsModulator = if (isListening) (rmsLevel * 60f) else 0f
+            val baseHeight = if (active) (15f + (index % 5) * 10f) else 6f
+            // Live RMS drives bar amplitude while recording; gentle idle
+            // motion while speaking so SPEAKING reads distinctly.
+            val rmsModulator = when {
+                isListening -> (rmsLevel.coerceIn(0f, 1f) * 60f)
+                isSpeaking -> 12f
+                else -> 0f
+            }
             
             val height by infiniteTransition.animateFloat(
                 initialValue = baseHeight,
@@ -495,7 +625,7 @@ fun WaveformVisualizer(
                     .width(3.dp)
                     .height(height.coerceIn(6f, 70f).dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (isListening) VasuCrimson else VasuTextMuted.copy(alpha = 0.3f))
+                    .background(barColor)
             )
         }
     }
@@ -505,7 +635,8 @@ fun WaveformVisualizer(
 fun VoiceMicButton(
     isListening: Boolean,
     isSpeaking: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    rmsLevel: Float = 0f
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
     val pulse by infiniteTransition.animateFloat(
@@ -519,34 +650,56 @@ fun VoiceMicButton(
     )
 
     val buttonColor = when {
-        isListening -> VasuError
-        isSpeaking -> VasuElectric
+        isListening -> VasuListening
+        isSpeaking -> VasuSpeaking
         else -> VasuCrimson
     }
+    val micLabel = when {
+        isListening -> "Listening — tap to stop"
+        isSpeaking -> "Speaking — tap to interrupt"
+        else -> "Tap mic to speak"
+    }
 
-    Box(contentAlignment = Alignment.Center) {
-        if (isListening || isSpeaking) {
-            Box(
-                modifier = Modifier
-                    .size(110.dp)
-                    .scale(pulse)
-                    .clip(CircleShape)
-                    .background(buttonColor.copy(alpha = 0.2f))
-            )
-        }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(contentAlignment = Alignment.Center) {
+            if (isListening || isSpeaking) {
+                // RMS-reactive halo while recording: louder input widens the glow.
+                val haloAlpha = (0.15f + rmsLevel.coerceIn(0f, 1f) * 0.25f)
+                    .let { if (isSpeaking) 0.2f else it }
+                Box(
+                    modifier = Modifier
+                        .size(110.dp)
+                        .scale(pulse)
+                        .clip(CircleShape)
+                        .background(buttonColor.copy(alpha = haloAlpha))
+                )
+            }
 
-        FloatingActionButton(
-            onClick = onClick,
-            modifier = Modifier.size(80.dp),
-            containerColor = buttonColor,
-            contentColor = VasuDarkBg,
-            shape = CircleShape
-        ) {
-            Icon(
-                imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                contentDescription = null,
-                modifier = Modifier.size(36.dp)
-            )
+            FloatingActionButton(
+                onClick = onClick,
+                modifier = Modifier.size(80.dp),
+                containerColor = buttonColor,
+                contentColor = VasuDarkBg,
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                    contentDescription = micLabel,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = micLabel,
+            color = when {
+                isListening -> VasuListening
+                isSpeaking -> VasuSpeaking
+                else -> VasuTextSecondary
+            },
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center
+        )
     }
 }

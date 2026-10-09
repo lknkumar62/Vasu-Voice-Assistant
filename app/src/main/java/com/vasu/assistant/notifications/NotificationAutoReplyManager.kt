@@ -110,11 +110,15 @@ class NotificationAutoReplyManager(
     }
 
     private suspend fun generateReply(senderName: String, messageText: String): String {
+        // Redact OTP/card-like codes before the message leaves the device (fail-closed privacy).
+        val safeText = messageText
+            .replace(Regex("\\b\\d{4}\\s?\\d{4}\\s?\\d{4}\\s?\\d{4}\\b"), "[CARD REDACTED]")
+            .replace(Regex("\\b\\d{4,8}\\b"), "[OTP REDACTED]")
         // Use AI to generate contextual reply
         return try {
             val prompt = buildString {
                 append("Generate a short, friendly, casual reply to this message from $senderName. ")
-                append("Message: \"$messageText\". ")
+                append("Message: \"$safeText\". ")
                 append("Keep it natural, 1-2 lines max. Don't use quotes in the reply.")
             }
             val provider = aiProvider

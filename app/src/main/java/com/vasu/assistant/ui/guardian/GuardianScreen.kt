@@ -180,6 +180,16 @@ fun GuardianScreen(
                     .padding(bottom = 8.dp)
             )
 
+            Text(
+                "Voice biometrics stay on this device and are never uploaded.",
+                color = VasuTextMuted,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
+
             when (val state = enrollState) {
                 is EnrollmentState.Idle -> EnrollCtaCard(onClick = { startEnrollmentFlow() })
 

@@ -37,6 +37,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.vasu.assistant.ui.components.VasuCard
 import com.vasu.assistant.ui.theme.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,15 +62,16 @@ fun ChatScreen(
         Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 
-    // Smart scroll: trigger only if user is near bottom
-    LaunchedEffect(uiState.messages.size, uiState.isLoading, uiState.partialTranscript) {
+    // Smart scroll: trigger only if user is near bottom.
+    // Keys include last-message content length so streaming appends re-trigger scroll.
+    val lastMessageLength = uiState.messages.lastOrNull()?.content?.length ?: 0
+    LaunchedEffect(uiState.messages.size, lastMessageLength, uiState.isLoading, uiState.partialTranscript) {
         if (isNearBottom && uiState.messages.isNotEmpty()) {
-            scope.launch {
-                kotlinx.coroutines.delay(100)
-                try {
-                    listState.animateScrollToItem(uiState.messages.size - 1)
-                } catch (_: Exception) {}
-            }
+            kotlinx.coroutines.delay(100)
+            try {
+                val total = listState.layoutInfo.totalItemsCount
+                if (total > 0) listState.animateScrollToItem(total - 1)
+            } catch (_: Exception) {}
         }
     }
 
@@ -272,7 +276,7 @@ fun ChatScreen(
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Hello, User 👋",
+                                text = "Hello, User",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = VasuTextPrimary
@@ -288,7 +292,10 @@ fun ChatScreen(
                                 viewModel.sendMessage()
                                 scope.launch {
                                     kotlinx.coroutines.delay(100)
-                                    try { listState.animateScrollToItem(filteredMessages.size) } catch (_: Exception) {}
+                                    try {
+                                        val total = listState.layoutInfo.totalItemsCount
+                                        if (total > 0) listState.animateScrollToItem(total - 1)
+                                    } catch (_: Exception) {}
                                 }
                             })
                         }
@@ -374,7 +381,10 @@ fun ChatScreen(
                     viewModel.sendMessage()
                     scope.launch {
                         kotlinx.coroutines.delay(100)
-                        try { listState.animateScrollToItem(filteredMessages.size) } catch (_: Exception) {}
+                        try {
+                            val total = listState.layoutInfo.totalItemsCount
+                            if (total > 0) listState.animateScrollToItem(total - 1)
+                        } catch (_: Exception) {}
                     }
                 },
                 onVoiceToggle = { viewModel.toggleListening() }
@@ -475,6 +485,14 @@ fun ChatScreen(
                 }
             }
         }
+    }
+}
+
+private fun formatMessageTime(timestamp: Long): String {
+    return try {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+    } catch (_: Exception) {
+        ""
     }
 }
 
@@ -641,28 +659,42 @@ private fun SuggestionGrid(onSuggestionClick: (String) -> Unit) {
 
 @Composable
 private fun SystemMessageBubble(message: ChatMessage) {
-    Row(
+    val timeLabel = remember(message.timestamp) { formatMessageTime(message.timestamp) }
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .background(VasuDarkCard.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = Icons.Filled.Info,
-                contentDescription = null,
-                tint = VasuTextMuted,
-                modifier = Modifier.size(12.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .background(VasuDarkCard.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = VasuTextMuted,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = message.content.removePrefix("System:").trim(),
+                    color = VasuTextMuted,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        if (timeLabel.isNotBlank()) {
             Text(
-                text = message.content.removePrefix("System:").trim(),
+                text = timeLabel,
                 color = VasuTextMuted,
                 fontSize = 10.sp,
-                textAlign = TextAlign.Center
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
     }
@@ -685,6 +717,7 @@ fun ChatBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = alignment
     ) {
+        val timeLabel = remember(message.timestamp) { formatMessageTime(message.timestamp) }
         Card(
             colors = CardDefaults.cardColors(containerColor = bgColor),
             shape = if (isUser) RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
@@ -701,7 +734,7 @@ fun ChatBubble(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.3f),
+                                VasuObsidian.copy(alpha = 0.4f),
                                 RoundedCornerShape(8.dp)
                             )
                             .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -735,7 +768,7 @@ fun ChatBubble(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(1.dp)
-                            .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.05f))
+                            .background(VasuGlassWhite)
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
@@ -775,6 +808,14 @@ fun ChatBubble(
                     }
                 }
             }
+        }
+        if (timeLabel.isNotBlank()) {
+            Text(
+                text = timeLabel,
+                color = VasuTextMuted,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+            )
         }
     }
 }

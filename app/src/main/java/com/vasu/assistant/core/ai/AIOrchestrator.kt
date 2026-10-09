@@ -3,6 +3,8 @@ package com.vasu.assistant.core.ai
 import android.content.Context
 import android.util.Log
 import com.vasu.assistant.core.tts.SentenceSplitter
+import com.vasu.assistant.core.command.LocalCommandRouter
+import com.vasu.assistant.core.security.RoleManager
 import com.vasu.assistant.devices.BluetoothManager
 import com.vasu.assistant.devices.DeviceControlManager
 import com.vasu.assistant.devices.TorchManager
@@ -37,7 +39,8 @@ class AIOrchestrator @Inject constructor(
     private val volumeManager: VolumeManager,
     private val bluetoothManager: BluetoothManager,
     private val deviceControlManager: DeviceControlManager,
-    private val toolRouter: ToolRouter
+    private val toolRouter: ToolRouter,
+    private val roleManager: RoleManager
 ) {
     companion object {
         private const val TAG = "AIOrchestrator"
@@ -69,6 +72,26 @@ class AIOrchestrator @Inject constructor(
      */
     suspend fun processInput(rawInput: String, history: List<ChatMessage> = emptyList()): String =
         withContext(Dispatchers.IO) {
+        // A2 (command-router): local-first deterministic routing. A simple
+        // device command matched here skips the LLM round-trip: permission is
+        // checked against the command's SecurityTypes-derived role, then the
+        // command runs through the existing ToolRouter.executeTool path
+        // (risk gate included) and its reply() is the canonical turn text.
+        // Anything else — no match, denied role, tool failure — falls through
+        // to the existing LLM path below untouched. Pure-local sentinels
+        // (local_time/local_date) have no ToolRouter dispatch and are
+        // answered directly.
+        LocalCommandRouter.match(rawInput)?.let { cmd ->
+            if (roleManager.hasPermission(cmd.requiredRole)) {
+                if (toolRouter.findTool(cmd.toolName) != null) {
+                    val execution = toolRouter.executeTool(cmd.toolName, cmd.params)
+                    if (execution.success) return@withContext cmd.reply(execution.message)
+                } else {
+                    return@withContext cmd.reply("")
+                }
+            }
+        }
+
         val input = rawInput.trim()
         if (input.isEmpty()) return@withContext ""
 
