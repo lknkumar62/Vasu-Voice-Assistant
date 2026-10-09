@@ -27,8 +27,6 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- UnlockActivity dismiss-keyguard (legacy; modern path uses setShowWhenLocked) -->
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
-    <!-- Legacy haptics flag (no Vibrator API usage found — ringer vibrate mode only) -->
-    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- DrivingMode + BluetoothManager car / proximity detection (pre-S pairing) -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <!-- DrivingModeManager car-BT identification (API 31+) -->
@@ -39,24 +37,14 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- TorchManager flashlight control (via CameraManager.setTorchMode) -->
     <uses-permission android:name="android.permission.FLASHLIGHT" />
-    <!-- DND / interruption-filter control (no setInterruptionFilter usage found) -->
-    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <!-- Telephony and messaging -->
-    <!-- Direct call placement (no ACTION_CALL usage found — code uses ACTION_DIAL) -->
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <!-- Direct SMS send (no SmsManager usage found — code uses ACTION_SENDTO intent) -->
-    <uses-permission android:name="android.permission.SEND_SMS" />
     <!-- MessagingManager.getRecentMessages SMS inbox read -->
     <uses-permission android:name="android.permission.READ_SMS" />
-    <!-- Call-history lookup (no CallLog API usage found) -->
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <!-- PhoneStateReceiver incoming-call state / number detection -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <!-- ContactManager / MessagingManager contact lookup -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <!-- Programmatic call answering (no TelecomManager.acceptRingingCall usage found) -->
-    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <!-- Alarms and scheduled automation -->
     <!-- ReminderReceiver / SocialAlarmReceiver exact alarms -->
@@ -69,22 +57,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Doze exemption for background listening (PermissionsViewModel gate) -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- APK install flow (no PackageInstaller usage found) -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Storage -->
-    <!-- Legacy scoped-storage file access -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <!-- Legacy file write -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
-    <!-- Gallery / image attach (no MediaStore read found) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <!-- Video attach (no MediaStore read found) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <!-- Audio attach for shared / transcribed clips (no MediaStore read found) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <!-- Partial photo-picker access (API 34) -->
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 

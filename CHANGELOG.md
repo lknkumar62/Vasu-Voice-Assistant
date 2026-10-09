@@ -1,5 +1,21 @@
 # CHANGELOG — VASU Voice Assistant
 
+## 2026-10-02 — 4.18.6 (97)
+
+- Version bump 4.18.5 (96) → 4.18.6 (97).
+- Release signing: release signingConfig with CI-injected keystore, debug fallback for local only.
+- Local-first router: on-device-first routing with provider fallback.
+- Glass kit: shared glassmorphism component kit adopted across screens.
+- Free-API audit: verified free-tier API usage and limits.
+- Privacy consent: onboarding consent flow for mic/data handling.
+- Voice/chat polish: listening, TTS, and chat UX refinements.
+- User guide: in-app/standalone user guide added.
+- Changelog: changelog and release-notes hygiene for the wave.
+- Manifest audit: manifest permissions and components reviewed.
+- OTP redaction fix: one-time codes redacted from logs.
+- Permission cleanup: 12 unused permissions dropped from the manifest.
+- Glass adoption: screens migrated onto the shared glass kit.
+
 ## 2026-10-02
 
 - Hidden internal ErrorLog for every swallowed failure (`c0b6d67`).

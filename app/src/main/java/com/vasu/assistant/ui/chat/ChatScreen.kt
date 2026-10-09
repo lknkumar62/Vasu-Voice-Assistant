@@ -34,7 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.vasu.assistant.ui.components.VasuCard
+import com.vasu.assistant.ui.components.GlassCard
 import com.vasu.assistant.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -390,12 +390,11 @@ fun ChatScreen(
                 onVoiceToggle = { viewModel.toggleListening() }
             )
 
-            VasuCard(
+            GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .imePadding(),
-                borderAlpha = 0.2f
+                    .imePadding()
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
@@ -509,9 +508,8 @@ private fun ThinkingBubble() {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
-        VasuCard(
-            modifier = Modifier.padding(horizontal = 4.dp),
-            borderAlpha = 0.1f
+        GlassCard(
+            modifier = Modifier.padding(horizontal = 4.dp)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),

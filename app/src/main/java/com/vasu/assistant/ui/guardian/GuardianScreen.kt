@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
@@ -28,6 +29,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.vasu.assistant.core.security.EnrollmentState
 import com.vasu.assistant.core.security.EnrolledVoice
 import com.vasu.assistant.core.security.UserRole
+import com.vasu.assistant.ui.components.EmptyState
+import com.vasu.assistant.ui.components.ErrorState
+import com.vasu.assistant.ui.components.GlassCard
+import com.vasu.assistant.ui.components.SectionHeader
 import com.vasu.assistant.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -123,9 +128,9 @@ fun GuardianScreen(
             }
 
             // ── Guardian master toggle ──────────────────────────────
-            Card(
+            GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+                contentPadding = 0.dp
             ) {
                 Row(
                     modifier = Modifier
@@ -170,11 +175,8 @@ fun GuardianScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // ── Enrollment section ──────────────────────────────────
-            Text(
-                "Voice enrollment",
-                color = VasuTextSecondary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+            SectionHeader(
+                title = "Voice enrollment",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
@@ -194,9 +196,9 @@ fun GuardianScreen(
                 is EnrollmentState.Idle -> EnrollCtaCard(onClick = { startEnrollmentFlow() })
 
                 is EnrollmentState.Completed -> {
-                    Card(
+                    GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+                        contentPadding = 0.dp
                     ) {
                         Column(
                             modifier = Modifier
@@ -236,27 +238,25 @@ fun GuardianScreen(
                     )
                 }
 
-                is EnrollmentState.Error -> Card(
+                is EnrollmentState.Error -> GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+                    contentPadding = 0.dp
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(state.message, color = VasuError, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row {
-                            OutlinedButton(onClick = { viewModel.cancelEnrollment() }) {
-                                Text("Cancel")
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Button(onClick = { startEnrollmentFlow() }) {
-                                Text("Try again")
-                            }
+                        ErrorState(
+                            icon = Icons.Filled.ErrorOutline,
+                            message = state.message,
+                            retryLabel = "Try again",
+                            onRetry = { startEnrollmentFlow() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedButton(onClick = { viewModel.cancelEnrollment() }) {
+                            Text("Cancel")
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
 
@@ -269,24 +269,19 @@ fun GuardianScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // ── Enrolled voices ─────────────────────────────────────
-            Text(
-                "Enrolled voices (${voices.size})",
-                color = VasuTextSecondary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+            SectionHeader(
+                title = "Enrolled voices (${voices.size})",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
             )
 
             if (voices.isEmpty()) {
-                Text(
-                    "No voices enrolled yet.",
-                    color = VasuTextMuted,
-                    fontSize = 13.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
+                EmptyState(
+                    icon = Icons.Filled.Mic,
+                    title = "No voices enrolled",
+                    subtitle = "Start enrollment to add your first voice.",
+                    modifier = Modifier.fillMaxWidth()
                 )
             } else {
                 voices.forEach { voice ->
@@ -326,9 +321,9 @@ fun GuardianScreen(
 
 @Composable
 private fun EnrollCtaCard(onClick: () -> Unit) {
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        contentPadding = 0.dp
     ) {
         Column(
             modifier = Modifier
@@ -379,9 +374,9 @@ private fun RecorderCard(
         }
     }
 
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        contentPadding = 0.dp
     ) {
         Column(
             modifier = Modifier
@@ -475,9 +470,9 @@ private fun CompleteEnrollmentForm(
     var role by remember { mutableStateOf(UserRole.FAMILY) }
     var roleMenuOpen by remember { mutableStateOf(false) }
 
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        contentPadding = 0.dp
     ) {
         Column(
             modifier = Modifier
@@ -551,9 +546,9 @@ private fun VoiceRow(
     var roleMenuOpen by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()) }
 
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard)
+        contentPadding = 0.dp
     ) {
         Row(
             modifier = Modifier

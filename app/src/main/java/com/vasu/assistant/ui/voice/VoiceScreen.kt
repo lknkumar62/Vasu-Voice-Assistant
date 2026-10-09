@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.vasu.assistant.ui.components.VasuCard
+import com.vasu.assistant.ui.components.GlassCard
 import com.vasu.assistant.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,7 +108,7 @@ fun VoiceScreen(
             }
 
             // 4. Waveform Visualizer Card
-            VasuCard(
+            GlassCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -153,7 +153,7 @@ fun VoiceScreen(
             }
 
             // 5. Transcript Area (Glass Card)
-            VasuCard(
+            GlassCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -346,7 +346,7 @@ private fun StatusDisplayCard(
         label = "dot_alpha"
     )
 
-    VasuCard(
+    GlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -385,11 +385,10 @@ private fun ErrorBannerCard(
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = VasuDarkCard),
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, VasuError.copy(alpha = 0.6f))
+        borderColor = VasuError.copy(alpha = 0.6f),
+        contentPadding = 0.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
@@ -501,11 +500,11 @@ private fun WakeWordToggleCard(
     reason: String?,
     onToggle: () -> Unit
 ) {
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = if (isActive) VasuSuccess.copy(alpha = 0.05f) else VasuDarkCard),
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) VasuSuccess.copy(alpha = 0.2f) else VasuCrimson.copy(alpha = 0.12f))
+        containerColor = if (isActive) VasuSuccess.copy(alpha = 0.05f) else VasuDarkCard,
+        borderColor = if (isActive) VasuSuccess.copy(alpha = 0.2f) else VasuCrimson.copy(alpha = 0.12f),
+        contentPadding = 0.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -560,7 +559,7 @@ private fun DiagnosticsCard(
     model: String,
     voice: String
 ) {
-    VasuCard(
+    GlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

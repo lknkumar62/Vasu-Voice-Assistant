@@ -23,3 +23,9 @@ EXPECTED PENDING CI: ~114 total unit tests (85 pre-existing from earlier 10-02 b
 - No dedicated agent process: tool loop is capped at 3 rounds; missions bounded by 60s budget and MAX_STEPS=50.
 - Guardian is fail-closed by design: speaker session resets on restart, tools deny until next wake-word verification.
 - VASU ships one bundled wake-word owner cohort; multi-owner "family" wake via TFLite path is not wired.
+
+## 4.18.6 (97) — 2026-10-02
+
+- Version bump 4.18.5 (96) → 4.18.6 (97).
+- 10-agent wave: release signing, local-first router, glass kit, free-API audit, privacy consent, voice/chat polish, user guide, changelog, manifest audit.
+- OTP redaction fix; permission cleanup (12 dropped); glass adoption across screens.
