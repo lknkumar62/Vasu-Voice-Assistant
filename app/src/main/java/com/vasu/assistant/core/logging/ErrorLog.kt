@@ -53,4 +53,26 @@ object ErrorLog {
             "$base | ${t.javaClass.simpleName}: ${t.message ?: ""} | $stack\n"
         }
     }
+
+    /**
+     * Read the tail of the internal log for diagnostics. Debug builds only
+     * surface this; release builds never call it from UI.
+     */
+    fun readTail(maxChars: Int = 8000): String {
+        return try {
+            val target = logFile ?: return "(log not initialized)"
+            if (!target.exists()) return "(empty — no errors recorded yet)"
+            val text = target.readText()
+            if (text.length <= maxChars) text else text.takeLast(maxChars)
+        } catch (_: Throwable) {
+            "(unreadable)"
+        }
+    }
+
+    fun clear() {
+        try {
+            logFile?.writeText("")
+        } catch (_: Throwable) {
+        }
+    }
 }

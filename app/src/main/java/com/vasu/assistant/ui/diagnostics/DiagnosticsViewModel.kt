@@ -36,9 +36,13 @@ class DiagnosticsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DiagnosticsUiState())
     val uiState: StateFlow<DiagnosticsUiState> = _uiState.asStateFlow()
 
+    private val _errorLogTail = MutableStateFlow("")
+    val errorLogTail: StateFlow<String> = _errorLogTail.asStateFlow()
+
     init { refresh() }
 
     fun refresh() {
+        refreshErrorLog()
         val items = mutableListOf<DiagnosticItem>()
 
         // AI Provider
@@ -134,5 +138,22 @@ class DiagnosticsViewModel @Inject constructor(
         ))
 
         _uiState.value = DiagnosticsUiState(items = items)
+    }
+
+    /** Debug-only: reload the internal error-log tail for copy/paste diagnostics. */
+    fun refreshErrorLog() {
+        _errorLogTail.value = try {
+            com.vasu.assistant.core.logging.ErrorLog.readTail()
+        } catch (_: Exception) {
+            "(unreadable)"
+        }
+    }
+
+    fun clearErrorLog() {
+        try {
+            com.vasu.assistant.core.logging.ErrorLog.clear()
+        } catch (_: Exception) {
+        }
+        _errorLogTail.value = "(cleared)"
     }
 }
