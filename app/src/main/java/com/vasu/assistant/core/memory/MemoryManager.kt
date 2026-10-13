@@ -24,6 +24,19 @@ class MemoryManager @Inject constructor(
         // Learn from conversation
         userMemory.learnFromConversation(input)
 
+        // Vault pre-extract guard (pure part only; LLM wiring lands later):
+        // only fact-bearing input proceeds to extraction, saving LLM cost.
+        // Synchronous-safe: stays in this suspend context, no new scope.
+        try {
+            if (VaultExtractor.looksFactBearing(input)) {
+                // Deferred: once LLM wiring lands, the assistant-reply path
+                // will call storeVaultFacts(input, assistantReply, llmJson).
+                // No LLM call here by design.
+            }
+        } catch (_: Exception) {
+            // Vault guard must never break input processing.
+        }
+
         // Handle explicit memory commands
         when {
             input.lowercase().startsWith("remember that") || input.lowercase().startsWith("yaad rakh") -> {
@@ -41,6 +54,29 @@ class MemoryManager @Inject constructor(
             input.lowercase().contains("what do you remember") || input.lowercase().contains("kya yaad hai") -> {
                 // This will be handled by AI orchestrator
             }
+        }
+    }
+
+    /**
+     * Store already-extracted vault facts (model JSON) into long-term memory.
+     * Called by the future LLM response path, not by processInput directly,
+     * since extraction requires an LLM call. Stores ONLY facts; entities,
+     * relationships and commitments are ignored in this batch.
+     * UserMemory.remember already drops sensitive values.
+     */
+    suspend fun storeVaultFacts(userMsg: String, assistantMsg: String, rawJson: String) {
+        try {
+            // Dedup reference for the future vault table; no column for it yet.
+            VaultExtractor.sourceRef(userMsg, assistantMsg)
+            val extraction = VaultExtractor.parseExtractionResponse(rawJson, userMsg)
+            extraction.facts.forEachIndexed { index, fact ->
+                userMemory.remember(
+                    "fact_${System.currentTimeMillis()}_$index",
+                    "${fact.subject} ${fact.predicate} ${fact.obj}"
+                )
+            }
+        } catch (_: Exception) {
+            // Vault storage must never break the caller.
         }
     }
 

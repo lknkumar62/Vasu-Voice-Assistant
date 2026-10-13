@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.vasu.assistant.core.tts.SentenceSplitter
 import com.vasu.assistant.core.command.LocalCommandRouter
+import com.vasu.assistant.core.personality.PersonalityManager
 import com.vasu.assistant.core.security.RoleManager
 import com.vasu.assistant.devices.BluetoothManager
 import com.vasu.assistant.devices.DeviceControlManager
@@ -40,7 +41,8 @@ class AIOrchestrator @Inject constructor(
     private val bluetoothManager: BluetoothManager,
     private val deviceControlManager: DeviceControlManager,
     private val toolRouter: ToolRouter,
-    private val roleManager: RoleManager
+    private val roleManager: RoleManager,
+    private val personalityManager: PersonalityManager
 ) {
     companion object {
         private const val TAG = "AIOrchestrator"
@@ -51,6 +53,26 @@ class AIOrchestrator @Inject constructor(
 
     /** Tool declarations sent to the LLM so it can request real executions. */
     private val llmTools: List<ToolDefinition> by lazy { toolRouter.getAvailableTools() }
+
+    /**
+     * Narrow [llmTools] to the tools this turn plausibly needs. Fail-open:
+     * any doubt returns the full list, so the prompt and loop are unchanged
+     * when the signal is weak or the filter throws.
+     */
+    private fun relevantTools(input: String, history: List<ChatMessage>): List<ToolDefinition> {
+        return try {
+            val wanted = ToolRelevanceFilter.selectForConversation(
+                listOf(input) + history.map { it.content },
+                llmTools.map { it.name }.toSet()
+            )
+            val relevant = ToolRelevanceFilter.decide(llmTools, wanted)
+            Log.d(TAG, "ToolRelevanceFilter kept=${relevant.size} total=${llmTools.size} wanted=${wanted.size}")
+            relevant
+        } catch (e: Exception) {
+            Log.w(TAG, "ToolRelevanceFilter failed open", e)
+            llmTools
+        }
+    }
 
     /**
      * Process arbitrary user text/voice input, executing locally if it matches device commands,
@@ -120,7 +142,17 @@ class AIOrchestrator @Inject constructor(
         }
 
         // 2. CONVERSATIONAL CLOUD AI (Gemini / Claude)
-        val systemPrompt = promptManager.buildPrompt(userInput = input).toString()
+        // Jarvis-port personality: learn from this turn (fail-open) and append
+        // the personality block so replies adapt to verbosity/formality/humor.
+        val personalityBlock = try {
+            personalityManager.observe(input)
+            personalityManager.promptBlock("voice")
+        } catch (_: Exception) { null }
+        val systemPrompt = promptManager.buildPrompt(
+            userInput = input,
+            includePersonality = personalityBlock != null,
+            personalityBlock = personalityBlock
+        ).toString()
 
         try {
             if (geminiProvider.isConfigured) {
@@ -135,7 +167,7 @@ class AIOrchestrator @Inject constructor(
                             prompt = prompt,
                             systemPrompt = systemPrompt,
                             history = loopHistory,
-                            tools = llmTools
+                            tools = relevantTools(input, history)
                         )
                     },
                     failureReply = { failure ->
@@ -157,7 +189,7 @@ class AIOrchestrator @Inject constructor(
                             prompt = prompt,
                             systemPrompt = systemPrompt,
                             history = loopHistory,
-                            tools = llmTools
+                            tools = relevantTools(input, history)
                         )
                     },
                     failureReply = {

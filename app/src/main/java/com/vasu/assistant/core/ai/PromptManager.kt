@@ -89,13 +89,20 @@ Remember user's name, preferences, and past interactions."""
      * mirrors the user's script (Roman -> Roman, Devanagari -> Devanagari,
      * English -> English). Detection is local; the instruction (never the
      * raw key material) is what reaches the model.
+     *
+     * When [personalityBlock] is non-null it is appended verbatim as the
+     * final section. [includePersonality] marks the call as personality-aware
+     * for future direct-manager integration; both default to off so existing
+     * callers compile and behave exactly as before.
      */
     fun buildPrompt(
         includeTools: Boolean = true,
         includeGuardian: Boolean = false,
         userRole: String = "UNKNOWN",
         includeMemory: Boolean = false,
-        userInput: String? = null
+        userInput: String? = null,
+        includePersonality: Boolean = false,
+        personalityBlock: String? = null
     ): StringBuilder {
         val detected = userInput
             ?.takeIf { it.isNotBlank() }
@@ -124,6 +131,10 @@ Remember user's name, preferences, and past interactions."""
 
         if (includeMemory) {
             prompt.append("\n").append(memoryPrompt)
+        }
+
+        if ((includePersonality || personalityBlock != null) && personalityBlock != null) {
+            prompt.append("\n").append(personalityBlock)
         }
 
         return prompt
