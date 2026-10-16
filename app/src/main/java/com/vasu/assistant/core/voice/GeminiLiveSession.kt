@@ -77,7 +77,8 @@ class GeminiLiveSession @Inject constructor() {
     suspend fun connectAndWaitReady(
         apiKey: String,
         systemInstruction: String,
-        model: String = GeminiLiveProtocol.LIVE_MODEL
+        model: String = GeminiLiveProtocol.LIVE_MODEL,
+        voiceName: String = GeminiLiveProtocol.TARGET_VOICE
     ): Boolean = withContext(Dispatchers.IO) {
         disconnect()
 
@@ -102,7 +103,7 @@ class GeminiLiveSession @Inject constructor() {
                     isConnected.set(true)
                     val setupMessage = GeminiLiveProtocol.setupMessage(
                         model = model,
-                        voiceName = GeminiLiveProtocol.TARGET_VOICE,
+                        voiceName = voiceName,
                         systemInstruction = systemInstruction
                     )
                     ws.send(setupMessage)

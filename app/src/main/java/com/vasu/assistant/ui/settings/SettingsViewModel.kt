@@ -12,6 +12,7 @@ import com.vasu.assistant.core.ai.ModelCatalog
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.network.NetworkMonitor
 import com.vasu.assistant.core.network.NetworkState
+import com.vasu.assistant.core.security.RoleManager
 import com.vasu.assistant.core.service.VasuForegroundService
 import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.tts.TTSManager
@@ -69,6 +70,8 @@ data class SettingsUiState(
     val androidFallbackTtsEnabled: Boolean = false,
     val geminiTtsVoice: String = VasuSettings.DEFAULT_GEMINI_TTS_VOICE,
     val geminiTtsModel: String = VasuSettings.DEFAULT_GEMINI_TTS_MODEL,
+    val geminiLiveVoice: String = VasuSettings.DEFAULT_GEMINI_LIVE_VOICE,
+    val geminiLiveModel: String = VasuSettings.DEFAULT_GEMINI_LIVE_MODEL,
 
     // Wake word
     val wakeWordEnabled: Boolean = false,
@@ -105,7 +108,8 @@ class SettingsViewModel @Inject constructor(
     private val settings: VasuSettings,
     private val ttsManager: TTSManager,
     private val wakeWordDetector: WakeWordDetector,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val roleManager: RoleManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -145,6 +149,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             ttsManager.customVoiceStatus.collect { _uiState.value = _uiState.value.copy(customVoiceStatus = it) }
         }
+        viewModelScope.launch {
+            roleManager.guardianEnabled.collect { _uiState.value = _uiState.value.copy(voiceGuardEnabled = it) }
+        }
     }
 
     private fun refresh() {
@@ -173,11 +180,15 @@ class SettingsViewModel @Inject constructor(
             lastError = keyStore.lastError,
             voiceProfile = settings.voiceProfile.value,
             wakeWordEnabled = settings.wakeWordEnabled.value,
-            voiceGuardEnabled = settings.voiceGuardEnabled.value,
+            // FIX-6: RoleManager is the live guardian state (WakeWordDetector consults
+            // it); the old VasuSettings flag was display-only, so read the real one.
+            voiceGuardEnabled = roleManager.guardianEnabled.value,
             autoAllowEnabled = settings.autoAllowEnabled.value,
             androidFallbackTtsEnabled = settings.androidFallbackTtsEnabled.value,
             geminiTtsVoice = settings.geminiTtsVoice.value,
             geminiTtsModel = settings.geminiTtsModel.value,
+            geminiLiveVoice = settings.geminiLiveVoice.value,
+            geminiLiveModel = settings.geminiLiveModel.value,
             network = networkMonitor.state.value,
             // Live Chat config
             chatServerUrl = context.getSharedPreferences("vasu_chat_config", Context.MODE_PRIVATE)
@@ -375,6 +386,28 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(geminiTtsModel = model)
     }
 
+    fun setGeminiLiveVoice(voice: String) {
+        settings.setGeminiLiveVoice(voice)
+        _uiState.value = _uiState.value.copy(geminiLiveVoice = voice)
+    }
+
+    fun setGeminiLiveModel(model: String) {
+        settings.setGeminiLiveModel(model)
+        _uiState.value = _uiState.value.copy(geminiLiveModel = model)
+    }
+
+    /**
+     * FIX-6: Jarvis (male) / Nova (female) presets — set the cloud TTS voice and
+     * the Gemini Live voice together; the fine-grained pickers can still override
+     * either one afterwards.
+     */
+    fun setVoiceGender(gender: String) {
+        val voice = VasuSettings.geminiVoiceForGender(gender)
+        settings.setGeminiTtsVoice(voice)
+        settings.setGeminiLiveVoice(voice)
+        _uiState.value = _uiState.value.copy(geminiTtsVoice = voice, geminiLiveVoice = voice)
+    }
+
     // Wake word
 
     /**
@@ -395,7 +428,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setVoiceGuardEnabled(enabled: Boolean) {
+        // FIX-6: drives the live guardian (RoleManager) that the wake-word verifier
+        // and the security layer consult; the VasuSettings flag is kept as a mirror.
         settings.setVoiceGuardEnabled(enabled)
+        roleManager.setGuardianEnabled(enabled)
         _uiState.value = _uiState.value.copy(voiceGuardEnabled = enabled)
     }
 

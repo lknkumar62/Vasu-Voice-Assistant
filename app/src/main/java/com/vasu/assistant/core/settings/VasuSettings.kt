@@ -3,6 +3,7 @@ package com.vasu.assistant.core.settings
 import android.content.Context
 import android.content.SharedPreferences
 import com.vasu.assistant.core.tts.VoiceProfile
+import com.vasu.assistant.core.voice.GeminiLiveProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,6 +46,12 @@ class VasuSettings @Inject constructor(
     private val _geminiTtsModel = MutableStateFlow(DEFAULT_GEMINI_TTS_MODEL)
     val geminiTtsModel: StateFlow<String> = _geminiTtsModel.asStateFlow()
 
+    private val _geminiLiveVoice = MutableStateFlow(DEFAULT_GEMINI_LIVE_VOICE)
+    val geminiLiveVoice: StateFlow<String> = _geminiLiveVoice.asStateFlow()
+
+    private val _geminiLiveModel = MutableStateFlow(DEFAULT_GEMINI_LIVE_MODEL)
+    val geminiLiveModel: StateFlow<String> = _geminiLiveModel.asStateFlow()
+
     init {
         loadAll()
     }
@@ -64,6 +71,8 @@ class VasuSettings @Inject constructor(
         _androidFallbackTtsEnabled.value = prefs.getBoolean("android_fallback_tts", false)
         _geminiTtsVoice.value = prefs.getString("gemini_tts_voice", DEFAULT_GEMINI_TTS_VOICE) ?: DEFAULT_GEMINI_TTS_VOICE
         _geminiTtsModel.value = prefs.getString("gemini_tts_model", DEFAULT_GEMINI_TTS_MODEL) ?: DEFAULT_GEMINI_TTS_MODEL
+        _geminiLiveVoice.value = prefs.getString("gemini_live_voice", DEFAULT_GEMINI_LIVE_VOICE) ?: DEFAULT_GEMINI_LIVE_VOICE
+        _geminiLiveModel.value = prefs.getString("gemini_live_model", DEFAULT_GEMINI_LIVE_MODEL) ?: DEFAULT_GEMINI_LIVE_MODEL
     }
 
     fun setVoiceProfile(profile: VoiceProfile) {
@@ -116,11 +125,36 @@ class VasuSettings @Inject constructor(
         prefs.edit().putString("gemini_tts_model", model).apply()
     }
 
+    fun setGeminiLiveVoice(voice: String) {
+        _geminiLiveVoice.value = voice
+        prefs.edit().putString("gemini_live_voice", voice).apply()
+    }
+
+    fun setGeminiLiveModel(model: String) {
+        _geminiLiveModel.value = model
+        prefs.edit().putString("gemini_live_model", model).apply()
+    }
+
     companion object {
         const val DEFAULT_GEMINI_TTS_VOICE = "Kore"
         const val DEFAULT_GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
         const val FALLBACK_GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
         const val BASE_GEMINI_TTS_MODEL = "gemini-2.0-flash"
+
+        // FIX-6: the Gemini Live (hands-free) voice and model are user-selectable.
+        const val DEFAULT_GEMINI_LIVE_VOICE = DEFAULT_GEMINI_TTS_VOICE
+        const val DEFAULT_GEMINI_LIVE_MODEL = GeminiLiveProtocol.LIVE_MODEL
+
+        val GEMINI_LIVE_MODELS = listOf(
+            GeminiLiveProtocol.LIVE_MODEL to "Gemini 3.8 Live (recommended)",
+            GeminiLiveProtocol.LIVE_MODEL_FALLBACK to "Gemini 2.5 Live (native audio)"
+        )
+
+        // FIX-6: Jarvis (male) / Nova (female) voice-gender presets.
+        const val VOICE_GENDER_MALE = "male"
+        const val VOICE_GENDER_FEMALE = "female"
+        const val JARVIS_GEMINI_VOICE = "Charon"
+        const val NOVA_GEMINI_VOICE = "Kore"
 
         // Maya same-to-same voices — 43 voices across 3 personas (Friday/Maya/Venom)
         val MAYA_VOICES = listOf(
@@ -137,6 +171,29 @@ class VasuSettings @Inject constructor(
             "Kore", "Aoede", "Autonoe", "Callirrhoe", "Despina", "Erinome", "Gacrux", "Laomedeia", "Leda", "Pulcherrima", "Sulafat", "Vindemiatrix", "Zephyr",
             "Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Charon", "Enceladus", "Fenrir", "Iapetus", "Orus", "Puck", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Umbriel", "Zubenelgenubi"
         )
+
+        // FIX-6: every catalog voice mapped to a gender so the Jarvis/Nova presets
+        // can highlight a voice picked in the fine-grained selector as well.
+        val MALE_GEMINI_VOICES = setOf(
+            "Achird", "Algenib", "Algieba", "Alnilam", "Charon", "Enceladus", "Fenrir",
+            "Iapetus", "Orus", "Puck", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar",
+            "Umbriel", "Zubenelgenubi"
+        )
+        val FEMALE_GEMINI_VOICES = setOf(
+            "Achernar", "Aoede", "Autonoe", "Callirrhoe", "Despina", "Erinome", "Gacrux",
+            "Kore", "Laomedeia", "Leda", "Pulcherrima", "Sulafat", "Vindemiatrix", "Zephyr"
+        )
+
+        /** The voice the Jarvis/Nova gender presets select. */
+        fun geminiVoiceForGender(gender: String): String =
+            if (gender == VOICE_GENDER_MALE) JARVIS_GEMINI_VOICE else NOVA_GEMINI_VOICE
+
+        /** Null when the voice is unknown (should not happen for catalog voices). */
+        fun genderForVoice(voice: String): String? = when {
+            voice in MALE_GEMINI_VOICES -> VOICE_GENDER_MALE
+            voice in FEMALE_GEMINI_VOICES -> VOICE_GENDER_FEMALE
+            else -> null
+        }
 
         val LANGUAGES = listOf(
             "hi-IN" to "Hindi (India)",

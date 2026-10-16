@@ -60,6 +60,8 @@ fun SettingsScreen(
     var showKey by remember { mutableStateOf(false) }
     var modelMenuOpen by remember { mutableStateOf(false) }
     var languageMenuOpen by remember { mutableStateOf(false) }
+    var liveVoiceMenuOpen by remember { mutableStateOf(false) }
+    var liveModelMenuOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -295,10 +297,119 @@ fun SettingsScreen(
                     onChange = viewModel::setVolume
                 )
 
+                // FIX-6: Jarvis/Nova gender presets — quick way to switch the
+                // assistant between a male and a female voice (applies to both the
+                // cloud TTS voice and the Gemini Live hands-free voice).
+                SettingsCard {
+                    Text("Voice Gender", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Jarvis (male) or Nova (female) — a specific voice can still be picked below.",
+                        color = VasuTextSecondary, fontSize = 12.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    val selectedGender = VasuSettings.genderForVoice(state.geminiTtsVoice)
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (selectedGender == VasuSettings.VOICE_GENDER_MALE) {
+                            Button(
+                                onClick = { viewModel.setVoiceGender(VasuSettings.VOICE_GENDER_MALE) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson, contentColor = VasuDarkBg),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Jarvis (Male)", fontWeight = FontWeight.Bold) }
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.setVoiceGender(VasuSettings.VOICE_GENDER_MALE) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Jarvis (Male)", color = VasuTextPrimary, fontWeight = FontWeight.Medium) }
+                        }
+                        if (selectedGender == VasuSettings.VOICE_GENDER_FEMALE) {
+                            Button(
+                                onClick = { viewModel.setVoiceGender(VasuSettings.VOICE_GENDER_FEMALE) },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson, contentColor = VasuDarkBg),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Nova (Female)", fontWeight = FontWeight.Bold) }
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.setVoiceGender(VasuSettings.VOICE_GENDER_FEMALE) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Nova (Female)", color = VasuTextPrimary, fontWeight = FontWeight.Medium) }
+                        }
+                    }
+                }
+
                 VasuVoiceSelector(
                     selectedVoice = state.geminiTtsVoice,
                     onVoiceSelected = viewModel::setGeminiTtsVoice
                 )
+
+                // FIX-6: Gemini Live (hands-free) voice + model pickers.
+                SettingsCard {
+                    Text("Live Voice (hands-free)", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Box {
+                        OutlinedButton(
+                            onClick = { liveVoiceMenuOpen = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuTextPrimary)
+                        ) {
+                            Text(state.geminiLiveVoice, fontSize = 13.sp)
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VasuTextSecondary)
+                        }
+                        DropdownMenu(
+                            expanded = liveVoiceMenuOpen,
+                            onDismissRequest = { liveVoiceMenuOpen = false }
+                        ) {
+                            VasuSettings.GEMINI_VOICES.forEach { voice ->
+                                DropdownMenuItem(
+                                    text = { Text(voice) },
+                                    onClick = {
+                                        viewModel.setGeminiLiveVoice(voice)
+                                        liveVoiceMenuOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text("Live Model", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Box {
+                        OutlinedButton(
+                            onClick = { liveModelMenuOpen = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuTextPrimary)
+                        ) {
+                            Text(
+                                VasuSettings.GEMINI_LIVE_MODELS.firstOrNull { it.first == state.geminiLiveModel }?.second
+                                    ?: state.geminiLiveModel,
+                                fontSize = 13.sp
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VasuTextSecondary)
+                        }
+                        DropdownMenu(
+                            expanded = liveModelMenuOpen,
+                            onDismissRequest = { liveModelMenuOpen = false }
+                        ) {
+                            VasuSettings.GEMINI_LIVE_MODELS.forEach { (id, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        viewModel.setGeminiLiveModel(id)
+                                        liveModelMenuOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
 
                 SettingsCard {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

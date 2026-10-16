@@ -16,6 +16,7 @@ import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.vasu.assistant.core.audio.AudioSessionManager
+import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.voice.GeminiVoiceState
 import com.vasu.assistant.core.voice.VoiceStateManager
 import com.vasu.assistant.core.wakeword.WakeWordDetector
@@ -49,7 +50,8 @@ class STTManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val wakeWordDetectorProvider: Provider<WakeWordDetector>,
     private val audioSessionManager: AudioSessionManager,
-    private val voiceStateManager: VoiceStateManager
+    private val voiceStateManager: VoiceStateManager,
+    private val settings: VasuSettings
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -155,6 +157,8 @@ class STTManager @Inject constructor(
             scope.launch {
                 voiceStateManager.transitionTo(GeminiVoiceState.COMMAND_LISTENING)
             }
+
+            refreshLanguageFromSettings()
 
             if (!isInitialized || speechRecognizer == null) {
                 createInternalRecognizer()
@@ -300,6 +304,21 @@ class STTManager @Inject constructor(
                 retryWithBackoff()
             }
         }, totalDelay)
+    }
+
+    /**
+     * FIX-6: STT language follows Settings -> Language. The recognizer is rebuilt
+     * when the language changed since the last session so the choice applies
+     * immediately (it used to stay frozen at the default hi-IN forever).
+     */
+    private fun refreshLanguageFromSettings() {
+        val desired = settings.voiceProfile.value.language
+        if (desired.isBlank() || desired == config.language) return
+        Log.i(TAG, "STT language changed ${config.language} -> $desired; rebuilding recognizer")
+        config = config.copy(language = desired)
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        isInitialized = false
     }
 
     private fun createRecognizerIntent(): Intent {
