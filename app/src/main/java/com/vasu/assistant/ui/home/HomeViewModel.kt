@@ -22,7 +22,8 @@ data class HomeUiState(
     val lastMessage: String = "",
     val isWakeWordActive: Boolean = false,
     val wakeWordState: WakeWordState = WakeWordState.IDLE,
-    val serviceState: VasuServiceState = VasuServiceState.OFF
+    val serviceState: VasuServiceState = VasuServiceState.OFF,
+    val animationsEnabled: Boolean = true
 )
 
 enum class VasuServiceState { OFF, STARTING, LISTENING, ACTIVE, SPEAKING, ERROR }
@@ -46,6 +47,11 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             wakeWordDetector.state.collect { state ->
                 _uiState.value = _uiState.value.copy(wakeWordState = state)
+            }
+        }
+        viewModelScope.launch {
+            settings.animationsEnabled.collect { enabled ->
+                _uiState.value = _uiState.value.copy(animationsEnabled = enabled)
             }
         }
         viewModelScope.launch {

@@ -1,14 +1,11 @@
 package com.vasu.assistant.ui.home
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,12 +13,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.vasu.assistant.ui.components.NeonOrb
+import com.vasu.assistant.ui.components.orbStateFor
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.vasu.assistant.core.wakeword.WakeWordState
@@ -125,36 +123,16 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(
-                                animateColorAsState(
-                                    when {
-                                        uiState.isListening -> VasuCrimson.copy(alpha = 0.2f)
-                                        uiState.isSpeaking -> VasuElectric.copy(alpha = 0.2f)
-                                        uiState.isThinking -> VasuWarning.copy(alpha = 0.2f)
-                                        uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen.copy(alpha = 0.1f)
-                                        else -> VasuDarkCard
-                                    }
-                                ).value
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "VASU Orb",
-                            modifier = Modifier.size(56.dp),
-                            tint = when {
-                                uiState.isListening -> VasuCrimson
-                                uiState.isSpeaking -> VasuElectric
-                                uiState.isThinking -> VasuWarning
-                                uiState.wakeWordState == WakeWordState.LISTENING -> VasuGreen
-                                else -> VasuTextSecondary
-                            }
-                        )
-                    }
+                    NeonOrb(
+                        state = orbStateFor(
+                            isListening = uiState.isListening,
+                            isSpeaking = uiState.isSpeaking,
+                            isThinking = uiState.isThinking,
+                            wakeListening = uiState.wakeWordState == WakeWordState.LISTENING,
+                            wakeDetected = uiState.wakeWordState == WakeWordState.DETECTED
+                        ),
+                        animationsEnabled = uiState.animationsEnabled
+                    )
 
                     Spacer(modifier = Modifier.height(12.dp))
 

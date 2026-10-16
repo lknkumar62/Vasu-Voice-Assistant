@@ -58,7 +58,8 @@ data class VoiceUiState(
     val wakeWordState: WakeWordState = WakeWordState.IDLE,
     val wakeWordReason: String? = null,
     val geminiModel: String = VasuSettings.DEFAULT_GEMINI_TTS_MODEL, // display model badge
-    val geminiVoice: String = VasuSettings.DEFAULT_GEMINI_TTS_VOICE // display voice badge
+    val geminiVoice: String = VasuSettings.DEFAULT_GEMINI_TTS_VOICE, // display voice badge
+    val animationsEnabled: Boolean = true
 )
 
 @HiltViewModel
@@ -102,6 +103,11 @@ class VoiceViewModel @Inject constructor(
         viewModelScope.launch {
             wakeWordDetector.unavailableReason.collect { reason ->
                 _uiState.value = _uiState.value.copy(wakeWordReason = reason)
+            }
+        }
+        viewModelScope.launch {
+            settings.animationsEnabled.collect { enabled ->
+                _uiState.value = _uiState.value.copy(animationsEnabled = enabled)
             }
         }
 

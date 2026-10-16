@@ -31,6 +31,9 @@ class VasuSettings @Inject constructor(
     private val _autoAllowEnabled = MutableStateFlow(true)
     val autoAllowEnabled: StateFlow<Boolean> = _autoAllowEnabled.asStateFlow()
 
+    private val _animationsEnabled = MutableStateFlow(true)
+    val animationsEnabled: StateFlow<Boolean> = _animationsEnabled.asStateFlow()
+
     private val _otpProtectionEnabled = MutableStateFlow(true)
     val otpProtectionEnabled: StateFlow<Boolean> = _otpProtectionEnabled.asStateFlow()
 
@@ -73,6 +76,7 @@ class VasuSettings @Inject constructor(
         _geminiTtsModel.value = prefs.getString("gemini_tts_model", DEFAULT_GEMINI_TTS_MODEL) ?: DEFAULT_GEMINI_TTS_MODEL
         _geminiLiveVoice.value = prefs.getString("gemini_live_voice", DEFAULT_GEMINI_LIVE_VOICE) ?: DEFAULT_GEMINI_LIVE_VOICE
         _geminiLiveModel.value = prefs.getString("gemini_live_model", DEFAULT_GEMINI_LIVE_MODEL) ?: DEFAULT_GEMINI_LIVE_MODEL
+        _animationsEnabled.value = prefs.getBoolean("animations_enabled", true)
     }
 
     fun setVoiceProfile(profile: VoiceProfile) {
@@ -133,6 +137,11 @@ class VasuSettings @Inject constructor(
     fun setGeminiLiveModel(model: String) {
         _geminiLiveModel.value = model
         prefs.edit().putString("gemini_live_model", model).apply()
+    }
+
+    fun setAnimationsEnabled(enabled: Boolean) {
+        _animationsEnabled.value = enabled
+        prefs.edit().putBoolean("animations_enabled", enabled).apply()
     }
 
     companion object {

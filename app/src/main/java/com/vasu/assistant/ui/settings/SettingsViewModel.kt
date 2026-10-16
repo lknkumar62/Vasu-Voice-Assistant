@@ -72,6 +72,7 @@ data class SettingsUiState(
     val geminiTtsModel: String = VasuSettings.DEFAULT_GEMINI_TTS_MODEL,
     val geminiLiveVoice: String = VasuSettings.DEFAULT_GEMINI_LIVE_VOICE,
     val geminiLiveModel: String = VasuSettings.DEFAULT_GEMINI_LIVE_MODEL,
+    val animationsEnabled: Boolean = true,
 
     // Wake word
     val wakeWordEnabled: Boolean = false,
@@ -152,6 +153,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             roleManager.guardianEnabled.collect { _uiState.value = _uiState.value.copy(voiceGuardEnabled = it) }
         }
+        viewModelScope.launch {
+            settings.animationsEnabled.collect { _uiState.value = _uiState.value.copy(animationsEnabled = it) }
+        }
     }
 
     private fun refresh() {
@@ -189,6 +193,7 @@ class SettingsViewModel @Inject constructor(
             geminiTtsModel = settings.geminiTtsModel.value,
             geminiLiveVoice = settings.geminiLiveVoice.value,
             geminiLiveModel = settings.geminiLiveModel.value,
+            animationsEnabled = settings.animationsEnabled.value,
             network = networkMonitor.state.value,
             // Live Chat config
             chatServerUrl = context.getSharedPreferences("vasu_chat_config", Context.MODE_PRIVATE)
@@ -433,6 +438,11 @@ class SettingsViewModel @Inject constructor(
         settings.setVoiceGuardEnabled(enabled)
         roleManager.setGuardianEnabled(enabled)
         _uiState.value = _uiState.value.copy(voiceGuardEnabled = enabled)
+    }
+
+    fun setAnimationsEnabled(enabled: Boolean) {
+        settings.setAnimationsEnabled(enabled)
+        _uiState.value = _uiState.value.copy(animationsEnabled = enabled)
     }
 
     fun setAutoAllowEnabled(enabled: Boolean) {

@@ -94,7 +94,8 @@ fun VoiceScreen(
                 isListening = uiState.isListening,
                 isSpeaking = uiState.isSpeaking,
                 activeSpeaker = if (uiState.isSpeaking) uiState.geminiVoice.ifBlank { "Kore" } else null,
-                onReconnect = viewModel::reconnect
+                onReconnect = viewModel::reconnect,
+                animationsEnabled = uiState.animationsEnabled
             )
 
             // 3. Error Banner
@@ -118,7 +119,8 @@ fun VoiceScreen(
                     WaveformVisualizer(
                         isListening = uiState.isListening,
                         rmsLevel = uiState.rmsLevel,
-                        isSpeaking = uiState.isSpeaking
+                        isSpeaking = uiState.isSpeaking,
+                        animationsEnabled = uiState.animationsEnabled
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -213,7 +215,8 @@ fun VoiceScreen(
                 isListening = uiState.isListening,
                 isSpeaking = uiState.isSpeaking,
                 rmsLevel = uiState.rmsLevel,
-                onClick = { viewModel.toggleListening() }
+                onClick = { viewModel.toggleListening() },
+                animationsEnabled = uiState.animationsEnabled
             )
 
             // 7. Primary Action Buttons
@@ -321,7 +324,8 @@ private fun StatusDisplayCard(
     isListening: Boolean,
     onReconnect: () -> Unit,
     isSpeaking: Boolean = false,
-    activeSpeaker: String? = null
+    activeSpeaker: String? = null,
+    animationsEnabled: Boolean = true
 ) {
     val (dotColor, label, showReconnect) = when (mode) {
         VoiceUiMode.SPEAKING -> Triple(VasuSpeaking, "SPEAKING (${activeSpeaker ?: "Kore"})", false)
@@ -334,17 +338,23 @@ private fun StatusDisplayCard(
         VoiceUiMode.DISCONNECTED -> Triple(VasuTextMuted, "DISCONNECTED", true)
         else -> Triple(VasuIdle, "IDLE", true)
     }
-    // Gentle pulse for the live states (listening / speaking) only.
-    val infiniteTransition = rememberInfiniteTransition(label = "status_dot")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isListening || isSpeaking || mode == VoiceUiMode.SPEAKING || mode == VoiceUiMode.LISTENING) 0.35f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dot_alpha"
-    )
+    // Gentle pulse for the live states (listening / speaking) only; with
+    // animations off the transition is never created (dot holds solid).
+    val dotAlpha = if (animationsEnabled) {
+        val infiniteTransition = rememberInfiniteTransition(label = "status_dot")
+        val animated by infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = if (isListening || isSpeaking || mode == VoiceUiMode.SPEAKING || mode == VoiceUiMode.LISTENING) 0.35f else 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = EaseInOutSine),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "dot_alpha"
+        )
+        animated
+    } else {
+        1f
+    }
 
     GlassCard(
         modifier = Modifier.fillMaxWidth()
@@ -583,9 +593,10 @@ private fun DiagnosticsRow(label: String, value: String, valueColor: Color, isBo
 fun WaveformVisualizer(
     isListening: Boolean,
     rmsLevel: Float = 0f,
-    isSpeaking: Boolean = false
+    isSpeaking: Boolean = false,
+    animationsEnabled: Boolean = true
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    val infiniteTransition = if (animationsEnabled) rememberInfiniteTransition(label = "wave") else null
     val active = isListening || isSpeaking
     val barColor = when {
         isListening -> VasuListening
@@ -609,15 +620,22 @@ fun WaveformVisualizer(
                 else -> 0f
             }
             
-            val height by infiniteTransition.animateFloat(
-                initialValue = baseHeight,
-                targetValue = baseHeight + rmsModulator,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(600 + delay, easing = EaseInOutSine),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "bar_$index"
-            )
+            val transition = infiniteTransition
+            val height: Float = if (transition != null) {
+                val animated by transition.animateFloat(
+                    initialValue = baseHeight,
+                    targetValue = baseHeight + rmsModulator,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(600 + delay, easing = EaseInOutSine),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "bar_$index"
+                )
+                animated
+            } else {
+                // Animations off: bars hold their state height, no animator runs.
+                baseHeight
+            }
 
             Box(
                 modifier = Modifier
@@ -635,18 +653,24 @@ fun VoiceMicButton(
     isListening: Boolean,
     isSpeaking: Boolean,
     onClick: () -> Unit,
-    rmsLevel: Float = 0f
+    rmsLevel: Float = 0f,
+    animationsEnabled: Boolean = true
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isListening || isSpeaking) 1.25f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
+    val pulse = if (animationsEnabled) {
+        val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
+        val animated by infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = if (isListening || isSpeaking) 1.25f else 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse"
+        )
+        animated
+    } else {
+        1f
+    }
 
     val buttonColor = when {
         isListening -> VasuListening

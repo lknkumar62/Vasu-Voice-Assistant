@@ -434,6 +434,17 @@ fun SettingsScreen(
                 }
             }
 
+            // --- APPEARANCE SECTION ---
+            SettingsSection(title = "APPEARANCE") {
+                SettingsToggleItem(
+                    icon = Icons.Default.Animation,
+                    title = "Animations",
+                    subtitle = if (state.animationsEnabled) "Animated orb and effects enabled" else "Animations off (static orb, battery saver)",
+                    enabled = state.animationsEnabled,
+                    onToggle = viewModel::setAnimationsEnabled
+                )
+            }
+
             // --- SECURITY & AUTOMATION SECTION ---
             SettingsSection(title = "SECURITY & AUTOMATION") {
                 SettingsToggleItem(

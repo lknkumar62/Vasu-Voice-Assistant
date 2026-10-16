@@ -10,9 +10,13 @@ import com.vasu.assistant.ui.theme.VasuListening
 import com.vasu.assistant.ui.theme.VasuSpeaking
 import com.vasu.assistant.ui.theme.VasuThinking
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +42,18 @@ class AvatarManager @Inject constructor(
 
     private val _orbColorHex = MutableStateFlow(colorHex(VasuIdle))
     val orbColorHex: StateFlow<String> = _orbColorHex.asStateFlow()
+
+    /**
+     * FIX-7: self-wire the pure mappers so [orbAnimation] / [orbColorHex] track the
+     * live voice pipeline without any caller having to forward events.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    init {
+        scope.launch {
+            voiceStateManager.state.collect { updateFromVoiceState(it) }
+        }
+    }
 
     /** Transient emotional overlay (happy/sad/angry/surprised/error) on top of voice state. */
     @Volatile
