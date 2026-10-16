@@ -41,7 +41,7 @@ import kotlin.math.sqrt
  *        ↓
  * VAD / Energy Gate
  *        ↓
- * Rolling Window (~1.5s / 25,088 samples)
+ * Rolling Window (~1.58s / 25,344 samples = 98 frames)
  *        ↓
  * MelSpectrogram (98 frames x 40 mel bands)
  *        ↓
@@ -68,10 +68,24 @@ class WakeWordDetector @Inject constructor(
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
         private const val CHUNK_SAMPLES = 1600 // 100ms per frame
-        private const val ROLLING_WINDOW_SAMPLES = 25088 // 98 frames * 256 hop
+        private const val FFT_SIZE = 512
+        private const val HOP_SIZE = FFT_SIZE / 2
+
+        /**
+         * Window must yield exactly [WakeWordModel.INPUT_SIZE] mel frames because
+         * numFrames = (window - FFT_SIZE) / HOP_SIZE + 1. The previous 25,088
+         * window produced only 97 frames, so the detector gate
+         * (`melFeatures.size >= inputSize`) silently rejected every inference and
+         * "Hello Vasu" could never fire. Derived, not hardcoded, so the two
+         * constants cannot drift apart again. Internal so the frame-count
+         * contract is pinned by a unit test.
+         */
+        internal const val ROLLING_WINDOW_SAMPLES =
+            (WakeWordModel.INPUT_SIZE - 1) * HOP_SIZE + FFT_SIZE
         private const val DEBOUNCE_MS = 1800L
         private const val VAD_ENERGY_THRESHOLD = 0.015f
-        private const val MIC_RELEASE_DELAY_MS = 200L
+        private const val REARM_RETRY_DELAY_MS = 500L
+        private const val REARM_MAX_ATTEMPTS = 12
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -79,8 +93,8 @@ class WakeWordDetector @Inject constructor(
     private val wakeWordModel = WakeWordModel(context)
     private val melExtractor = MelSpectrogram(
         sampleRate = SAMPLE_RATE,
-        fftSize = 512,
-        numMelBands = 40
+        fftSize = FFT_SIZE,
+        numMelBands = WakeWordModel.NUM_MEL_BANDS
     )
 
     private val _state = MutableStateFlow(WakeWordState.IDLE)
@@ -97,6 +111,13 @@ class WakeWordDetector @Inject constructor(
 
     private val isPausedForStt = AtomicBoolean(false)
     private val isMutedForPlayback = AtomicBoolean(false)
+
+    // True while the user wants continuous wake-word listening. A detection
+    // releases the mic (releaseMicForCommand) but the listener stays "wanted"
+    // until stop(), so resumeAfterSpeechRecognition() can re-acquire the mic and
+    // restart capture - otherwise the detector stayed deaf after the first use.
+    private val shouldBeListening = AtomicBoolean(false)
+    private var rearmJob: Job? = null
     private var lastDetectionTimestamp = 0L
 
     // Rolling audio buffer
@@ -126,8 +147,26 @@ class WakeWordDetector @Inject constructor(
      * Requests mic from AudioSessionManager before creating AudioRecord.
      */
     @Synchronized
-    fun start(): Boolean {
+    fun start(): Boolean = startInternal(assertIntent = true, requireMicFree = false)
+
+    /**
+     * @param assertIntent user/service-initiated starts re-assert the listening
+     *   intent; the re-arm path passes false and aborts if stop() cleared the
+     *   intent while the re-arm was in flight.
+     * @param requireMicFree never force-steal mic ownership (re-arm path).
+     */
+    @Synchronized
+    private fun startInternal(assertIntent: Boolean, requireMicFree: Boolean): Boolean {
         if (_state.value == WakeWordState.LISTENING) return true
+
+        if (assertIntent) {
+            // Intent, not capture success: a start that fails because the mic is
+            // briefly busy must still be retried by the next resume.
+            shouldBeListening.set(true)
+        } else if (!shouldBeListening.get()) {
+            // stop() ran while this re-arm was in flight - do not resurrect capture.
+            return false
+        }
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -145,8 +184,14 @@ class WakeWordDetector @Inject constructor(
             }
         }
 
-        // Request mic from AudioSessionManager
-        if (!audioSessionManager.requestMic(AudioSessionManager.MicOwner.WAKE_WORD_DETECTOR)) {
+        // Request mic from AudioSessionManager. The re-arm path asks atomically
+        // for a free mic instead of stealing ownership from another consumer.
+        if (requireMicFree) {
+            if (!audioSessionManager.requestMicIfFree(AudioSessionManager.MicOwner.WAKE_WORD_DETECTOR)) {
+                Log.d(TAG, "Re-arm waiting: mic owned by ${audioSessionManager.currentOwner.value.label}")
+                return false
+            }
+        } else if (!audioSessionManager.requestMic(AudioSessionManager.MicOwner.WAKE_WORD_DETECTOR)) {
             _state.value = WakeWordState.ERROR
             _unavailableReason.value = "Microphone is occupied by another component"
             Log.w(TAG, "Cannot start WakeWordDetector: mic not available")
@@ -290,13 +335,13 @@ class WakeWordDetector @Inject constructor(
                                 rollingBufferFilled = 0
                                 java.util.Arrays.fill(rollingBuffer, 0f)
 
-                                // CRITICAL: Release mic immediately so STT/Gemini can acquire it
+                                // CRITICAL: Release mic immediately so STT/Gemini can acquire it.
+                                // Capture is fully stopped here, so the state must NOT stay
+                                // LISTENING: that made start() short-circuit and left the
+                                // detector deaf forever. resumeAfterSpeechRecognition()
+                                // re-arms instead.
                                 releaseMicForCommand()
-
-                                delay(MIC_RELEASE_DELAY_MS)
-                                if (_state.value == WakeWordState.DETECTED) {
-                                    _state.value = WakeWordState.LISTENING
-                                }
+                                _state.value = WakeWordState.IDLE
                             } else {
                                 Log.w(TAG, ">>> [VOICE GUARDIAN] Owner verification failed. Ignoring wake word.")
                                 voiceStateManager.transitionTo(GeminiVoiceState.BACKGROUND_LISTENING)
@@ -314,7 +359,10 @@ class WakeWordDetector @Inject constructor(
     /**
      * Release mic after wake word detection so STT/Gemini can acquire it.
      * Stops the AudioRecord, releases it, then notifies AudioSessionManager.
+     * Synchronized because the listening coroutine (Dispatchers.Default) calls
+     * this while start()/stop() run on the main thread.
      */
+    @Synchronized
     private fun releaseMicForCommand() {
         try {
             listeningJob?.cancel()
@@ -357,11 +405,49 @@ class WakeWordDetector @Inject constructor(
     }
 
     /**
-     * Resume wake word after speech recognition finishes.
+     * Resume wake word after speech recognition (or a Gemini Live session) finishes.
+     *
+     * A detection releases the mic ([releaseMicForCommand]), so capture is not
+     * running anymore and just clearing the pause flag left the detector deaf.
+     * Re-arm here - but only once nobody else owns the mic: start() would
+     * force-release an active Gemini Live session (AudioSessionManager grants by
+     * stealing ownership) and break its capture mid-conversation. The re-arm
+     * therefore polls briefly for the mic to free up and gives up silently.
      */
     fun resumeAfterSpeechRecognition() {
         Log.d(TAG, "Resuming wake word after STT")
         isPausedForStt.set(false)
+        if (shouldBeListening.get() && _state.value != WakeWordState.LISTENING) {
+            rearmWhenMicFree()
+        }
+    }
+
+    private fun rearmWhenMicFree() {
+        rearmJob?.cancel()
+        rearmJob = scope.launch {
+            repeat(REARM_MAX_ATTEMPTS) {
+                if (!shouldBeListening.get() || _state.value == WakeWordState.LISTENING) {
+                    return@launch
+                }
+                // Non-mic failures would only churn state (permission denied,
+                // model unreadable), so stop polling for them.
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
+                    Log.d(TAG, "Re-arm skipped: RECORD_AUDIO not granted")
+                    return@launch
+                }
+                if (wakeWordModel.status != ModelStatus.READY) {
+                    Log.d(TAG, "Re-arm skipped: wake word model not ready")
+                    return@launch
+                }
+                if (startInternal(assertIntent = false, requireMicFree = true)) {
+                    return@launch
+                }
+                delay(REARM_RETRY_DELAY_MS)
+            }
+            Log.d(TAG, "Wake word not re-armed this time; mic stayed in use")
+        }
     }
 
     /**
@@ -379,6 +465,9 @@ class WakeWordDetector @Inject constructor(
      */
     @Synchronized
     fun stop() {
+        shouldBeListening.set(false)
+        rearmJob?.cancel()
+        rearmJob = null
         listeningJob?.cancel()
         listeningJob = null
 

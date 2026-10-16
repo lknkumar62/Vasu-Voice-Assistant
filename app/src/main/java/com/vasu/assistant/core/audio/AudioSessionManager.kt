@@ -211,6 +211,22 @@ class AudioSessionManager @Inject constructor(
     }
 
     /**
+     * Request mic ownership only if nobody else currently owns it.
+     *
+     * Unlike [requestMic], this never force-releases the current owner. Used by
+     * the wake-word re-arm path, which must not interrupt an active Gemini
+     * Live/STT capture by stealing ownership (atomic check-and-acquire).
+     */
+    fun requestMicIfFree(owner: MicOwner): Boolean = lock.withLock {
+        val current = _currentOwner.value
+        if (current != MicOwner.NONE && current != owner) {
+            Log.d(TAG, "requestMicIfFree($owner) — denied, mic owned by $current")
+            return@withLock false
+        }
+        requestMic(owner)
+    }
+
+    /**
      * Release mic ownership. Only the current owner can release.
      */
     fun releaseMic(owner: MicOwner) = lock.withLock {

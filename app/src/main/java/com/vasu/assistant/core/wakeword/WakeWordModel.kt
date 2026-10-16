@@ -41,15 +41,26 @@ class WakeWordModel(
     var status: ModelStatus = ModelStatus.NOT_LOADED
         private set
 
+    companion object {
+        /** Number of mel spectrogram frames the TFLite model consumes. */
+        const val INPUT_SIZE = 98
+        /** Number of mel bands per frame. */
+        const val NUM_MEL_BANDS = 40
+    }
+
     // Model configuration
-    val inputSize: Int = 98          // Number of mel spectrogram frames
-    val numMelBands: Int = 40        // Number of mel bands
-    val threshold: Float = 0.7f      // Detection threshold
+    val inputSize: Int = INPUT_SIZE          // Number of mel spectrogram frames
+    val numMelBands: Int = NUM_MEL_BANDS     // Number of mel bands
+    val threshold: Float = 0.7f              // Detection threshold
 
     /**
      * Load the TFLite model, reporting why when it cannot be loaded.
      */
+    @Synchronized
     fun load(): ModelStatus {
+        // Each toggle re-ran load() and replaced the interpreter without closing
+        // the previous one, leaking native memory per start/stop cycle.
+        close()
         status = try {
             interpreter = Interpreter(loadModelFile())
             ModelStatus.READY
@@ -67,6 +78,7 @@ class WakeWordModel(
      * @param features Mel spectrogram features [inputSize][numMelBands]
      * @return Detection score (0.0 to 1.0)
      */
+    @Synchronized
     fun predict(features: Array<FloatArray>): Float {
         if (!isLoaded || interpreter == null) {
             return 0f
