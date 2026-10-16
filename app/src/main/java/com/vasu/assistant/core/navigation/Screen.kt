@@ -14,5 +14,6 @@ sealed class Screen(val route: String) {
     data object Privacy : Screen("privacy")
     data object Location : Screen("location")
     data object Browser : Screen("browser")
+    data object CommandLibrary : Screen("command_library")
     data object Diagnostics : Screen("diagnostics")
 }

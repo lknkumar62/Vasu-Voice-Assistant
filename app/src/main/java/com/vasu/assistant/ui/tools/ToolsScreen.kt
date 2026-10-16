@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,6 +38,7 @@ import com.vasu.assistant.ui.theme.*
 @Composable
 fun ToolsScreen(
     onNavigateBack: () -> Unit = {},
+    onOpenCommandLibrary: () -> Unit = {},
     onToolSelect: (String) -> Unit = {},
     viewModel: ToolsViewModel = hiltViewModel()
 ) {
@@ -110,6 +112,51 @@ fun ToolsScreen(
                 ),
                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
             )
+
+            // Voice Command Library entry (FIX-8)
+            VasuCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenCommandLibrary() }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.RecordVoiceOver,
+                        contentDescription = null,
+                        tint = VasuCrimson,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                    ) {
+                        Text(
+                            text = "Voice Command Library",
+                            color = VasuTextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "Everything you can say offline — tap to browse",
+                            color = VasuTextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = VasuTextMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
             // Category Navigation
             Row(

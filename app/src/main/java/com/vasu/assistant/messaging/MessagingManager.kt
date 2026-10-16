@@ -38,8 +38,12 @@ class MessagingManager @Inject constructor(
      * button is the final confirmation). Accepts a contact name or raw number.
      */
     fun sendSms(contactName: String, message: String): ActionResult {
-        val (name, number) = resolveAddress(contactName)
-            ?: return ActionResult.error("send_sms", "Contact not found: $contactName", "Contact not found")
+        val (name, number) = when (val r = resolveAddress(contactName)) {
+            is AddressResolution.Found -> r
+            is AddressResolution.Ambiguous -> return ambiguousContact("send_sms", contactName, r.names)
+            AddressResolution.NotFound ->
+                return ActionResult.error("send_sms", "Contact not found: $contactName", "Contact not found")
+        }
 
         return try {
             val intent = Intent(Intent.ACTION_SENDTO).apply {
@@ -60,8 +64,12 @@ class MessagingManager @Inject constructor(
      * Accepts either a raw phone number or a contact name.
      */
     fun makeCall(contactOrNumber: String): ActionResult {
-        val (name, number) = resolveAddress(contactOrNumber)
-            ?: return ActionResult.error("make_call", "Contact not found: $contactOrNumber", "Contact not found")
+        val (name, number) = when (val r = resolveAddress(contactOrNumber)) {
+            is AddressResolution.Found -> r
+            is AddressResolution.Ambiguous -> return ambiguousContact("make_call", contactOrNumber, r.names)
+            AddressResolution.NotFound ->
+                return ActionResult.error("make_call", "Contact not found: $contactOrNumber", "Contact not found")
+        }
 
         return try {
             val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")).apply {
@@ -78,8 +86,12 @@ class MessagingManager @Inject constructor(
      * Open WhatsApp chat with a contact (accepts a contact name or raw number)
      */
     fun openWhatsApp(contactName: String, message: String = ""): ActionResult {
-        val (name, number) = resolveAddress(contactName)
-            ?: return ActionResult.error("whatsapp", "Contact not found: $contactName", "Contact not found")
+        val (name, number) = when (val r = resolveAddress(contactName)) {
+            is AddressResolution.Found -> r
+            is AddressResolution.Ambiguous -> return ambiguousContact("whatsapp", contactName, r.names)
+            AddressResolution.NotFound ->
+                return ActionResult.error("whatsapp", "Contact not found: $contactName", "Contact not found")
+        }
 
         return try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -157,25 +169,37 @@ class MessagingManager @Inject constructor(
     }
 
     /**
-     * Find contact for messaging
+     * FIX-8: how a spoken name/number resolved against the contacts provider.
      */
-    private fun findContactForMessaging(name: String): ContactInfo? {
-        return contactManager.findBestMatch(name)
+    private sealed interface AddressResolution {
+        data class Found(val display: String, val number: String) : AddressResolution
+        data class Ambiguous(val names: List<String>) : AddressResolution
+        data object NotFound : AddressResolution
     }
 
     /**
-     * Resolves a contact name OR a raw phone number to (display, number).
-     * Strings containing letters go through the contacts provider; anything
-     * else is treated as a number the user typed directly.
+     * Resolves a contact name OR a raw phone number. Strings containing
+     * letters go through the contacts provider; anything else is treated as a
+     * number the user typed directly. Multiple equally-ranked contacts are
+     * reported as [AddressResolution.Ambiguous] — never silently picked.
      */
-    private fun resolveAddress(contactOrNumber: String): Pair<String, String>? {
+    private fun resolveAddress(contactOrNumber: String): AddressResolution {
         val trimmed = contactOrNumber.trim()
-        if (trimmed.isEmpty()) return null
-        return if (trimmed.any { it.isLetter() }) {
-            val contact = findContactForMessaging(trimmed) ?: return null
-            contact.name to contact.phoneNumber
-        } else {
-            trimmed to trimmed
+        if (trimmed.isEmpty()) return AddressResolution.NotFound
+        if (!trimmed.any { it.isLetter() }) return AddressResolution.Found(trimmed, trimmed)
+        val matches = contactManager.findMatches(trimmed)
+        return when {
+            matches.isEmpty() -> AddressResolution.NotFound
+            matches.size == 1 -> AddressResolution.Found(matches[0].name, matches[0].phoneNumber)
+            else -> AddressResolution.Ambiguous(matches.take(4).map { it.name })
         }
     }
+
+    /** Speakable error when a name matched several contacts. */
+    private fun ambiguousContact(action: String, query: String, names: List<String>): ActionResult =
+        ActionResult.error(
+            action,
+            "Multiple contacts match \"$query\": ${names.joinToString(", ")} — please say the full name",
+            "Say the full name or a phone number"
+        )
 }

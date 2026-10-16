@@ -139,26 +139,31 @@ class ContactManager @Inject constructor(
     }
 
     /**
-     * Find best matching contact for a name
+     * FIX-8: ranked matches — exact name first, then prefix, then any contains
+     * hit. Returns ALL top-ranked matches so callers can disambiguate instead
+     * of silently picking an arbitrary entry.
      */
-    fun findBestMatch(name: String): ContactInfo? {
-        val contacts = searchContacts(name)
+    fun findMatches(name: String): List<ContactInfo> {
+        val query = name.trim()
+        if (query.isEmpty()) return emptyList()
+        val contacts = searchContacts(query)
+        if (contacts.isEmpty()) return emptyList()
 
-        // Exact match first
-        val exactMatch = contacts.find {
-            it.name.equals(name, ignoreCase = true)
-        }
-        if (exactMatch != null) return exactMatch
+        val exact = contacts.filter { it.name.equals(query, ignoreCase = true) }
+        if (exact.isNotEmpty()) return exact
 
-        // Starts with
-        val startsWith = contacts.find {
-            it.name.startsWith(name, ignoreCase = true)
-        }
-        if (startsWith != null) return startsWith
+        val startsWith = contacts.filter { it.name.startsWith(query, ignoreCase = true) }
+        if (startsWith.isNotEmpty()) return startsWith
 
-        // Contains
-        return contacts.firstOrNull()
+        return contacts
     }
+
+    /**
+     * Find best matching contact for a name — first of [findMatches].
+     * Callers that must not guess should use [findMatches] and handle
+     * multiple results.
+     */
+    fun findBestMatch(name: String): ContactInfo? = findMatches(name).firstOrNull()
 }
 
 /**

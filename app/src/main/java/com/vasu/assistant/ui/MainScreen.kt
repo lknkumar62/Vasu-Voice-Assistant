@@ -30,6 +30,7 @@ import com.vasu.assistant.core.navigation.Screen
 import com.vasu.assistant.ui.automation.AutomationScreen
 import com.vasu.assistant.ui.browser.BrowserScreen
 import com.vasu.assistant.ui.chat.ChatScreen
+import com.vasu.assistant.ui.command.CommandLibraryScreen
 import com.vasu.assistant.ui.diagnostics.DiagnosticsScreen
 import com.vasu.assistant.ui.guardian.GuardianScreen
 import com.vasu.assistant.ui.home.HomeScreen
@@ -180,6 +181,7 @@ fun MainScreen() {
                 composable(Screen.Tools.route) {
                     ToolsScreen(
                         onNavigateBack = { navController.popBackStack() },
+                        onOpenCommandLibrary = { navigateTop(Screen.CommandLibrary.route) },
                         onToolSelect = { toolId ->
                             when (toolId) {
                                 "settings" -> navigateTop(Screen.Settings.route)
@@ -212,6 +214,9 @@ fun MainScreen() {
                 }
                 composable(Screen.Diagnostics.route) {
                     DiagnosticsScreen(onNavigateBack = { navController.popBackStack() })
+                }
+                composable(Screen.CommandLibrary.route) {
+                    CommandLibraryScreen(onNavigateBack = { navController.popBackStack() })
                 }
             }
         }

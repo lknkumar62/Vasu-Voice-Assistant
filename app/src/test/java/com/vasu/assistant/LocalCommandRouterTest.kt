@@ -174,6 +174,9 @@ class LocalCommandRouterTest {
         assertNull(LocalCommandRouter.match("volume up and torch on"))
         assertNull(LocalCommandRouter.match("torch on then volume up"))
         assertNull(LocalCommandRouter.match("time batao aur sms bhejo"))
+        // Hinglish "aur" (= and) joins two commands — routes must not fire half.
+        assertNull(LocalCommandRouter.match("go back aur photo dikhao"))
+        assertNull(LocalCommandRouter.match("call mom aur weather batao"))
     }
 
     @Test
@@ -181,7 +184,9 @@ class LocalCommandRouterTest {
         assertNull(LocalCommandRouter.match("torch on karke photo lo"))
         assertNull(LocalCommandRouter.match("volume badhao aur gana chalao"))
         assertNull(LocalCommandRouter.match("send sms to mom"))
-        assertNull(LocalCommandRouter.match("open camera"))
+        // "open camera" intentionally flipped by FIX-8: it now routes as
+        // open_app("camera") — a true app-open the ToolRouter can resolve.
+        assertNull(LocalCommandRouter.match("play some music"))
         assertNull(LocalCommandRouter.match("bluetooth on karo"))
     }
 
@@ -198,7 +203,7 @@ class LocalCommandRouterTest {
     // ------------------------------------------------------------- role sanity
 
     @Test
-    fun `every routed command demands exactly the LOW risk role`() {
+    fun `device commands demand exactly the LOW risk role`() {
         val inputs = listOf(
             "turn on the torch", "torch band karo", "volume up", "awaz kam karo",
             "mute", "volume full", "battery kitni hai", "time kya hai", "aaj ki tarikh"
@@ -213,5 +218,45 @@ class LocalCommandRouterTest {
             )
         }
         assertEquals(UserRole.GUEST, RiskLevel.LOW.requiredRole)
+    }
+
+    // -------------------------------------------------- FIX-8 offline routes
+
+    @Test
+    fun `offline routes map to their tools with extracted params`() {
+        assertEquals("open_app", LocalCommandRouter.match("open whatsapp")!!.toolName)
+        assertEquals("open_app", LocalCommandRouter.match("whatsapp kholo")!!.toolName)
+        assertEquals("make_call", LocalCommandRouter.match("call mom")!!.toolName)
+        assertEquals("mom", LocalCommandRouter.match("call mom")!!.params["contact"])
+        assertEquals("mom", LocalCommandRouter.match("mom ko call karo")!!.params["contact"])
+        assertEquals("press_back", LocalCommandRouter.match("go back")!!.toolName)
+        assertEquals("press_home", LocalCommandRouter.match("go home")!!.toolName)
+        assertEquals("scroll_down", LocalCommandRouter.match("neeche scroll karo")!!.toolName)
+        assertEquals("scroll_up", LocalCommandRouter.match("upar scroll karo")!!.toolName)
+        assertEquals("click", LocalCommandRouter.match("login pe click karo")!!.toolName)
+        assertEquals("login", LocalCommandRouter.match("login pe click karo")!!.params["text"])
+    }
+
+    @Test
+    fun `offline routes demand the role of their ToolRouter risk`() {
+        assertEquals(RiskLevel.LOW.requiredRole, LocalCommandRouter.match("go back")!!.requiredRole)
+        assertEquals(RiskLevel.MEDIUM.requiredRole, LocalCommandRouter.match("open whatsapp")!!.requiredRole)
+        assertEquals(RiskLevel.MEDIUM.requiredRole, LocalCommandRouter.match("click login")!!.requiredRole)
+        assertEquals(RiskLevel.HIGH.requiredRole, LocalCommandRouter.match("call mom")!!.requiredRole)
+        assertEquals(UserRole.FRIEND, RiskLevel.MEDIUM.requiredRole)
+        assertEquals(UserRole.BOSS, RiskLevel.HIGH.requiredRole)
+    }
+
+    @Test
+    fun `ambiguity and cross-intent routes return null`() {
+        assertNull(LocalCommandRouter.match("open"))           // no app name
+        assertNull(LocalCommandRouter.match("call"))           // no contact
+        assertNull(LocalCommandRouter.match("click"))          // no target
+        assertNull(LocalCommandRouter.match("scroll"))         // no direction
+        assertNull(LocalCommandRouter.match("scroll up down")) // both directions
+        assertNull(LocalCommandRouter.match("back home"))      // two navigations
+        assertNull(LocalCommandRouter.match("call back mom"))  // return-call, not press_back
+        assertNull(LocalCommandRouter.match("call mom volume up"))    // device+call mix
+        assertNull(LocalCommandRouter.match("open whatsapp call mom")) // two routes
     }
 }
