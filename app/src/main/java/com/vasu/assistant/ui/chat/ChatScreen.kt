@@ -2,9 +2,11 @@ package com.vasu.assistant.ui.chat
 
 import android.widget.Toast
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -31,9 +34,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.vasu.assistant.database.ConversationSessionEntity
 import com.vasu.assistant.ui.components.GlassCard
 import com.vasu.assistant.ui.theme.*
 import kotlinx.coroutines.launch
@@ -55,11 +60,29 @@ fun ChatScreen(
     var searchQuery by remember { mutableStateOf("") }
     var speakingId by remember { mutableStateOf<String?>(null) }
     var isNearBottom by remember { mutableStateOf(true) }
+    var showSessions by remember { mutableStateOf(false) }
+    var menuMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    var renameTarget by remember { mutableStateOf<ConversationSessionEntity?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    val sessions by viewModel.sessions.collectAsState(initial = emptyList())
 
     // Copy helper
     fun copyText(id: String, text: String) {
         clipboard.setText(AnnotatedString(text))
         Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+    }
+
+    // Share/export helper (chat export + single-message share)
+    fun shareText(text: String, chooserTitle: String) {
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(android.content.Intent.createChooser(intent, chooserTitle))
+        } catch (e: Exception) {
+            Toast.makeText(context, "Sharing unavailable", Toast.LENGTH_SHORT).show()
+        }
     }
 
     // Smart scroll: trigger only if user is near bottom.
@@ -155,6 +178,19 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showSessions = true }) {
+                        Icon(Icons.Filled.History, contentDescription = "Chat history", tint = VasuTextSecondary)
+                    }
+                    IconButton(onClick = {
+                        viewModel.newChat()
+                        searchQuery = ""
+                        speakingId = null
+                    }) {
+                        Icon(Icons.Filled.AddComment, contentDescription = "New chat", tint = VasuTextSecondary)
+                    }
+                    IconButton(onClick = { shareText(viewModel.exportText(), "Share chat") }) {
+                        Icon(Icons.Filled.Share, contentDescription = "Export chat", tint = VasuTextSecondary)
+                    }
                     if (uiState.isListening) {
                         IconButton(onClick = viewModel::toggleListening) {
                             Icon(Icons.Default.Stop, contentDescription = "Stop", tint = VasuError)
@@ -311,6 +347,7 @@ fun ChatScreen(
                         ChatBubble(
                             message = message,
                             isSpeaking = isSpeaking,
+                            onLongClick = { menuMessage = message },
                             onCopy = { copyText(message.id, message.content) },
                             onSpeak = {
                                 if (isSpeaking) {
@@ -466,13 +503,7 @@ fun ChatScreen(
 
             if (filteredMessages.isNotEmpty()) {
                 TextButton(
-                    onClick = {
-                        try {
-                            viewModel.clearChat()
-                        } catch (_: Exception) {
-                            Toast.makeText(context, "Chat cleared", Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    onClick = { viewModel.clearChat() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -484,6 +515,191 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    if (showSessions) {
+        ModalBottomSheet(
+            onDismissRequest = { showSessions = false },
+            containerColor = VasuDarkCard
+        ) {
+            Text(
+                text = "Chat history",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = VasuTextPrimary,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (sessions.isEmpty()) {
+                Text(
+                    text = "No saved chats yet.",
+                    fontSize = 12.sp,
+                    color = VasuTextMuted,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                    items(sessions, key = { it.id }) { session ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.openSession(session.id)
+                                    searchQuery = ""
+                                    speakingId = null
+                                    showSessions = false
+                                }
+                                .padding(horizontal = 20.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = session.title,
+                                    fontSize = 14.sp,
+                                    color = VasuTextPrimary,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = formatSessionDate(session.updatedAt),
+                                    fontSize = 11.sp,
+                                    color = VasuTextMuted
+                                )
+                            }
+                            IconButton(onClick = {
+                                renameTarget = session
+                                renameText = session.title
+                            }) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "Rename",
+                                    tint = VasuTextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(onClick = { viewModel.deleteSession(session.id) }) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Delete",
+                                    tint = VasuError.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+
+    menuMessage?.let { msg ->
+        val isMsgSpeaking = speakingId == msg.id
+        ModalBottomSheet(
+            onDismissRequest = { menuMessage = null },
+            containerColor = VasuDarkCard
+        ) {
+            Text(
+                text = "Message",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = VasuTextPrimary,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            MessageActionRow(Icons.Filled.ContentCopy, "Copy") {
+                copyText(msg.id, msg.content)
+                menuMessage = null
+            }
+            MessageActionRow(
+                icon = if (isMsgSpeaking) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                label = if (isMsgSpeaking) "Stop speaking" else "Speak"
+            ) {
+                if (isMsgSpeaking) {
+                    viewModel.stopSpeaking()
+                    speakingId = null
+                } else {
+                    speakingId = msg.id
+                    viewModel.replayMessage(msg.content)
+                    scope.launch {
+                        kotlinx.coroutines.delay(8000)
+                        if (speakingId == msg.id) speakingId = null
+                    }
+                }
+                menuMessage = null
+            }
+            MessageActionRow(Icons.Filled.Share, "Share message") {
+                shareText(msg.content, "Share message")
+                menuMessage = null
+            }
+            if (msg.id.toLongOrNull() != null) {
+                MessageActionRow(Icons.Filled.Delete, "Delete message", tint = VasuError) {
+                    viewModel.deleteMessage(msg.id)
+                    menuMessage = null
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+
+    renameTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            containerColor = VasuDarkCard,
+            title = { Text("Rename chat", color = VasuTextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = VasuCrimson,
+                        unfocusedBorderColor = VasuCrimson.copy(alpha = 0.3f),
+                        focusedTextColor = VasuTextPrimary,
+                        unfocusedTextColor = VasuTextPrimary,
+                        cursorColor = VasuCrimson
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.renameSession(target.id, renameText)
+                    renameTarget = null
+                }) { Text("Save", color = VasuCrimson) }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTarget = null }) { Text("Cancel", color = VasuTextMuted) }
+            }
+        )
+    }
+}
+
+@Composable
+private fun MessageActionRow(
+    icon: ImageVector,
+    label: String,
+    tint: Color = VasuTextSecondary,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(label, fontSize = 14.sp, color = VasuTextPrimary)
+    }
+}
+
+private fun formatSessionDate(timestamp: Long): String {
+    return try {
+        SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(timestamp))
+    } catch (_: Exception) {
+        ""
     }
 }
 
@@ -698,10 +914,12 @@ private fun SystemMessageBubble(message: ChatMessage) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatBubble(
     message: ChatMessage,
     isSpeaking: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onCopy: () -> Unit = {},
     onSpeak: () -> Unit = {}
 ) {
@@ -725,6 +943,13 @@ fun ChatBubble(
             modifier = Modifier
                 .padding(horizontal = 4.dp)
                 .widthIn(max = 320.dp)
+                .then(
+                    if (onLongClick != null) {
+                        Modifier.combinedClickable(onClick = {}, onLongClick = onLongClick)
+                    } else {
+                        Modifier
+                    }
+                )
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 if (hasTool) {

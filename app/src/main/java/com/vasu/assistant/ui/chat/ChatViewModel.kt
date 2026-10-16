@@ -7,10 +7,15 @@ import com.vasu.assistant.core.ai.AIOrchestrator
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.stt.STTState
 import com.vasu.assistant.core.tts.TTSManager
+import com.vasu.assistant.database.ConversationDao
+import com.vasu.assistant.database.ConversationMessageEntity
+import com.vasu.assistant.database.ConversationSessionEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
@@ -49,7 +54,7 @@ class ChatViewModel @Inject constructor(
     private val sttManager: STTManager,
     private val ttsManager: TTSManager,
     private val aiOrchestrator: AIOrchestrator,
-    private val conversationDao: com.vasu.assistant.database.ConversationDao
+    private val conversationDao: ConversationDao
 ) : ViewModel() {
 
     companion object {
@@ -59,7 +64,11 @@ class ChatViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    private val currentConversationId = System.currentTimeMillis().toString()
+    /** Saved chat sessions, newest first (FIX-5). */
+    val sessions: Flow<List<ConversationSessionEntity>> = conversationDao.observeSessions()
+
+    /** Current session row id; null until the first message of a new chat. */
+    private var currentSessionId: String? = null
 
     private val sendMutex = kotlinx.coroutines.sync.Mutex()
 
@@ -156,6 +165,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             if (!sendMutex.tryLock()) return@launch
 
+            // Transient streaming bubble id (hoisted so the error path can clean it up).
+            var streamingId: String? = null
+
             try {
                 _uiState.value = _uiState.value.copy(inputText = "", isLoading = true)
 
@@ -168,15 +180,39 @@ class ChatViewModel @Inject constructor(
                     )
                 }
 
-                addMessage(ChatMessage(content = text, isUser = true))
+                val sessionId = ensureSession()
+                persistAndAdd(ChatMessage(content = text, isUser = true), sessionId)
 
                 val requestId = "req_${System.currentTimeMillis()}_${text.hashCode()}"
                 Log.d(TAG, "AI_REQUEST requestId=$requestId chatTurn")
+
+                // Word-stream: the assistant bubble grows sentence by sentence as
+                // the orchestrator emits them (the same units TTS speaks).
                 val response = aiOrchestrator.processInputStreaming(text, history) { sentence ->
+                    val open = streamingId
+                    if (open == null) {
+                        val placeholder = ChatMessage(content = sentence, isUser = false)
+                        streamingId = placeholder.id
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages + placeholder
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages.map { m ->
+                                if (m.id == open) m.copy(content = m.content + " " + sentence) else m
+                            }
+                        )
+                    }
                     ttsManager.speakQueued(sentence)
                 }
-                val responseMsg = ChatMessage(content = response, isUser = false)
-                addMessage(responseMsg)
+
+                // Swap the transient streaming bubble for the persisted final reply.
+                streamingId?.let { open ->
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages.filterNot { it.id == open }
+                    )
+                }
+                val responseMsg = persistAndAdd(ChatMessage(content = response, isUser = false), sessionId)
                 _uiState.value = _uiState.value.copy(isLoading = false)
 
                 // TTS: sentence-level streaming enqueue — each completed
@@ -193,6 +229,12 @@ class ChatViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "sendMessage failed", e)
+                // Drop any un-persisted streaming bubble so no ghost reply stays.
+                streamingId?.let { open ->
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages.filterNot { it.id == open }
+                    )
+                }
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 addMessage(
                     ChatMessage(
@@ -241,102 +283,225 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Clears the CURRENT session (history rows + session row) and starts fresh. */
     fun clearChat() {
         viewModelScope.launch {
-            try {
-                conversationDao.deleteAllMessages()
-            } catch (_: Exception) {}
+            val sessionId = currentSessionId
+            if (sessionId != null) {
+                try {
+                    conversationDao.deleteConversation(sessionId)
+                    conversationDao.deleteSession(sessionId)
+                } catch (_: Exception) {}
+            }
+            currentSessionId = null
             lastSpokenResponseId = null
-            _uiState.value = _uiState.value.copy(
-                messages = listOf(
-                    ChatMessage(
-                        content = "नमस्ते! मैं वासु हूँ, आपकी वॉइस असिस्टेंट। आज मैं आपकी क्या मदद करूँ?",
-                        isUser = false
-                    )
+            _uiState.value = _uiState.value.copy(messages = greetingList())
+        }
+    }
+
+    /** Fire-and-forget variant used by non-send paths (STT errors). */
+    private fun addMessage(message: ChatMessage) {
+        viewModelScope.launch {
+            try {
+                persistAndAdd(message, ensureSession())
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // DB unavailable — still surface the message in this session.
+                Log.e(TAG, "addMessage failed", e)
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages + message
                 )
+            }
+        }
+    }
+
+    /** Persists a message (with adjacency dedup) and appends it with its DB row id as UI id. */
+    private suspend fun persistAndAdd(message: ChatMessage, sessionId: String): ChatMessage {
+        val last = _uiState.value.messages.lastOrNull()
+        if (last != null && last.isUser == message.isUser && last.content.trim() == message.content.trim()) {
+            return last // Skip duplicate
+        }
+
+        var stored = message
+        try {
+            val rowId = conversationDao.insertMessage(
+                ConversationMessageEntity(
+                    conversationId = sessionId,
+                    role = if (message.isUser) "user" else "assistant",
+                    content = message.content,
+                    toolName = message.toolName,
+                    toolResult = message.toolResult,
+                    timestamp = message.timestamp,
+                    source = "chat",
+                    isToolExecution = message.isToolExecution
+                )
+            )
+            stored = message.copy(id = rowId.toString())
+            if (message.isUser) {
+                // The first user message names the session; every turn bumps it.
+                if (conversationDao.getMessageCount(sessionId) == 1) {
+                    conversationDao.renameSession(sessionId, ChatTextFormatter.deriveTitle(message.content))
+                }
+                conversationDao.touchSession(sessionId, System.currentTimeMillis())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "insertMessage failed", e)
+        }
+
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages + stored
+        )
+        return stored
+    }
+
+    /** Session row for the current chat, created on demand. */
+    private suspend fun ensureSession(): String {
+        currentSessionId?.let { return it }
+        val now = System.currentTimeMillis()
+        val id = "s_${now}_${chatMessageIdSeq.incrementAndGet()}"
+        conversationDao.upsertSession(
+            ConversationSessionEntity(id = id, title = "New chat", createdAt = now, updatedAt = now)
+        )
+        currentSessionId = id
+        return id
+    }
+
+    /** Starts a fresh unsaved chat (session row is created on first message). */
+    fun newChat() {
+        viewModelScope.launch {
+            try { ttsManager.stop() } catch (_: Exception) {}
+            currentSessionId = null
+            lastSpokenResponseId = null
+            _uiState.value = _uiState.value.copy(messages = greetingList())
+        }
+    }
+
+    /** Switches to a saved session and loads its messages. */
+    fun openSession(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                try { ttsManager.stop() } catch (_: Exception) {}
+                val loaded = buildMessages(conversationDao.getMessages(sessionId).first())
+                currentSessionId = sessionId
+                lastSpokenResponseId = null
+                _uiState.value = _uiState.value.copy(
+                    messages = if (loaded.isEmpty()) greetingList() else loaded
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "openSession failed", e)
+            }
+        }
+    }
+
+    fun renameSession(sessionId: String, title: String) {
+        val clean = title.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                conversationDao.renameSession(sessionId, clean)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "renameSession failed", e)
+            }
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                conversationDao.deleteConversation(sessionId)
+                conversationDao.deleteSession(sessionId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteSession failed", e)
+            }
+            if (currentSessionId == sessionId) {
+                currentSessionId = null
+                lastSpokenResponseId = null
+                _uiState.value = _uiState.value.copy(messages = greetingList())
+            }
+        }
+    }
+
+    /** Deletes one persisted message (long-press menu). Ids are DB row ids. */
+    fun deleteMessage(messageId: String) {
+        val rowId = messageId.toLongOrNull() ?: return
+        viewModelScope.launch {
+            try {
+                conversationDao.deleteMessage(rowId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteMessage failed", e)
+            }
+            _uiState.value = _uiState.value.copy(
+                messages = _uiState.value.messages.filterNot { it.id == messageId }
             )
         }
     }
 
-    private fun addMessage(message: ChatMessage) {
-        val last = _uiState.value.messages.lastOrNull()
-        if (last != null && last.isUser == message.isUser && last.content.trim() == message.content.trim()) {
-            return // Skip duplicate
-        }
-
-        _uiState.value = _uiState.value.copy(
-            messages = _uiState.value.messages + message
-        )
-        // Save to database
-        viewModelScope.launch {
-            try {
-                conversationDao.insertMessage(
-                    com.vasu.assistant.database.ConversationMessageEntity(
-                        conversationId = currentConversationId,
-                        role = if (message.isUser) "user" else "assistant",
-                        content = message.content,
-                        toolName = message.toolName,
-                        toolResult = message.toolResult,
-                        timestamp = message.timestamp
-                    )
-                )
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "insertMessage failed", e)
-            }
-        }
-    }
+    /** Plain-text export of the current session for the share sheet. */
+    fun exportText(): String = ChatTextFormatter.toPlainText(_uiState.value.messages)
 
     private fun loadConversationHistory() {
         viewModelScope.launch {
             try {
-            val messages = conversationDao.getGlobalRecentMessages(limit = 50).reversed()
-            if (messages.isNotEmpty()) {
-                val chatMessages = mutableListOf<ChatMessage>()
-                for (entity in messages) {
-                    val isUser = entity.role == "user"
-                    val last = chatMessages.lastOrNull()
-                    if (last != null && last.isUser == isUser && last.content.trim() == entity.content.trim()) {
-                        continue // Drop duplicate historical records
-                    }
-                    chatMessages.add(
-                        ChatMessage(
-                            id = entity.id.toString(),
-                            content = entity.content,
-                            isUser = isUser,
-                            timestamp = entity.timestamp,
-                            toolName = entity.toolName,
-                            toolResult = entity.toolResult
-                        )
+                val latest = conversationDao.getLatestSession()
+                if (latest == null) {
+                    currentSessionId = null
+                    _uiState.value = _uiState.value.copy(messages = greetingList())
+                } else {
+                    currentSessionId = latest.id
+                    val loaded = buildMessages(conversationDao.getMessages(latest.id).first())
+                    _uiState.value = _uiState.value.copy(
+                        messages = if (loaded.isEmpty()) greetingList() else loaded
                     )
                 }
-                _uiState.value = _uiState.value.copy(messages = chatMessages                )
-            } else {
-                _uiState.value = _uiState.value.copy(
-                    messages = listOf(
-                        ChatMessage(
-                            content = "नमस्ते! मैं वासु हूँ, आपकी वॉइस असिस्टेंट। आज मैं आपकी क्या मदद करूँ?",
-                            isUser = false
-                        )
-                    )
-                )
-            }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "history load failed", e)
-                _uiState.value = _uiState.value.copy(
-                    messages = listOf(
-                        ChatMessage(
-                            content = "नमस्ते! मैं वासु हूँ, आपकी वॉइस असिस्टेंट। आज मैं आपकी क्या मदद करूँ?",
-                            isUser = false
-                        )
-                    )
-                )
+                _uiState.value = _uiState.value.copy(messages = greetingList())
             }
         }
     }
+
+    private fun buildMessages(entities: List<ConversationMessageEntity>): List<ChatMessage> {
+        val chatMessages = mutableListOf<ChatMessage>()
+        for (entity in entities) {
+            val isUser = entity.role == "user"
+            val last = chatMessages.lastOrNull()
+            if (last != null && last.isUser == isUser && last.content.trim() == entity.content.trim()) {
+                continue // Drop duplicate historical records
+            }
+            chatMessages.add(
+                ChatMessage(
+                    id = entity.id.toString(),
+                    content = entity.content,
+                    isUser = isUser,
+                    timestamp = entity.timestamp,
+                    isToolExecution = entity.isToolExecution,
+                    toolName = entity.toolName,
+                    toolResult = entity.toolResult
+                )
+            )
+        }
+        return chatMessages
+    }
+
+    private fun greetingList(): List<ChatMessage> = listOf(
+        ChatMessage(
+            content = "नमस्ते! मैं वासु हूँ, आपकी वॉइस असिस्टेंट। आज मैं आपकी क्या मदद करूँ?",
+            isUser = false
+        )
+    )
 
     override fun onCleared() {
         super.onCleared()

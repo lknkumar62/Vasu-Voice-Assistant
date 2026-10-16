@@ -20,7 +20,7 @@ object DatabaseModule {
             context,
             VasuDatabase::class.java,
             "vasu_database"
-        ).build()
+        ).addMigrations(VasuDatabase.MIGRATION_1_2).build()
     }
 
     @Provides
