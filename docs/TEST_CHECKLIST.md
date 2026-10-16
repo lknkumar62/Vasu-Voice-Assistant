@@ -97,3 +97,10 @@ FIX-7 — visual identity (2026-10-16):
 - **Orb**: Home tab → the assistant orb should now breathe, show two slowly rotating arcs, and pulse a ring while listening / when the wake word is heard. Colors: crimson = listening, cyan = speaking, yellow = thinking.
 - **Animations off**: Settings → APPEARANCE → Animations OFF → back to Home: the orb is a static frame and the Voice tab's dot/waveform/mic halo stop moving; switch ON again to restore motion.
 - **Fonts**: titles and labels should now use the new sci-fi fonts (no default AOSP look). If any text looks broken/cut off, send a screenshot along with the Diagnostics log.
+
+FIX-8 Pass A — offline routes / command library / contacts (2026-10-16):
+- **Offline routes (try with airplane mode ON)**: "open whatsapp" / "whatsapp kholo" → WhatsApp opens; "go back" / "wapas chalo" → previous screen; "go home" → home screen; "scroll down" / "neeche scroll karo" → screen scrolls; "click login" style → clicks that visible text (accessibility service on).
+- **Call**: "call mom" / "mummy ko call karo" → dialer opens pre-filled (you still press the final call button). Numbers too: "call 9876543210".
+- **Multi-match contacts**: if 2+ contacts share a name, "call Rahul" no longer guesses — VASU answers "Multiple contacts match …" with the names and asks for the full name (same for SMS/WhatsApp).
+- **Command Library**: Tools tab → "Voice Command Library" card → full list (Device / Screen & navigation / Apps / Calls). An automated test keeps this list and the real routing in sync.
+- **Compound guard**: "torch on and send sms" / "go back aur photo dikhao" → no half execution (the LLM handles the whole sentence).
