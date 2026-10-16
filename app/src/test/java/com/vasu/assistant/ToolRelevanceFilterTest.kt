@@ -142,4 +142,28 @@ class ToolRelevanceFilterTest {
         )
         assertTrue(selected.any { it == "volume_up" || it == "volume_down" || it == "set_volume" })
     }
+
+    @Test
+    fun `hindi call keyword triggers messaging tools`() {
+        val selected = ToolRelevanceFilter.selectForConversation(
+            listOf("papa ko कॉल करो"), allNames
+        )
+        assertTrue(selected.contains("make_call"))
+    }
+
+    @Test
+    fun `hindi message keyword triggers messaging tools`() {
+        val selected = ToolRelevanceFilter.selectForConversation(
+            listOf("उसे संदेश भेजो"), allNames
+        )
+        assertTrue(selected.contains("send_message"))
+    }
+
+    @Test
+    fun `hindi open keyword triggers screen tools`() {
+        val selected = ToolRelevanceFilter.selectForConversation(
+            listOf("यूट्यूब खोलो"), allNames
+        )
+        assertTrue(selected.contains("open_app"))
+    }
 }

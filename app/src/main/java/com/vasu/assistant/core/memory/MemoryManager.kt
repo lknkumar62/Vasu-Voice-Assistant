@@ -1,5 +1,6 @@
 package com.vasu.assistant.core.memory
 
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,6 +18,9 @@ class MemoryManager @Inject constructor(
     private val conversationMemory: ConversationMemory,
     private val userMemory: UserMemory
 ) {
+    /** Explicit memory commands recognised by [detectCommand]. */
+    enum class MemoryCommand { REMEMBER, FORGET }
+
     /**
      * Process user input and extract learnable information
      */
@@ -37,23 +41,38 @@ class MemoryManager @Inject constructor(
             // Vault guard must never break input processing.
         }
 
-        // Handle explicit memory commands
-        when {
-            input.lowercase().startsWith("remember that") || input.lowercase().startsWith("yaad rakh") -> {
-                val fact = input.lowercase().substringAfter("that").substringAfter("rakh").trim()
-                if (fact.isNotBlank()) {
-                    userMemory.remember("fact_${System.currentTimeMillis()}", fact)
-                }
+        performCommand(input)
+    }
+
+    /**
+     * Which explicit memory command [input] is, or null for a normal turn.
+     * Pure, no side effects: the AI orchestrator uses this to short-circuit
+     * remember/forget turns before any other matcher can hijack them.
+     */
+    fun detectCommand(input: String): MemoryCommand? {
+        val lower = input.trim().lowercase(Locale.ROOT)
+        return when {
+            REMEMBER_PREFIXES.any { lower.startsWith(it) } -> MemoryCommand.REMEMBER
+            FORGET_PREFIXES.any { lower.startsWith(it) } -> MemoryCommand.FORGET
+            else -> null
+        }
+    }
+
+    /**
+     * Execute the explicit command in [input] (detected by [detectCommand]).
+     * Returns true when a fact was actually stored or deleted.
+     */
+    suspend fun performCommand(input: String): Boolean {
+        return when (detectCommand(input)) {
+            MemoryCommand.REMEMBER -> {
+                val fact = valueAfter(REMEMBER_PREFIXES, input)
+                fact.isNotBlank() && userMemory.remember("fact_${System.currentTimeMillis()}", fact)
             }
-            input.lowercase().startsWith("forget that") || input.lowercase().startsWith("bhool jao") -> {
-                val key = input.lowercase().substringAfter("that").substringAfter("jao").trim()
-                if (key.isNotBlank()) {
-                    userMemory.forget(key)
-                }
+            MemoryCommand.FORGET -> {
+                val key = valueAfter(FORGET_PREFIXES, input)
+                userMemory.forgetMatching(key)
             }
-            input.lowercase().contains("what do you remember") || input.lowercase().contains("kya yaad hai") -> {
-                // This will be handled by AI orchestrator
-            }
+            null -> false
         }
     }
 
@@ -97,6 +116,15 @@ class MemoryManager @Inject constructor(
                 append(conversationContext)
             }
         }
+    }
+
+    /**
+     * Long-term user facts as prompt text; empty when nothing is remembered.
+     * Preferred over [getFullContext] for prompt injection because the recent
+     * conversation is already sent to the model as chat history.
+     */
+    suspend fun getUserFacts(): String {
+        return userMemory.getMemoryContext()
     }
 
     /**
@@ -144,5 +172,26 @@ class MemoryManager @Inject constructor(
      */
     fun clearConversation() {
         conversationMemory.clearCurrent()
+    }
+
+    companion object {
+        private val REMEMBER_PREFIXES = listOf(
+            "remember that", "remember this",
+            "yaad rakhna", "yaad rakho", "yaad rakh",
+            "याद रखना", "याद रखो", "याद रखिए", "याद रख"
+        )
+        private val FORGET_PREFIXES = listOf(
+            "forget that", "forget this",
+            "bhool jao", "bhool ja",
+            "भूल जाओ", "भूल जा"
+        )
+
+        /** Text after the longest matching command prefix, cleaned up. */
+        private fun valueAfter(prefixes: List<String>, input: String): String {
+            val lower = input.trim().lowercase(Locale.ROOT)
+            val prefix = prefixes.filter { lower.startsWith(it) }.maxByOrNull { it.length }
+                ?: return ""
+            return lower.removePrefix(prefix).trim().trimStart(':', ',', '-', '—').trim()
+        }
     }
 }

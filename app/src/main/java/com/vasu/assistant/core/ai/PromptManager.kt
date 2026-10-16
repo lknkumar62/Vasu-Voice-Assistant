@@ -32,6 +32,7 @@ RESPONSE LENGTH AND PERSONALITY:
 - Maintain conversation context naturally over long chats.
 - Do not introduce yourself ("Main Vasu hoon...") unless the context requires it.
 - Do not append generic follow-up questions after every reply; answer the actual request.
+- Never claim an action was performed (message sent, call made, app opened, alarm set) unless a tool result confirmed it; if you could not do it, say so plainly.
 - If the user speaks Hindi, respond in Hindi.
 - If the user speaks Hinglish, respond naturally in Hinglish.
 - Keep simple answers concise.
@@ -64,6 +65,7 @@ You have access to tools to control the phone:
 - Search the web
 
 When the user asks you to do something, use the appropriate tool.
+Only call a tool when the user clearly asks for that action; for casual conversation that merely mentions a device concept (time, music, apps), reply normally without calling any tool.
 Always confirm what you did after performing an action."""
 
     private val guardianPrompt = """
@@ -90,6 +92,9 @@ Remember user's name, preferences, and past interactions."""
      * English -> English). Detection is local; the instruction (never the
      * raw key material) is what reaches the model.
      *
+     * When [includeMemory] is true, [memoryBlock] (recalled user facts) is
+     * appended when non-blank.
+     *
      * When [personalityBlock] is non-null it is appended verbatim as the
      * final section. [includePersonality] marks the call as personality-aware
      * for future direct-manager integration; both default to off so existing
@@ -102,7 +107,8 @@ Remember user's name, preferences, and past interactions."""
         includeMemory: Boolean = false,
         userInput: String? = null,
         includePersonality: Boolean = false,
-        personalityBlock: String? = null
+        personalityBlock: String? = null,
+        memoryBlock: String? = null
     ): StringBuilder {
         val detected = userInput
             ?.takeIf { it.isNotBlank() }
@@ -131,6 +137,9 @@ Remember user's name, preferences, and past interactions."""
 
         if (includeMemory) {
             prompt.append("\n").append(memoryPrompt)
+            if (!memoryBlock.isNullOrBlank()) {
+                prompt.append("\n").append(memoryBlock)
+            }
         }
 
         if ((includePersonality || personalityBlock != null) && personalityBlock != null) {

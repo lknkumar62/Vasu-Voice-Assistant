@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.vasu.assistant.core.tts.SentenceSplitter
 import com.vasu.assistant.core.command.LocalCommandRouter
+import com.vasu.assistant.core.memory.MemoryManager
 import com.vasu.assistant.core.personality.PersonalityManager
 import com.vasu.assistant.core.security.RoleManager
 import com.vasu.assistant.devices.BluetoothManager
@@ -42,7 +43,8 @@ class AIOrchestrator @Inject constructor(
     private val deviceControlManager: DeviceControlManager,
     private val toolRouter: ToolRouter,
     private val roleManager: RoleManager,
-    private val personalityManager: PersonalityManager
+    private val personalityManager: PersonalityManager,
+    private val memoryManager: MemoryManager
 ) {
     companion object {
         private const val TAG = "AIOrchestrator"
@@ -75,6 +77,79 @@ class AIOrchestrator @Inject constructor(
     }
 
     /**
+     * Per-turn context shared by both generation paths: personality (fail-open)
+     * and the facts the user has asked us to remember, rendered into the system
+     * prompt. [includeTools] mirrors whether the caller actually sends tools -
+     * the streaming wire format does not, so its prompt must not mention them.
+     */
+    private suspend fun buildTurnContext(input: String, includeTools: Boolean): String {
+        val personalityBlock = try {
+            personalityManager.observe(input)
+            personalityManager.promptBlock("voice")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) { null }
+        val memoryFacts = try {
+            memoryManager.getUserFacts()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) { "" }
+        return promptManager.buildPrompt(
+            includeTools = includeTools,
+            userInput = input,
+            includePersonality = personalityBlock != null,
+            personalityBlock = personalityBlock,
+            includeMemory = true,
+            memoryBlock = memoryFacts.takeIf { it.isNotBlank() }
+        ).toString()
+    }
+
+    /**
+     * Handles explicit remember/forget commands (see
+     * [com.vasu.assistant.core.memory.MemoryManager.detectCommand]). Returns
+     * the canonical reply when the turn was a memory command, else null.
+     * Detection and execution share one variant set in MemoryManager, so the
+     * reply can never claim a store that did not happen.
+     */
+    private suspend fun handleMemoryCommand(input: String): String? {
+        val command = memoryManager.detectCommand(input) ?: return null
+        val performed = try {
+            memoryManager.performCommand(input)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Memory command failed", e)
+            false
+        }
+        val detected = LanguageDetector.detect(input)
+        Log.i(TAG, "MemoryCommand ${command.name} applied=$performed")
+        return when (command) {
+            MemoryManager.MemoryCommand.REMEMBER ->
+                if (performed) {
+                    scriptPick(detected, "Yaad rakh liya.", "याद रख लिया।", "Noted.")
+                } else {
+                    scriptPick(
+                        detected,
+                        "Ye main yaad nahi rakh sakta.",
+                        "यह मैं याद नहीं रख सकता।",
+                        "I can't remember that."
+                    )
+                }
+            MemoryManager.MemoryCommand.FORGET ->
+                if (performed) {
+                    scriptPick(detected, "Bhool gaya.", "भूल गया।", "Forgotten.")
+                } else {
+                    scriptPick(
+                        detected,
+                        "Uske baare me mera paas kuch yaad nahi tha.",
+                        "उसके बारे में मेरे पास कुछ याद नहीं था।",
+                        "I didn't have anything about that."
+                    )
+                }
+        }
+    }
+
+    /**
      * Process arbitrary user text/voice input, executing locally if it matches device commands,
      * or routing to Gemini AI for natural conversational responses.
      *
@@ -94,6 +169,14 @@ class AIOrchestrator @Inject constructor(
      */
     suspend fun processInput(rawInput: String, history: List<ChatMessage> = emptyList()): String =
         withContext(Dispatchers.IO) {
+        val input = rawInput.trim()
+        if (input.isEmpty()) return@withContext ""
+
+        // Explicit memory commands run before every local matcher: a fact like
+        // "remember that my meeting time is 5" must be stored, not hijacked by
+        // the time-command branch.
+        handleMemoryCommand(input)?.let { return@withContext it }
+
         // A2 (command-router): local-first deterministic routing. A simple
         // device command matched here skips the LLM round-trip: permission is
         // checked against the command's SecurityTypes-derived role, then the
@@ -103,7 +186,7 @@ class AIOrchestrator @Inject constructor(
         // to the existing LLM path below untouched. Pure-local sentinels
         // (local_time/local_date) have no ToolRouter dispatch and are
         // answered directly.
-        LocalCommandRouter.match(rawInput)?.let { cmd ->
+        LocalCommandRouter.match(input)?.let { cmd ->
             if (roleManager.hasPermission(cmd.requiredRole)) {
                 if (toolRouter.findTool(cmd.toolName) != null) {
                     val execution = toolRouter.executeTool(cmd.toolName, cmd.params)
@@ -113,9 +196,6 @@ class AIOrchestrator @Inject constructor(
                 }
             }
         }
-
-        val input = rawInput.trim()
-        if (input.isEmpty()) return@withContext ""
 
         val requestId = "req_${System.currentTimeMillis()}_${input.hashCode()}"
         val detected = LanguageDetector.detect(input)
@@ -142,17 +222,9 @@ class AIOrchestrator @Inject constructor(
         }
 
         // 2. CONVERSATIONAL CLOUD AI (Gemini / Claude)
-        // Jarvis-port personality: learn from this turn (fail-open) and append
-        // the personality block so replies adapt to verbosity/formality/humor.
-        val personalityBlock = try {
-            personalityManager.observe(input)
-            personalityManager.promptBlock("voice")
-        } catch (_: Exception) { null }
-        val systemPrompt = promptManager.buildPrompt(
-            userInput = input,
-            includePersonality = personalityBlock != null,
-            personalityBlock = personalityBlock
-        ).toString()
+        // Jarvis-port context: personality + remembered facts (fail-open).
+        // Tools are sent on this path, so the tool section stays in the prompt.
+        val systemPrompt = buildTurnContext(input, includeTools = true)
 
         try {
             if (geminiProvider.isConfigured) {
@@ -263,6 +335,16 @@ class AIOrchestrator @Inject constructor(
             }
         }
 
+        // Explicit memory commands short-circuit before any matcher (same rule
+        // as processInput) and still emit sentence-wise for TTS.
+        val memoryReply = handleMemoryCommand(input)
+        if (memoryReply != null) {
+            val splitter = SentenceSplitter()
+            splitter.feed(memoryReply).forEach(::emitSentence)
+            splitter.flush()?.let(::emitSentence)
+            return memoryReply
+        }
+
         // Local/fast turns bypass the cloud; stream their canned reply through
         // the splitter so callers still get sentence-level delivery.
         val localReply = normalizer.checkLanguageSwitchCommand(input)
@@ -274,6 +356,26 @@ class AIOrchestrator @Inject constructor(
             splitter.flush()?.let(::emitSentence)
             return localReply
         }
+
+        // Tool-capable turns take the non-streaming path: the streaming wire
+        // format has no function-call support, so executing the action for real
+        // beats streaming a "done" that never happened. Keyword signal only -
+        // fail-safe back to streaming when the filter finds nothing or throws.
+        val toolTurn = try {
+            ToolRelevanceFilter.selectForConversation(
+                listOf(input),
+                llmTools.map { it.name }.toSet()
+            ).isNotEmpty()
+        } catch (_: Exception) { false }
+        if (toolTurn) {
+            val response = processInput(rawInput, history)
+            val splitter = SentenceSplitter()
+            splitter.feed(response).forEach(::emitSentence)
+            splitter.flush()?.let(::emitSentence)
+            return response
+        }
+
+        val systemPrompt = buildTurnContext(input, includeTools = false)
 
         // Mirror processInput's provider priority: gemini first, then claude.
         // A provider that is configured but not stream-capable falls back to
@@ -289,7 +391,7 @@ class AIOrchestrator @Inject constructor(
             val full = StringBuilder()
             var emittedAny = false
             try {
-                streamingProvider.generateStream(input, history).collect { chunk ->
+                streamingProvider.generateStream(input, history, systemPrompt).collect { chunk ->
                     full.append(chunk)
                     splitter.feed(chunk).forEach { sentence ->
                         emittedAny = true

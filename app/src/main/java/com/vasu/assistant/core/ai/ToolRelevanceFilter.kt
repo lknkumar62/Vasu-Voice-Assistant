@@ -60,21 +60,24 @@ object ToolRelevanceFilter {
             tools = setOf("open_whatsapp", "make_call", "send_message", "lookup_contact"),
             keywords = setOf(
                 "call", "phone", "dial", "whatsapp",
-                "sms", "message", "contact", "number"
+                "sms", "message", "contact", "number",
+                "कॉल", "फोन", "मैसेज", "संदेश", "भेज", "भेजो", "भेजना", "व्हाट्सएप", "संपर्क"
             )
         ),
         "alarm" to TriggerGroup(
             tools = setOf("create_alarm"),
             keywords = setOf(
                 "alarm", "time", "samay", "समय",
-                "date", "tarikh", "तारीख", "reminder"
+                "date", "tarikh", "तारीख", "reminder",
+                "अलार्म", "रिमाइंडर"
             )
         ),
         "web" to TriggerGroup(
             tools = setOf("search_web"),
             keywords = setOf(
                 "search", "google", "web", "internet",
-                "online", "website", "news", "weather"
+                "online", "website", "news", "weather",
+                "खोज", "सर्च", "गूगल", "इंटरनेट", "वेबसाइट", "समाचार", "मौसम"
             )
         ),
         "screen" to TriggerGroup(
@@ -84,7 +87,8 @@ object ToolRelevanceFilter {
             ),
             keywords = setOf(
                 "screen", "click", "tap", "scroll",
-                "open", "button", "type", "press"
+                "open", "button", "type", "press",
+                "स्क्रीन", "खोल", "खोलो", "बटन", "टाइप", "स्क्रॉल"
             )
         ),
         "camera" to TriggerGroup(
@@ -96,7 +100,10 @@ object ToolRelevanceFilter {
         ),
         "files" to TriggerGroup(
             tools = setOf("browse_files", "search_files", "delete_file"),
-            keywords = setOf("file", "folder", "directory", "download", "path", "document")
+            keywords = setOf(
+                "file", "folder", "directory", "download", "path", "document",
+                "फाइल", "फ़ाइल", "फोल्डर", "डाउनलोड", "डाक्यूमेंट"
+            )
         ),
         "missions" to TriggerGroup(
             tools = setOf("run_mission", "read_notifications"),

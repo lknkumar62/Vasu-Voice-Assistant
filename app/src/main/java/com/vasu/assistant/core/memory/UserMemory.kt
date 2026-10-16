@@ -1,6 +1,7 @@
 package com.vasu.assistant.core.memory
 
 import com.vasu.assistant.database.UserMemoryEntity
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,6 +91,24 @@ class UserMemory @Inject constructor(
      */
     suspend fun forget(key: String) {
         repository.forget(key)
+    }
+
+    /**
+     * Forget every fact matching [text]: exact key first, else any fact whose
+     * value contains it (case-insensitive). Facts are stored under generated
+     * keys (fact_<timestamp>), so forgetting by exact key alone silently
+     * missed spoken "forget that ..." commands. Returns true when something
+     * was deleted.
+     */
+    suspend fun forgetMatching(text: String): Boolean {
+        val needle = text.trim().lowercase(Locale.ROOT)
+        if (needle.isEmpty()) return false
+        val hits = repository.getAllMemory().filter {
+            it.key.equals(needle, ignoreCase = true) ||
+                it.value.lowercase(Locale.ROOT).contains(needle)
+        }
+        hits.forEach { repository.forget(it.key) }
+        return hits.isNotEmpty()
     }
 
     /**

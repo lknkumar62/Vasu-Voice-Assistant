@@ -117,7 +117,12 @@ class ClaudeProvider @Inject constructor(
      * Empty body yields no items; failures throw AiError or return an empty flow —
      * match existing error conventions in AIProvider.kt.
      */
-    override suspend fun generateStream(prompt: String, history: List<ChatMessage>, model: String?): Flow<String> =
+    override suspend fun generateStream(
+        prompt: String,
+        history: List<ChatMessage>,
+        systemPrompt: String,
+        model: String?
+    ): Flow<String> =
         flow {
             val apiKey = keyStore.getClaudeKey()
                 ?: throw AiError(AiErrorKind.NOT_CONFIGURED, "Claude/OmniRoute API key is missing. Add your API key in Settings.")
@@ -125,7 +130,7 @@ class ClaudeProvider @Inject constructor(
             val baseUrl = keyStore.claudeBaseUrl.trimEnd('/')
             val payload = buildMessagesPayload(
                 model = resolvedModel,
-                systemPrompt = "",
+                systemPrompt = systemPrompt,
                 prompt = prompt,
                 history = history,
                 tools = emptyList(),

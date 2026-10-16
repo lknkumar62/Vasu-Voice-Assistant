@@ -1,6 +1,10 @@
 package com.vasu.assistant.core.memory
 
-class ConversationMemory {
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class ConversationMemory @Inject constructor() {
     private val history = mutableListOf<Pair<String, String>>()
 
     fun addMessage(role: String, content: String) {

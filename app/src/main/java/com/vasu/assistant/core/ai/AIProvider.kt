@@ -17,7 +17,12 @@ interface AIProviderStream {
      * Empty body yields no items; failures throw AiError or return an empty flow —
      * match existing error conventions in AIProvider.kt.
      */
-    suspend fun generateStream(prompt: String, history: List<ChatMessage>, model: String? = null): Flow<String>
+    suspend fun generateStream(
+        prompt: String,
+        history: List<ChatMessage>,
+        systemPrompt: String = "",
+        model: String? = null
+    ): Flow<String>
 }
 
 data class ChatMessage(

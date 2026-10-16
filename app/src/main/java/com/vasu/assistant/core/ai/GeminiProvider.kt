@@ -223,13 +223,18 @@ class GeminiProvider @Inject constructor(
      * Empty body yields no items; failures throw AiError or return an empty flow —
      * match existing error conventions in AIProvider.kt.
      */
-    override suspend fun generateStream(prompt: String, history: List<ChatMessage>, model: String?): Flow<String> =
+    override suspend fun generateStream(
+        prompt: String,
+        history: List<ChatMessage>,
+        systemPrompt: String,
+        model: String?
+    ): Flow<String> =
         flow {
             val key = keyStore.getGeminiKey()
                 ?: throw AiError(AiErrorKind.NOT_CONFIGURED, "No Gemini API key saved. Add one in Settings > AI Provider.")
             val resolvedModel = model?.takeIf { it.isNotBlank() } ?: keyStore.geminiModel
             val settings = effectiveConfig()
-            val payload = buildPayload(prompt, "", history, emptyList(), 0.7f, 1024).toString()
+            val payload = buildPayload(prompt, systemPrompt, history, emptyList(), 0.7f, 1024).toString()
             val request = Request.Builder()
                 .url("${settings.baseUrl}/models/$resolvedModel:streamGenerateContent?alt=sse")
                 .addHeader("x-goog-api-key", key)
