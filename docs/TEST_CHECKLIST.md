@@ -66,3 +66,16 @@ FIX-4 — HIGH-risk confirmation / OTP guard / emergency stop:
 - Devanagari/English variants ask in the same script; a new command like "Rahul ko call karo" while a confirmation is pending must NOT count as "yes".
 - OTP guard: "OTP 654321 hai, Rahul ko message bhej do" → safety refusal (Privacy → OTP protection ON by default); turning it OFF in Privacy settings allows it.
 - Emergency stop (stop listening / service shutdown) while a mission runs → mission aborts at the next step with "stopped by user", TTS stops.
+
+Chat / diagnostics (2026-10-16):
+- Chat: send 4-5 messages quickly (two within the same second) → no crash, all messages appear in order.
+- Diagnostics: Settings → ADVANCED → "Open Diagnostics" (debug APK only) → internal error-log card visible and copyable for sharing.
+
+FIX-5 — chat sessions / export / long-press / streaming (2026-10-16):
+- **Upgrade/migration test (most important)**: install this APK on top of the previously installed OLD build (do NOT uninstall first) → app opens normally, old chat messages are still there (History sheet shows them as "Chat" entries), stored memories still answer. Any crash at open = tell me immediately.
+- Word-stream: send a message → the reply bubble appears and grows sentence by sentence while VASU speaks.
+- History icon (top bar) → earlier chats with titles (first message); tap = open; Edit = rename; Delete = remove that chat.
+- New chat icon → fresh session; after the first message it appears in History as its own entry.
+- Long-press any message → Copy / Speak / Share / Delete that single message.
+- Share icon (top bar) → Android share sheet with the whole chat as text.
+- Clear Conversation button now clears only the CURRENT chat (not everything).
