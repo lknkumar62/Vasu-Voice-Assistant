@@ -79,3 +79,10 @@ FIX-5 — chat sessions / export / long-press / streaming (2026-10-16):
 - Long-press any message → Copy / Speak / Share / Delete that single message.
 - Share icon (top bar) → Android share sheet with the whole chat as text.
 - Clear Conversation button now clears only the CURRENT chat (not everything).
+
+FIX-12 — live voice / hands-free loop (2026-10-16):
+- **Jarvis loop (most important)**: keep the app closed (or screen off) → say "Hello Vasu" → after the chime/notification, say a command ("aaj mausam kaisa hai?" / "time kya hai") → VASU must HEAR it and ANSWER out loud. Repeat 4-5 commands in one flow.
+- **No double voice**: each reply must be heard exactly ONCE (the double-speaking bug is fixed — earlier it sometimes spoke twice).
+- **Offline fallback**: turn airplane mode ON → "Hello Vasu" → "time kya hai" → reply still spoken (local voice). If nothing is heard, the notification returns to "Hello Vasu" within ~15s — try again.
+- **After 5+ back-to-back wake commands**: wake word must still work, phone must not freeze or get unusually hot.
+- If live voice still fails, open Settings → ADVANCED → "Open Diagnostics" (debug APK) → copy the internal log and send it to me.
