@@ -30,6 +30,9 @@ class VasuSettings @Inject constructor(
     private val _autoAllowEnabled = MutableStateFlow(true)
     val autoAllowEnabled: StateFlow<Boolean> = _autoAllowEnabled.asStateFlow()
 
+    private val _otpProtectionEnabled = MutableStateFlow(true)
+    val otpProtectionEnabled: StateFlow<Boolean> = _otpProtectionEnabled.asStateFlow()
+
     private val _offlineOnly = MutableStateFlow(false)
     val offlineOnly: StateFlow<Boolean> = _offlineOnly.asStateFlow()
 
@@ -56,6 +59,7 @@ class VasuSettings @Inject constructor(
         _wakeWordEnabled.value = prefs.getBoolean("wake_word_enabled", false)
         _voiceGuardEnabled.value = prefs.getBoolean("voice_guard_enabled", false)
         _autoAllowEnabled.value = prefs.getBoolean("auto_allow_enabled", true)
+        _otpProtectionEnabled.value = prefs.getBoolean("otp_protection_enabled", true)
         _offlineOnly.value = prefs.getBoolean("offline_only", false)
         _androidFallbackTtsEnabled.value = prefs.getBoolean("android_fallback_tts", false)
         _geminiTtsVoice.value = prefs.getString("gemini_tts_voice", DEFAULT_GEMINI_TTS_VOICE) ?: DEFAULT_GEMINI_TTS_VOICE
@@ -85,6 +89,11 @@ class VasuSettings @Inject constructor(
     fun setAutoAllowEnabled(enabled: Boolean) {
         _autoAllowEnabled.value = enabled
         prefs.edit().putBoolean("auto_allow_enabled", enabled).apply()
+    }
+
+    fun setOtpProtectionEnabled(enabled: Boolean) {
+        _otpProtectionEnabled.value = enabled
+        prefs.edit().putBoolean("otp_protection_enabled", enabled).apply()
     }
 
     fun setOfflineOnly(enabled: Boolean) {

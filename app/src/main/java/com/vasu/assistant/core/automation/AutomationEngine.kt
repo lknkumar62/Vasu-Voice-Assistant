@@ -38,6 +38,16 @@ class AutomationEngine @Inject constructor() {
         val results = mutableListOf<ActionResult>()
 
         for ((index, step) in steps.withIndex()) {
+            if (!_isRunning.value) {
+                _currentTask.value = null
+                return AutomationResult(
+                    success = false,
+                    stepsCompleted = index,
+                    totalSteps = steps.size,
+                    message = "Stopped by user",
+                    stepResults = results
+                )
+            }
             _currentTask.value = step.description.ifBlank { step.action }
 
             val result = executeStep(service, step, step.retryCount)

@@ -6,7 +6,9 @@ import com.vasu.assistant.core.tts.SentenceSplitter
 import com.vasu.assistant.core.command.LocalCommandRouter
 import com.vasu.assistant.core.memory.MemoryManager
 import com.vasu.assistant.core.personality.PersonalityManager
+import com.vasu.assistant.core.security.OtpGuard
 import com.vasu.assistant.core.security.RoleManager
+import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.devices.BluetoothManager
 import com.vasu.assistant.devices.DeviceControlManager
 import com.vasu.assistant.devices.TorchManager
@@ -20,6 +22,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,7 +47,8 @@ class AIOrchestrator @Inject constructor(
     private val toolRouter: ToolRouter,
     private val roleManager: RoleManager,
     private val personalityManager: PersonalityManager,
-    private val memoryManager: MemoryManager
+    private val memoryManager: MemoryManager,
+    private val settings: VasuSettings
 ) {
     companion object {
         private const val TAG = "AIOrchestrator"
@@ -149,6 +153,91 @@ class AIOrchestrator @Inject constructor(
         }
     }
 
+    /** HIGH-risk call parked for a yes/no confirmation (autonomous mode off). */
+    private data class PendingConfirmation(val toolName: String, val args: Map<String, Any>)
+
+    /** Atomic swap on read keeps concurrent turns from double-executing. */
+    private val pendingConfirmation = AtomicReference<PendingConfirmation?>(null)
+
+    /**
+     * Resolves a parked HIGH-risk confirmation against [input]: a clear no
+     * cancels it, a clear yes executes the parked tool now, and anything else
+     * drops the parked call and is treated as a new request. Returns null when
+     * the turn should continue normally.
+     */
+    private suspend fun resolvePendingConfirmation(
+        input: String,
+        detected: DetectedLanguage,
+        requestId: String
+    ): String? {
+        val pending = pendingConfirmation.getAndSet(null) ?: return null
+        return when {
+            ConfirmationGate.isNegative(input) -> {
+                Log.i(TAG, "Confirmation declined requestId=$requestId tool=${pending.toolName}")
+                scriptPick(
+                    detected,
+                    roman = "Theek hai, cancel kar diya.",
+                    deva = "ठीक है, रद्द कर दिया।",
+                    eng = "Okay, cancelled."
+                )
+            }
+            ConfirmationGate.isAffirmative(input) -> {
+                // The OTP/payment guard still applies to the confirming turn.
+                policyBlockedReply(pending.toolName, input, detected)?.let { return it }
+                Log.i(TAG, "Confirmation accepted requestId=$requestId tool=${pending.toolName}")
+                val execution = toolRouter.executeTool(pending.toolName, pending.args)
+                formatToolResult(
+                    AiResult.FunctionCall(pending.toolName, pending.args),
+                    execution,
+                    input,
+                    detected,
+                    requestId
+                )
+            }
+            else -> null
+        }
+    }
+
+    /**
+     * OTP/payment guard: refuses communication/notification tools on turns
+     * that carry credentials or payment context while the guard is enabled
+     * (Privacy settings). Applies regardless of autonomous execution.
+     */
+    private fun policyBlockedReply(
+        toolName: String,
+        input: String,
+        detected: DetectedLanguage
+    ): String? {
+        if (!settings.otpProtectionEnabled.value) return null
+        if (!OtpGuard.isGuardedTool(toolName)) return null
+        if (!OtpGuard.isSensitiveTurn(input)) return null
+        Log.w(TAG, "OTP/payment guard blocked tool=$toolName")
+        return scriptPick(
+            detected,
+            roman = "Ye baat OTP ya payment se judi lag rahi hai - safety ke liye main ye action nahi karunga. Chaaho to Privacy settings mein OTP protection band kar sakte ho.",
+            deva = "यह बात OTP या payment से जुड़ी लग रही है - सुरक्षा के लिए मैं यह काम नहीं करूँगा। चाहें तो Privacy settings में OTP protection बंद कर सकते हैं।",
+            eng = "This looks OTP/payment related - I will not do that while OTP protection is on. You can turn it off in Privacy settings."
+        )
+    }
+
+    /**
+     * Parks a HIGH-risk tool call and returns the confirmation question when
+     * autonomous execution is off; null means the call may execute.
+     */
+    private fun confirmationQuestion(
+        toolName: String,
+        args: Map<String, Any>,
+        detected: DetectedLanguage
+    ): String? {
+        val tool = toolRouter.findTool(toolName) ?: return null
+        if (!ConfirmationGate.requiresConfirmation(tool.riskLevel, settings.autoAllowEnabled.value)) {
+            return null
+        }
+        pendingConfirmation.set(PendingConfirmation(toolName, args))
+        Log.i(TAG, "Confirmation requested tool=$toolName")
+        return ConfirmationGate.questionFor(toolName, detected.style)
+    }
+
     /**
      * Process arbitrary user text/voice input, executing locally if it matches device commands,
      * or routing to Gemini AI for natural conversational responses.
@@ -171,6 +260,13 @@ class AIOrchestrator @Inject constructor(
         withContext(Dispatchers.IO) {
         val input = rawInput.trim()
         if (input.isEmpty()) return@withContext ""
+
+        val requestId = "req_${System.currentTimeMillis()}_${input.hashCode()}"
+        val detected = LanguageDetector.detect(input)
+
+        // A parked HIGH-risk confirmation resolves before everything else: a
+        // clear yes/no on this turn answers the question asked last turn.
+        resolvePendingConfirmation(input, detected, requestId)?.let { return@withContext it }
 
         // Explicit memory commands run before every local matcher: a fact like
         // "remember that my meeting time is 5" must be stored, not hijacked by
@@ -197,8 +293,6 @@ class AIOrchestrator @Inject constructor(
             }
         }
 
-        val requestId = "req_${System.currentTimeMillis()}_${input.hashCode()}"
-        val detected = LanguageDetector.detect(input)
         Log.i(TAG, "LANG requestId=$requestId style=${detected.style} script=${detected.script}")
 
         // 0. EXPLICIT LANGUAGE SWITCH + FAST CONVERSATIONAL REPLIES (script-aware)
@@ -335,8 +429,21 @@ class AIOrchestrator @Inject constructor(
             }
         }
 
-        // Explicit memory commands short-circuit before any matcher (same rule
-        // as processInput) and still emit sentence-wise for TTS.
+        // A parked HIGH-risk confirmation answers first ('haan'/'nahi'), then
+        // memory commands short-circuit (same rule as processInput); both emit
+        // sentence-wise for TTS.
+        val pendingReply = resolvePendingConfirmation(
+            input,
+            detected,
+            "req_${System.currentTimeMillis()}_${input.hashCode()}"
+        )
+        if (pendingReply != null) {
+            val splitter = SentenceSplitter()
+            splitter.feed(pendingReply).forEach(::emitSentence)
+            splitter.flush()?.let(::emitSentence)
+            return pendingReply
+        }
+
         val memoryReply = handleMemoryCommand(input)
         if (memoryReply != null) {
             val splitter = SentenceSplitter()
@@ -442,6 +549,8 @@ class AIOrchestrator @Inject constructor(
         // Log tool name and argument keys only — values may contain messages,
         // contacts, or file paths (privacy rule: nothing sensitive in logs).
         Log.i(TAG, "FunctionCall requestId=$requestId tool=${call.name} argKeys=${call.args.keys}")
+        policyBlockedReply(call.name, input, detected)?.let { return it }
+        confirmationQuestion(call.name, call.args, detected)?.let { return it }
         val execution = toolRouter.executeTool(call.name, call.args)
         return formatToolResult(call, execution, input, detected, requestId)
     }
@@ -485,6 +594,8 @@ class AIOrchestrator @Inject constructor(
                     // Log tool name and argument keys only — values may contain
                     // messages, contacts, or file paths (privacy rule).
                     Log.i(TAG, "FunctionCall requestId=$requestId tool=${result.name} argKeys=${result.args.keys}")
+                    policyBlockedReply(result.name, input, detected)?.let { return it }
+                    confirmationQuestion(result.name, result.args, detected)?.let { return it }
                     val execution = toolRouter.executeTool(result.name, result.args)
                     val decision = ToolCallLoopPlanner.decide(
                         completedRounds = completedRounds + 1,

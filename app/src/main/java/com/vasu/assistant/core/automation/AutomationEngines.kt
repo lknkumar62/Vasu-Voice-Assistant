@@ -41,6 +41,15 @@ class MissionEngine @Inject constructor(
 
     var permissionChecker: (String) -> Boolean = { false }
 
+    /** Set by the emergency stop; checked between steps. */
+    @Volatile
+    private var emergencyStop = false
+
+    /** Emergency stop: abort any in-flight mission at the next step boundary. */
+    fun cancelAll() {
+        emergencyStop = true
+    }
+
     suspend fun executeMission(
         mission: Mission,
         missionTimeoutMs: Long = DEFAULT_MISSION_TIMEOUT_MS,
@@ -55,10 +64,18 @@ class MissionEngine @Inject constructor(
             )
         }
         var stepsCompleted = 0
+        emergencyStop = false
         return try {
             withTimeoutOrNull(missionTimeoutMs) {
                 mission.steps.forEachIndexed { index, step ->
                     currentCoroutineContext().ensureActive()
+                    if (emergencyStop) {
+                        throw MissionAborted(
+                            "Mission '${mission.name}' stopped by user",
+                            "STOPPED",
+                            stepsCompleted
+                        )
+                    }
                     // Guard against run_mission -> executeTool -> executeMission recursion.
                     if (step.action == "run_mission") {
                         throw MissionAborted(

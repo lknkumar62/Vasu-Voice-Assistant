@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 import com.vasu.assistant.MainActivity
 import com.vasu.assistant.core.ai.AIOrchestrator
 import com.vasu.assistant.core.audio.AudioSessionManager
+import com.vasu.assistant.core.automation.AutomationEngine
+import com.vasu.assistant.core.automation.MissionEngine
 import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.tts.TTSManager
@@ -81,6 +83,8 @@ class VasuForegroundService : Service() {
     @Inject lateinit var ttsManager: TTSManager
     @Inject lateinit var audioSessionManager: AudioSessionManager
     @Inject lateinit var settings: VasuSettings
+    @Inject lateinit var automationEngine: AutomationEngine
+    @Inject lateinit var missionEngine: MissionEngine
 
     private val channelId = "vasu_service"
     private val notificationId = 1001
@@ -450,6 +454,9 @@ class VasuForegroundService : Service() {
         sttManager.stopListening()
         ttsManager.stop()
         audioSessionManager.forceReleaseMic("service_shutdown")
+        // Emergency stop: automation and missions stop too.
+        automationEngine.stop()
+        missionEngine.cancelAll()
         releaseWakeLock()
 
         stopForeground(STOP_FOREGROUND_REMOVE)
