@@ -130,7 +130,17 @@ class GeminiLiveVoiceService @Inject constructor(
         }
 
         _voiceState.value = GeminiVoiceState.CONNECTING
-        val ready = liveSession.connectAndWaitReady(apiKey, getSystemInstruction())
+        var ready = liveSession.connectAndWaitReady(apiKey, getSystemInstruction())
+        if (!ready) {
+            // The primary Live model may not be enabled for this API key (or was
+            // retired) - try the native-audio fallback once before giving up.
+            Log.w(TAG, "Primary Live model failed; retrying with ${GeminiLiveProtocol.LIVE_MODEL_FALLBACK}")
+            ready = liveSession.connectAndWaitReady(
+                apiKey,
+                getSystemInstruction(),
+                model = GeminiLiveProtocol.LIVE_MODEL_FALLBACK
+            )
+        }
         if (ready) {
             _voiceState.value = GeminiVoiceState.CONNECTED
         } else {

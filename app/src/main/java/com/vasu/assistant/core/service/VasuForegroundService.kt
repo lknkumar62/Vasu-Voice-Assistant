@@ -24,6 +24,7 @@ import com.vasu.assistant.core.automation.AutomationEngine
 import com.vasu.assistant.core.automation.MissionEngine
 import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.stt.STTManager
+import com.vasu.assistant.core.tts.SpeechQueue
 import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.voice.GeminiLiveVoiceService
 import com.vasu.assistant.core.voice.GeminiVoiceState
@@ -33,6 +34,7 @@ import com.vasu.assistant.core.wakeword.WakeWordState
 import com.vasu.assistant.devices.DeviceControlManager
 import com.vasu.assistant.ui.overlay.AssistantOverlayActivity
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -42,7 +44,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -81,6 +87,7 @@ class VasuForegroundService : Service() {
     @Inject lateinit var deviceControlManager: DeviceControlManager
     @Inject lateinit var sttManager: STTManager
     @Inject lateinit var ttsManager: TTSManager
+    @Inject lateinit var speechQueue: SpeechQueue
     @Inject lateinit var audioSessionManager: AudioSessionManager
     @Inject lateinit var settings: VasuSettings
     @Inject lateinit var automationEngine: AutomationEngine
@@ -92,6 +99,14 @@ class VasuForegroundService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var observerJob: Job? = null
+    private var sttCommandJob: Job? = null
+
+    /**
+     * True between a wake detection and the live session proving it is up.
+     * A live failure then reroutes the wake to the STT command loop instead
+     * of silently dropping the command (FIX-12).
+     */
+    @Volatile private var pendingWakeCommand = false
 
     companion object {
         private const val TAG = "VasuForegroundService"
@@ -267,16 +282,22 @@ class VasuForegroundService : Service() {
                 geminiLiveVoiceService.voiceState.collect { liveState ->
                     when (liveState) {
                         GeminiVoiceState.SPEAKING -> {
+                            pendingWakeCommand = false
                             _serviceState.value = VasuServiceState.SPEAKING
                             wakeWordListener.setMutedForPlayback(true)
                             notifyNotification("VASU Speaking...")
                         }
                         GeminiVoiceState.LISTENING -> {
+                            pendingWakeCommand = false
                             _serviceState.value = VasuServiceState.ACTIVE
                             wakeWordListener.pauseForSpeechRecognition()
                             notifyNotification("Listening to you...")
                         }
                         GeminiVoiceState.CONNECTED, GeminiVoiceState.IDLE -> {
+                            // Keep the wake command pending while a session is merely
+                            // CONNECTED: if mic streaming then fails, the ERROR branch
+                            // must still reroute it to STT (review finding 4).
+                            if (_serviceState.value != VasuServiceState.ACTIVE) pendingWakeCommand = false
                             if (_serviceState.value == VasuServiceState.SPEAKING ||
                                 _serviceState.value == VasuServiceState.ACTIVE
                             ) {
@@ -288,8 +309,20 @@ class VasuForegroundService : Service() {
                             }
                         }
                         GeminiVoiceState.ERROR -> {
-                            wakeWordListener.resumeAfterSpeechRecognition()
-                            _serviceState.value = VasuServiceState.LISTENING
+                            if (pendingWakeCommand && sttCommandJob?.isActive != true) {
+                                // Live could not serve this wake - capture the command
+                                // with STT instead of silently dropping it (FIX-12).
+                                pendingWakeCommand = false
+                                Log.w(TAG, "Gemini Live failed after wake - falling back to STT command capture")
+                                startSttCommandCapture()
+                            } else if (sttCommandJob?.isActive != true) {
+                                // Only re-arm the wake word when no command capture is
+                                // running - otherwise this ERROR (e.g. from the Live
+                                // service's synchronous no-key path) would re-arm the
+                                // mic mid-capture (review finding 2).
+                                wakeWordListener.resumeAfterSpeechRecognition()
+                                _serviceState.value = VasuServiceState.LISTENING
+                            }
                         }
                         else -> Unit
                     }
@@ -344,11 +377,89 @@ class VasuForegroundService : Service() {
         wakeWordListener.pauseForSpeechRecognition()
 
         // Try Gemini Live first — it manages its own mic via NativeMicrophoneRecorder
-        val liveStarted = geminiLiveVoiceService.startMicrophoneConversation()
-        if (!liveStarted) {
-            // Fallback: use STTManager which requests mic from AudioSessionManager
-            sttManager.startListening()
+        val liveRequested = geminiLiveVoiceService.startMicrophoneConversation()
+        if (liveRequested) {
+            // A live handshake failure surfaces as GeminiVoiceState.ERROR; the
+            // state observer then reroutes this wake to the STT command loop,
+            // so the command is never silently dropped (FIX-12).
+            pendingWakeCommand = true
+        } else {
+            // No key / mic busy: capture the command with STT + AIOrchestrator (FIX-12).
+            startSttCommandCapture()
         }
+    }
+
+    /**
+     * Background command loop used when Gemini Live is unavailable:
+     * listen once with STT, run the AI orchestrator, speak the reply via TTS.
+     * The ttsManager observer in startStateObservers() returns the service to
+     * the wake-word LISTENING state once playback finishes.
+     */
+    private fun startSttCommandCapture() {
+        pendingWakeCommand = false
+        sttCommandJob?.cancel()
+        notifyNotification("Listening to you...")
+
+        sttCommandJob = scope.launch {
+            // scope runs on Dispatchers.Main.immediate, so this body executes up to
+            // its first suspension (the flow subscription) before startListening()
+            // below is reached - no result can be missed.
+            val outcome: String? = withTimeoutOrNull(12_000) {
+                merge(
+                    sttManager.results.map { result -> result.text },
+                    sttManager.errors.map { null as String? }
+                ).first()
+            }
+
+            sttManager.stopListening()
+
+            val commandText = outcome?.trim().orEmpty()
+            if (commandText.isEmpty()) {
+                notifyNotification("Heard nothing - Listening for \"Hello Vasu\"")
+                wakeWordListener.resumeAfterSpeechRecognition()
+                _serviceState.value = VasuServiceState.LISTENING
+                return@launch
+            }
+
+            _serviceState.value = VasuServiceState.SPEAKING
+            notifyNotification("VASU is answering...")
+            var spokeAny = false
+            try {
+                // Pre-warm TTS engines for the background path (ChatViewModel
+                // normally does this; no UI opened on a hands-free turn).
+                ttsManager.initialize()
+                aiOrchestrator.processInputStreaming(commandText, emptyList()) { sentence ->
+                    spokeAny = true
+                    ttsManager.speakQueued(sentence)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Background command failed", e)
+                wakeWordListener.resumeAfterSpeechRecognition()
+                _serviceState.value = VasuServiceState.LISTENING
+                return@launch
+            }
+
+            // Wait for the speech queue to drain (bounded) so wake-word listening
+            // resumes only after the reply finished. Two consecutive idle polls are
+            // required: the between-sentences window (processing=false right before
+            // the next dequeue) could otherwise be caught as "finished" and the
+            // wake word would re-arm mid-reply (review finding 3). Nothing spoken
+            // (spokeAny == false) -> loop skipped entirely.
+            var idlePolls = 0
+            val drainDeadline = System.currentTimeMillis() + 60_000
+            while (spokeAny && idlePolls < 2 && System.currentTimeMillis() < drainDeadline) {
+                val busy = speechQueue.isProcessing.value || speechQueue.queueSize.value > 0
+                idlePolls = if (busy) 0 else idlePolls + 1
+                if (idlePolls < 2) delay(300)
+            }
+
+            notifyNotification("Listening for \"Hello Vasu\"")
+            wakeWordListener.resumeAfterSpeechRecognition()
+            _serviceState.value = VasuServiceState.LISTENING
+        }
+        sttManager.startListening()
     }
 
     /**
@@ -448,6 +559,7 @@ class VasuForegroundService : Service() {
     private fun shutdownService() {
         _serviceState.value = VasuServiceState.STOPPING
         observerJob?.cancel()
+        sttCommandJob?.cancel()
         wakeWordListener.stop()
         geminiLiveVoiceService.stopMicrophoneConversation()
         geminiLiveVoiceService.stopSpeaking()

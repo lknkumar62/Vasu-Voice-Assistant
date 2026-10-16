@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -79,9 +80,41 @@ class VoiceRouter @Inject constructor(
             Log.i(TAG, "TTS_COMPLETED source=${_currentSource.value}")
             onDone?.invoke()
         }
+        // The terminal error is delivered at most once per speak() call: when a
+        // fallback is disabled, an engine that both calls onError and returns
+        // false used to invoke the caller's onError twice (review finding 5).
+        val errorReported = AtomicBoolean(false)
         val wrappedOnError: (String) -> Unit = { error ->
-            muteWakeWord(false)
-            onError?.invoke(error)
+            if (errorReported.compareAndSet(false, true)) {
+                muteWakeWord(false)
+                onError?.invoke(error)
+            } else {
+                Log.d(TAG, "Error already reported for this turn - skipping duplicate")
+            }
+        }
+
+        // Engines can report failure BOTH via the onError callback and via a
+        // false return value. These guards make each fallback hop run at most
+        // once per speak() call; previously both signals each started the same
+        // fallback engine and the reply was spoken twice (FIX-12).
+        val localAttempted = AtomicBoolean(false)
+        val androidAttempted = AtomicBoolean(false)
+
+        val tryAndroidFallback: (String) -> Unit = { reason ->
+            if (androidAttempted.compareAndSet(false, true)) {
+                Log.d(TAG, "Trying Android fallback ($reason)")
+                fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+            } else {
+                Log.d(TAG, "Android fallback already started - skipping duplicate ($reason)")
+            }
+        }
+        val tryLocalFallback: (String) -> Unit = { reason ->
+            if (localAttempted.compareAndSet(false, true)) {
+                Log.w(TAG, "Falling back to LocalTtsEngine ($reason)")
+                fallbackToLocal(text, onStart, wrappedOnDone, wrappedOnError, tryAndroidFallback)
+            } else {
+                Log.d(TAG, "Local fallback already started - skipping duplicate ($reason)")
+            }
         }
 
         // Fast-path connectivity check
@@ -100,13 +133,17 @@ class VoiceRouter @Inject constructor(
                 onError = { geminiError ->
                     Log.w(TAG, "TTS_ERROR provider=gemini category=$geminiError — falling back to LocalTtsEngine")
                     // Transparent fallback: not silent, logged and source changes to LOCAL
-                    fallbackToLocal(text, onStart, wrappedOnDone, wrappedOnError)
+                    tryLocalFallback(geminiError)
                 }
             )
 
             if (geminiSuccess) return true
-            // If speak() returned false without invoking onError callback (e.g. immediate false),
-            // fallback explicitly here too
+            // Gemini reported failure via its return value; hop to local unless
+            // the onError callback already started that exact hop.
+            if (localAttempted.getAndSet(true)) {
+                Log.d(TAG, "Gemini failed but local fallback is already in progress")
+                return true
+            }
             Log.w(TAG, "GeminiTtsEngine returned false, falling back to local Vasu voice")
             _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
             val localFallbackSuccess = localTtsEngine.speak(
@@ -116,7 +153,7 @@ class VoiceRouter @Inject constructor(
                 onError = { localErr ->
                     Log.w(TAG, "Local Vasu voice also failed: $localErr")
                     if (settings.androidFallbackTtsEnabled.value) {
-                        fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                        tryAndroidFallback(localErr)
                     } else {
                         _currentSource.value = ActiveVoiceSource.MUTED
                         wrappedOnError("Vasu voice unavailable: $localErr")
@@ -125,7 +162,8 @@ class VoiceRouter @Inject constructor(
             )
             if (localFallbackSuccess) return true
             if (settings.androidFallbackTtsEnabled.value) {
-                return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                tryAndroidFallback("local returned false")
+                return true
             }
             _currentSource.value = ActiveVoiceSource.MUTED
             wrappedOnError("No Vasu voice available and local fallback disabled")
@@ -142,7 +180,7 @@ class VoiceRouter @Inject constructor(
             onError = { localError ->
                 Log.w(TAG, "LocalTtsEngine failed: $localError")
                 if (settings.androidFallbackTtsEnabled.value) {
-                    fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+                    tryAndroidFallback(localError)
                 } else {
                     _currentSource.value = ActiveVoiceSource.MUTED
                     wrappedOnError(localError)
@@ -155,7 +193,8 @@ class VoiceRouter @Inject constructor(
         // 3. Android system fallback — ONLY if explicitly enabled (user wants no local voice, so disabled by default)
         if (settings.androidFallbackTtsEnabled.value) {
             Log.d(TAG, "Local Vasu voice failed, trying Android fallback (enabled)")
-            return fallbackToAndroidSystem(text, onStart, wrappedOnDone, wrappedOnError)
+            tryAndroidFallback("local returned false")
+            return true
         }
         _currentSource.value = ActiveVoiceSource.MUTED
         wrappedOnError("No Vasu voice available and Android fallback disabled (as requested)")
@@ -166,7 +205,8 @@ class VoiceRouter @Inject constructor(
         text: String,
         onStart: (() -> Unit)?,
         onDone: (() -> Unit)?,
-        onError: ((String) -> Unit)?
+        onError: ((String) -> Unit)?,
+        tryAndroidFallback: (String) -> Unit
     ) {
         CoroutineScope(Dispatchers.Main).launch {
             _currentSource.value = ActiveVoiceSource.LOCAL_OFFLINE
@@ -177,7 +217,7 @@ class VoiceRouter @Inject constructor(
                 onError = { localErr ->
                     Log.w(TAG, "LocalTtsEngine fallback failed: $localErr")
                     if (settings.androidFallbackTtsEnabled.value) {
-                        fallbackToAndroidSystem(text, onStart, onDone, onError)
+                        tryAndroidFallback(localErr)
                     } else {
                         _currentSource.value = ActiveVoiceSource.MUTED
                         onError?.invoke(localErr)
@@ -185,7 +225,7 @@ class VoiceRouter @Inject constructor(
                 }
             )
             if (!success && settings.androidFallbackTtsEnabled.value) {
-                fallbackToAndroidSystem(text, onStart, onDone, onError)
+                tryAndroidFallback("fallback local returned false")
             }
         }
     }

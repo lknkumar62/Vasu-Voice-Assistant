@@ -11,7 +11,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,9 +30,8 @@ class GeminiLiveSession @Inject constructor() {
 
     companion object {
         private const val TAG = "GeminiLiveSession"
-        private const val WS_HOST = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
-        const val TARGET_VOICE = "Kore"
-        const val LIVE_MODEL = "models/gemini-2.0-flash-exp"
+        const val TARGET_VOICE = GeminiLiveProtocol.TARGET_VOICE
+        const val LIVE_MODEL = GeminiLiveProtocol.LIVE_MODEL
     }
 
     private var onAudioReceived: ((ByteArray) -> Unit)? = null
@@ -66,9 +64,21 @@ class GeminiLiveSession @Inject constructor() {
     fun isReady(): Boolean = isConnected.get() && isReadyState.get()
 
     /**
+     * Guards every listener callback: late callbacks from a socket that was
+     * superseded (model retry) or torn down must not touch shared state.
+     * Without this, a previous attempt's onClosed/onFailure completed the NEW
+     * attempt's deferred and clobbered isConnected (review finding 1).
+     */
+    private fun isStaleSocket(ws: WebSocket): Boolean = ws !== webSocket
+
+    /**
      * Connect to Gemini Live WebSocket and suspend until setup handshake completes.
      */
-    suspend fun connectAndWaitReady(apiKey: String, systemInstruction: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connectAndWaitReady(
+        apiKey: String,
+        systemInstruction: String,
+        model: String = GeminiLiveProtocol.LIVE_MODEL
+    ): Boolean = withContext(Dispatchers.IO) {
         disconnect()
 
         val deferred = CompletableDeferred<Boolean>()
@@ -82,22 +92,38 @@ class GeminiLiveSession @Inject constructor() {
                 .build()
             okHttpClient = client
 
-            val url = "$WS_HOST?key=${apiKey.trim()}"
+            val url = "${GeminiLiveProtocol.WS_ENDPOINT}?key=${apiKey.trim()}"
             val request = Request.Builder().url(url).build()
 
             webSocket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
+                    if (isStaleSocket(ws)) return
                     Log.d(TAG, "Gemini Live WebSocket opened; sending setup payload")
                     isConnected.set(true)
-                    val setupMessage = buildSetupMessage(systemInstruction)
+                    val setupMessage = GeminiLiveProtocol.setupMessage(
+                        model = model,
+                        voiceName = GeminiLiveProtocol.TARGET_VOICE,
+                        systemInstruction = systemInstruction
+                    )
                     ws.send(setupMessage)
                 }
 
                 override fun onMessage(ws: WebSocket, text: String) {
+                    if (isStaleSocket(ws)) return
                     handleIncomingServerMessage(text)
                 }
 
+                override fun onMessage(ws: WebSocket, bytes: okio.ByteString) {
+                    if (isStaleSocket(ws)) return
+                    // Gemini Live delivers server messages (including setupComplete)
+                    // as BINARY WebSocket frames. Without this override every message
+                    // was silently dropped and the setup handshake never completed
+                    // (FIX-12 root cause).
+                    handleIncomingServerMessage(bytes.utf8())
+                }
+
                 override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                    if (isStaleSocket(ws)) return
                     Log.d(TAG, "Gemini Live closing: $code / $reason")
                     isConnected.set(false)
                     isReadyState.set(false)
@@ -105,6 +131,7 @@ class GeminiLiveSession @Inject constructor() {
                 }
 
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    if (isStaleSocket(ws)) return
                     Log.d(TAG, "Gemini Live closed: $code / $reason")
                     isConnected.set(false)
                     isReadyState.set(false)
@@ -112,6 +139,7 @@ class GeminiLiveSession @Inject constructor() {
                 }
 
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    if (isStaleSocket(ws)) return
                     val err = t.message ?: "WebSocket failure"
                     Log.e(TAG, "Gemini Live failure: $err", t)
                     isConnected.set(false)
@@ -127,6 +155,9 @@ class GeminiLiveSession @Inject constructor() {
 
             if (!ready) {
                 Log.w(TAG, "Timed out waiting for Gemini Live setup confirmation")
+                // Close this attempt's socket so a late close-ack cannot interfere
+                // with the next attempt (model retry - review finding 1).
+                disconnect()
             }
             return@withContext ready
         } catch (e: Exception) {
@@ -135,40 +166,6 @@ class GeminiLiveSession @Inject constructor() {
             onError?.invoke(e.message ?: "Failed to connect to Gemini Live")
             return@withContext false
         }
-    }
-
-    private fun buildSetupMessage(systemInstruction: String): String {
-        val root = JSONObject()
-        val setup = JSONObject()
-        setup.put("model", LIVE_MODEL)
-
-        val generationConfig = JSONObject()
-        val responseModalities = JSONArray()
-        responseModalities.put("AUDIO")
-        generationConfig.put("responseModalities", responseModalities)
-
-        val speechConfig = JSONObject()
-        val voiceConfig = JSONObject()
-        val prebuiltVoiceConfig = JSONObject()
-        prebuiltVoiceConfig.put("voiceName", TARGET_VOICE) // "Kore"
-        voiceConfig.put("prebuiltVoiceConfig", prebuiltVoiceConfig)
-        speechConfig.put("voiceConfig", voiceConfig)
-        generationConfig.put("speechConfig", speechConfig)
-
-        setup.put("generationConfig", generationConfig)
-
-        if (systemInstruction.isNotBlank()) {
-            val systemInstructionObj = JSONObject()
-            val parts = JSONArray()
-            val part = JSONObject()
-            part.put("text", systemInstruction)
-            parts.put(part)
-            systemInstructionObj.put("parts", parts)
-            setup.put("systemInstruction", systemInstructionObj)
-        }
-
-        root.put("setup", setup)
-        return root.toString()
     }
 
     private fun handleIncomingServerMessage(jsonText: String) {
@@ -237,22 +234,7 @@ class GeminiLiveSession @Inject constructor() {
             return false
         }
         return try {
-            val root = JSONObject()
-            val clientContent = JSONObject()
-            val turns = JSONArray()
-            val turn = JSONObject()
-            turn.put("role", "user")
-            val parts = JSONArray()
-            val part = JSONObject()
-            part.put("text", promptText)
-            parts.put(part)
-            turn.put("parts", parts)
-            turns.put(turn)
-            clientContent.put("turns", turns)
-            clientContent.put("turnComplete", true)
-            root.put("clientContent", clientContent)
-
-            webSocket?.send(root.toString()) ?: false
+            webSocket?.send(GeminiLiveProtocol.textTurnMessage(promptText)) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Error sending text turn to Gemini Live", e)
             false
@@ -265,17 +247,7 @@ class GeminiLiveSession @Inject constructor() {
     fun sendAudioChunk(pcmChunk: ByteArray): Boolean {
         if (!isReady() || pcmChunk.isEmpty()) return false
         return try {
-            val root = JSONObject()
-            val realtimeInput = JSONObject()
-            val mediaChunks = JSONArray()
-            val chunk = JSONObject()
-            chunk.put("mimeType", "audio/pcm;rate=16000")
-            chunk.put("data", Base64.encodeToString(pcmChunk, Base64.NO_WRAP))
-            mediaChunks.put(chunk)
-            realtimeInput.put("mediaChunks", mediaChunks)
-            root.put("realtimeInput", realtimeInput)
-
-            webSocket?.send(root.toString()) ?: false
+            webSocket?.send(GeminiLiveProtocol.audioChunkMessage(pcmChunk)) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Error sending realtime audio chunk", e)
             false
