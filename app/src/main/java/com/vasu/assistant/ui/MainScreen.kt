@@ -160,7 +160,10 @@ fun MainScreen() {
                     )
                 }
                 composable(Screen.Settings.route) {
-                    SettingsScreen(onNavigateBack = { navController.popBackStack() })
+                    SettingsScreen(
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToDiagnostics = { navigateTop(Screen.Diagnostics.route) }
+                    )
                 }
                 composable(Screen.Guardian.route) {
                     GuardianScreen(onNavigateBack = { navController.popBackStack() })

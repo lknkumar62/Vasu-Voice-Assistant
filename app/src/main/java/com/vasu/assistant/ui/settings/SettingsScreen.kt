@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -42,6 +43,7 @@ import java.util.Date
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
+    onNavigateToDiagnostics: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -470,6 +472,25 @@ fun SettingsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = VasuCrimson, contentColor = VasuDarkBg),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Save Connector Config", fontWeight = FontWeight.Bold) }
+                }
+
+                // Debug builds only: on-device error-log viewer so crashes can
+                // be copied off the phone; invisible in release builds.
+                val context = LocalContext.current
+                val isDebuggable =
+                    (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                if (isDebuggable) {
+                    SettingsCard {
+                        Text("Diagnostics", color = VasuTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Internal error log (debug builds only).", color = VasuTextMuted, fontSize = 12.sp)
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = onNavigateToDiagnostics,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = VasuCrimson)
+                        ) { Text("Open Diagnostics", fontWeight = FontWeight.Bold) }
+                    }
                 }
             }
 

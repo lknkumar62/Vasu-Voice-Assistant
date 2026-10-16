@@ -219,6 +219,16 @@ Confirmed clean: no hardcoded secrets in main/; ToolRouter has 0 unimplemented a
 - FIX-17: fake-success sweep (also noted on line 149).
 - FIX-18: automation honesty (macro persistence, in-memory missions, create_mission).
 - FIX-19: Guardian honesty (real verification or relabel; keep off-by-default behavior documented).
+- FIX-20: UI wiring (tools dispatch + orphaned location/browser routes; chat affordances — attach/volume buttons; ChatInitGuard cleanup).
 
-### UI/navigation — pending
-Report not in yet at the time of writing; chat-open crash hypotheses will be appended here when reported.
+### UI / navigation (reported)
+| Sev | Finding | Ref |
+|---|---|---|
+| MAJOR | `onToolSelect` is declared but never invoked by ToolsScreen → the whole dispatch block is dead and `Screen.Location` / `Screen.Browser` / `Screen.Diagnostics` had no entry point (ToolsViewModel has no matching nav ids either) | `ui/MainScreen.kt:180-196`, `ui/tools/ToolsScreen.kt:40` |
+| MINOR | `ChatMessage.id` = `System.currentTimeMillis()` and it is the LazyColumn key → two messages in the same millisecond = duplicate key → `IllegalArgumentException` (crash right after sending, e.g. a fast local reply). **Fixed 2026-10-16** (unique id with an atomic sequence). | `ui/chat/ChatViewModel.kt:18`, `ui/chat/ChatScreen.kt:305` |
+| MINOR | `ChatInitGuard` dead (ChatViewModel guards inline); Attach + idle volume buttons are Toast-only; `ChatScreen` try/catch around async `clearChat()` can never fire; `VoiceScreen.kt:103` `!!` (safe behind a null check); `Theme.kt:43` Activity cast | ui/chat, ui/voice, ui/theme |
+| FIXED | Privacy OTP toggle persists (FIX-4); all 5 other Switch sites verified persisting; no empty onClick handlers in ui/; all 14 routes have NavHost composables and no route args → no null-arg crash class | — |
+
+Chat-open crash hypotheses (ranked, audit): (1) stale installed APK predating `3b0ba5d` — `ChatViewModel.init` used to call `ttsManager.initialize()` unguarded, so any TTS-engine exception killed the app the moment Chat was tapped; the current tree try/catches init and `TTSManager` never throws — rebuild + reinstall and retest. (2) the duplicate-key crash above (fixed 2026-10-16). (3) GlassCard intrinsic measurement — largely exonerated (no SubcomposeLayout descendants; no deterministic first-frame crash).
+
+Reachability: 11 of 14 routes were reachable (bottom bar + Home actions); orphaned = location, browser, diagnostics. Diagnostics got a debug-only entry point (Settings → ADVANCED → Open Diagnostics) on 2026-10-16 so on-device crash logs can be copied.

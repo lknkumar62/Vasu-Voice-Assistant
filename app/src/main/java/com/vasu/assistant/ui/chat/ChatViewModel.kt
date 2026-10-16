@@ -12,10 +12,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
+private val chatMessageIdSeq = AtomicLong()
+
 data class ChatMessage(
-    val id: String = System.currentTimeMillis().toString(),
+    val id: String = "${System.currentTimeMillis()}-${chatMessageIdSeq.incrementAndGet()}",
     val content: String,
     val isUser: Boolean,
     val timestamp: Long = System.currentTimeMillis(),
