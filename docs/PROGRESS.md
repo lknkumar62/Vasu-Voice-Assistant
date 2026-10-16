@@ -64,7 +64,7 @@
 ## Known Issues
 - User's phone: app crash on opening Chat (v4.18.6 installed) — awaiting hidden error-log paste from diag build (artifact of CI run `85c9132`).
 - Package: keeping `com.vasu.assistant` for now (preserves installed app data + keys). Any rename needs explicit user approval.
-- Spec-vs-repo gap audit DONE (`docs/GAP_AUDIT.md`); fix queue executing — FIX-1 (wake word) done, FIX-2 (boot/FGS safety) next.
+- Spec-vs-repo gap audit DONE (`docs/GAP_AUDIT.md`); fix queue executing — FIX-1 (wake word), FIX-2 (boot/FGS safety), FIX-3 (streaming prompt/tools/memory) done; FIX-4 (HIGH-risk confirmation + OTP/payment guard + emergency stop) next.
 
 ## Decisions Log
 - 2026-10-16 Package: namespace/applicationId stay `com.vasu.assistant` (reverted an accidental flip). Why: installed-app data, chat history and stored keys survive; 150+ existing files keep compiling; user rule = no package rename without approval.
@@ -72,3 +72,5 @@
 - 2026-10-16 Persistence split: Chat/Memory → Room; settings toggle → DataStore; keys → EncryptedSharedPreferences.
 - 2026-10-16 FIX-1 wake word: `ROLLING_WINDOW_SAMPLES` derived from `WakeWordModel.INPUT_SIZE` (25,344 = 98 frames; old 25,088 gave 97 → gate never passed). Detection now sets state IDLE + `shouldBeListening`, and `resumeAfterSpeechRecognition()` re-arms capture — detector survives beyond the first wake. Interpreter closed before reload. Regression test added.
 - 2026-10-16 Error handling: reuse existing hidden `com.vasu.assistant.core.logging.ErrorLog` (capped 256 KB, app-private, no UI reads it) instead of a duplicate logger.
+- 2026-10-16 FIX-2 boot/FGS: pre-Android-11 boots start the mic service directly; 11+ gets a "tap to resume" notification (boot mic-FGS disallowed; 14+ throws). Unknown service actions never start the mic pipeline; failed foreground starts degrade to DATA_SYNC, and `stopSelf()` is the last resort instead of a RemoteServiceException.
+- 2026-10-16 FIX-3 streaming: tool-relevant turns (keyword filter on the current input only) route to the non-streaming tool loop for real execution; the streaming prompt excludes the tool section entirely; explicit remember/forget commands short-circuit before every local matcher; auto-learning from generic turns stays off (UserMemory name heuristics too loose). Residual trade-off: broad keywords ("time") route casual chat into the slower tool path; the tool-restraint prompt line prevents unwanted calls.
