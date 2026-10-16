@@ -429,16 +429,17 @@ class WakeWordDetector @Inject constructor(
                 if (!shouldBeListening.get() || _state.value == WakeWordState.LISTENING) {
                     return@launch
                 }
-                // Non-mic failures would only churn state (permission denied,
-                // model unreadable), so stop polling for them.
+                // Stop polling for failures that cannot self-heal: permission
+                // denied, or the model asset missing. LOAD_FAILED keeps
+                // retrying because load() self-heals when the asset exists.
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
                     != PackageManager.PERMISSION_GRANTED
                 ) {
                     Log.d(TAG, "Re-arm skipped: RECORD_AUDIO not granted")
                     return@launch
                 }
-                if (wakeWordModel.status != ModelStatus.READY) {
-                    Log.d(TAG, "Re-arm skipped: wake word model not ready")
+                if (wakeWordModel.status == ModelStatus.ASSET_MISSING) {
+                    Log.d(TAG, "Re-arm skipped: wake word model asset missing")
                     return@launch
                 }
                 if (startInternal(assertIntent = false, requireMicFree = true)) {

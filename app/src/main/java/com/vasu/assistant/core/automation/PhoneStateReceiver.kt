@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.telephony.TelephonyManager
 import android.util.Log
+import com.vasu.assistant.core.service.VasuForegroundService
+import com.vasu.assistant.core.service.VasuServiceState
 
 class PhoneStateReceiver : BroadcastReceiver() {
 
@@ -46,10 +48,12 @@ class PhoneStateReceiver : BroadcastReceiver() {
     }
 
     private fun sendToForegroundService(context: Context, callState: String, number: String?) {
+        // Nothing to pause when the service is not running.
+        if (VasuForegroundService.serviceState.value == VasuServiceState.OFF) return
         try {
-            val intent = Intent(context, com.vasu.assistant.core.service.VasuForegroundService::class.java).apply {
-                action = "INCOMING_CALL"
-                putExtra("call_state", callState)
+            val intent = Intent(context, VasuForegroundService::class.java).apply {
+                action = VasuForegroundService.ACTION_INCOMING_CALL
+                putExtra(VasuForegroundService.EXTRA_CALL_STATE, callState)
                 putExtra("call_number", number)
             }
             context.startForegroundService(intent)

@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import com.vasu.assistant.MainActivity
 import com.vasu.assistant.core.ai.AIOrchestrator
 import com.vasu.assistant.core.audio.AudioSessionManager
+import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.stt.STTManager
 import com.vasu.assistant.core.tts.TTSManager
 import com.vasu.assistant.core.voice.GeminiLiveVoiceService
@@ -79,6 +80,7 @@ class VasuForegroundService : Service() {
     @Inject lateinit var sttManager: STTManager
     @Inject lateinit var ttsManager: TTSManager
     @Inject lateinit var audioSessionManager: AudioSessionManager
+    @Inject lateinit var settings: VasuSettings
 
     private val channelId = "vasu_service"
     private val notificationId = 1001
@@ -94,7 +96,10 @@ class VasuForegroundService : Service() {
         const val ACTION_STOP = "com.vasu.assistant.STOP"
         const val ACTION_UPDATE = "com.vasu.assistant.UPDATE"
         const val ACTION_START_VOICE = "com.vasu.assistant.START_VOICE"
+        const val ACTION_INCOMING_CALL = "INCOMING_CALL"
         const val EXTRA_STATUS = "status"
+        const val EXTRA_CALL_STATE = "call_state"
+        const val EXTRA_RESUME_WAKE_WORD = "vasu_resume_wake_word"
 
         private val _serviceState = MutableStateFlow(VasuServiceState.OFF)
         val serviceState: StateFlow<VasuServiceState> = _serviceState.asStateFlow()
@@ -109,7 +114,12 @@ class VasuForegroundService : Service() {
         }
 
         fun stop(context: Context) {
-            context.startService(Intent(context, VasuForegroundService::class.java).apply { action = ACTION_STOP })
+            try {
+                context.startService(Intent(context, VasuForegroundService::class.java).apply { action = ACTION_STOP })
+            } catch (e: IllegalStateException) {
+                // Service not running and we are in the background: nothing to stop.
+                Log.w(TAG, "stop() ignored (background start blocked): ${e.message}")
+            }
         }
 
         fun startVoiceInteraction(context: Context) {
@@ -122,10 +132,15 @@ class VasuForegroundService : Service() {
         }
 
         fun updateStatus(context: Context, status: String) {
-            context.startService(Intent(context, VasuForegroundService::class.java).apply {
-                action = ACTION_UPDATE
-                putExtra(EXTRA_STATUS, status)
-            })
+            try {
+                context.startService(Intent(context, VasuForegroundService::class.java).apply {
+                    action = ACTION_UPDATE
+                    putExtra(EXTRA_STATUS, status)
+                })
+            } catch (e: IllegalStateException) {
+                // Service not running and we are in the background: nothing to update.
+                Log.w(TAG, "updateStatus() ignored (background start blocked): ${e.message}")
+            }
         }
     }
 
@@ -176,8 +191,19 @@ class VasuForegroundService : Service() {
             ACTION_START_VOICE -> {
                 triggerActiveVoiceSession()
             }
+            ACTION_INCOMING_CALL -> {
+                handleIncomingCall(intent)
+            }
+            // Null intent = system restarted the service (START_STICKY): resume listening.
+            null, ACTION_START -> beginWakeWordPipeline()
             else -> {
-                beginWakeWordPipeline()
+                // Unknown/external actions must not silently start a microphone
+                // pipeline. Satisfy the startForegroundService contract without
+                // touching the live notification of an already-running service.
+                Log.w(TAG, "Unhandled service action: ${intent?.action}")
+                if (_serviceState.value == VasuServiceState.OFF) {
+                    goForeground("VASU idle", withMic = false)
+                }
             }
         }
         return START_STICKY
@@ -192,7 +218,13 @@ class VasuForegroundService : Service() {
             return
         }
 
-        goForeground("VASU active - Listening for \"Hello Vasu\"", withMic = true)
+        if (!goForeground("VASU active - Listening for \"Hello Vasu\"", withMic = true)) {
+            // Mic foreground service disallowed from here (background start on
+            // Android 11+, mic FGS prerequisites on Android 14+). The notification
+            // now asks the user to tap and resume from the foreground.
+            _serviceState.value = VasuServiceState.ERROR
+            return
+        }
         wakeWordListener.initialize()
 
         when (wakeWordListener.state.value) {
@@ -201,7 +233,14 @@ class VasuForegroundService : Service() {
                 notifyNotification(wakeWordListener.unavailableReason.value ?: "Wake word unavailable")
             }
             else -> {
-                wakeWordListener.start()
+                if (!wakeWordListener.start()) {
+                    // AudioRecord could not start (mic busy, or a background
+                    // start on Android 11+ where capture is not allowed).
+                    Log.w(TAG, "Wake word listener failed to start")
+                    _serviceState.value = VasuServiceState.ERROR
+                    goForeground("Tap to resume listening", withMic = false, resumeOnTap = true)
+                    return
+                }
                 _serviceState.value = VasuServiceState.LISTENING
                 startStateObservers()
             }
@@ -308,18 +347,93 @@ class VasuForegroundService : Service() {
         }
     }
 
+    /**
+     * Phone call state changes (PhoneStateReceiver). A call owns the mic, so
+     * never (re)start the wake-word pipeline from here - the service is in the
+     * background during a call, where a microphone foreground service is not
+     * allowed (Android 11+ while-in-use, Android 14+ mic FGS prerequisites).
+     */
+    private fun handleIncomingCall(intent: Intent) {
+        when (intent.getStringExtra(EXTRA_CALL_STATE)) {
+            "IDLE" -> {
+                // Call ended: resume only by user tap (notification -> MainActivity).
+                if (settings.wakeWordEnabled.value) {
+                    goForeground("Call ended - tap to resume listening", withMic = false, resumeOnTap = true)
+                } else {
+                    shutdownService()
+                }
+            }
+            else -> {
+                // Ringing or call in progress: release the wake-word mic.
+                wakeWordListener.stop()
+                goForeground("Call in progress - VASU paused", withMic = false)
+            }
+        }
+    }
+
     private fun hasMicPermission(): Boolean = ContextCompat.checkSelfPermission(
         this, Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
 
-    private fun goForeground(status: String, withMic: Boolean) {
-        ServiceCompat.startForeground(
-            this,
-            notificationId,
-            buildNotification(status),
-            if (withMic) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            else 0
-        )
+    /**
+     * Put the service in the foreground.
+     *
+     * Returns true when foregrounded with mic capture allowed. Never passes a
+     * zero type: on Android 14+ that can resolve to the manifest's declared
+     * types (microphone|camera|mediaProjection|dataSync), whose runtime
+     * prerequisites may not be met, and startForeground would throw.
+     */
+    private fun goForeground(status: String, withMic: Boolean, resumeOnTap: Boolean = false): Boolean {
+        if (!withMic) {
+            return try {
+                ServiceCompat.startForeground(
+                    this, notificationId,
+                    buildNotification(status, resumeOnTap),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+                true
+            } catch (e: Exception) {
+                // No valid foreground call: stop now instead of letting the
+                // system raise RemoteServiceException for the missed window.
+                Log.e(TAG, "Foreground start failed: ${e.message}")
+                stopSelf()
+                false
+            }
+        }
+        return try {
+            ServiceCompat.startForeground(
+                this, notificationId,
+                buildNotification(status, resumeOnTap),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+            true
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Mic foreground service denied: ${e.message}")
+            degradeToTapToResume()
+            false
+        } catch (e: IllegalStateException) {
+            // ForegroundServiceStartNotAllowedException (Android 12+
+            // background-start ban) extends IllegalStateException.
+            Log.w(TAG, "Foreground start with mic not allowed: ${e.message}")
+            degradeToTapToResume()
+            false
+        }
+    }
+
+    /** Stay foreground without mic and put a tap-to-resume action in front of the user. */
+    private fun degradeToTapToResume() {
+        try {
+            ServiceCompat.startForeground(
+                this, notificationId,
+                buildNotification("Tap to resume listening", resumeOnTap = true),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } catch (e: Exception) {
+            // Nothing could be foregrounded: stop instead of letting the
+            // system raise RemoteServiceException for the missed window.
+            Log.e(TAG, "Foreground degrade failed: ${e.message}")
+            stopSelf()
+        }
     }
 
     private fun notifyNotification(status: String) {
@@ -352,10 +466,13 @@ class VasuForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun buildNotification(status: String): Notification {
+    private fun buildNotification(status: String, resumeOnTap: Boolean = false): Notification {
+        val openApp = Intent(this, MainActivity::class.java).apply {
+            if (resumeOnTap) putExtra(EXTRA_RESUME_WAKE_WORD, true)
+        }
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java),
+            openApp,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
