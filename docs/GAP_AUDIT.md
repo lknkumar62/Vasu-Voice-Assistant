@@ -163,3 +163,62 @@ Status: **COMPLETE** — 4/4 agents reported (A: P1, B: P2-3, C: P4-5, D: P6-9).
   - Review pass 2 (verify): found the gate failure `Dagger/MissingBinding: ConversationMemory` (dead DI chain unmasked by the new injection) → fixed with `@Inject` constructor. MAJOR: routing false-positives offer tools to casual chat → fixed with a tool-restraint prompt line; residual (documented): misrouted chat turns lose first-sentence streaming latency by design.
   - Review pass 3 (verify fix round): all items OK, no new BLOCKER/MAJOR. **Verdict: fix round verified.**
   - Gate: green ✅ — `assembleDebug` + **218/218** unit tests + `lintDebug` clean (2026-10-16).
+- **FIX-4** ✅ 2026-10-16: HIGH-risk tools are confirmed before execution when autonomous execution is off (`ConfirmationGate.requiresConfirmation(HIGH, autoAllow)`; the call is parked and resolved at the top of both turn paths — a clear yes re-executes the parked call exactly once, a clear no cancels, anything else drops it and is treated as a new request; negative always wins; "karo" counts as a yes only in ≤3-word utterances so a new command like "Rahul ko call karo" is not mistaken for a confirmation). OTP/payment guard (`OtpGuard`): communication/notification tools are refused on turns carrying OTP/payment context (keywords EN/Hinglish/Devanagari + a standalone 6-digit code), regardless of the autonomous-execution setting; persisted `otpProtectionEnabled` (default on) finally wires the Privacy toggle. Emergency stop: service shutdown now calls `AutomationEngine.stop()` + `MissionEngine.cancelAll()` (checked at every step boundary; reset per mission). `autoAllowEnabled` is no longer a dead setting — it gates every HIGH-risk call on both the single-round and loop paths.
+  - Independent review: **FIX-4 verified** — no BLOCKER/MAJOR. Hardening items fixed: OTP guard re-checked on the confirming turn; pending swap made atomic (`AtomicReference.getAndSet`); grouped numbers ("987654 3210") no longer false-positive as OTP codes (+ test).
+  - Residual (documented, non-blocking): a strong yes word inside multi-sentence chatter may execute the parked call ("theek hai, waise mausam kaisa hai?" executes and skips the question); 2-word new commands containing "karo" ("call karo") count as yes — both directions stay safe (a parked call never runs without a yes word).
+  - Gate: green ✅ — `assembleDebug` + **227/227** unit tests + `lintDebug` clean (2026-10-16).
+
+---
+
+## Repo-wide health audit (2026-10-16, read-only)
+
+3 parallel read-only sweeps (devices/messaging/automation/security; voice/AI pipeline; UI/navigation) run against the whole repo, not just the spec gap. Status: devices+messaging+automation+security **REPORTED**; voice/AI **REPORTED**; UI/navigation **pending**.
+
+**Headline:** the repo is broadly healthy (ToolRouter dispatch complete — all 33 advertised tools wired, risk-gate ordering intact; DI resolves; OCR/ML Kit clean; no hardcoded secrets) but the **live-voice (Gemini Live) path and the voice state machine have blockers**, plus several fake-success surfaces and unwired hooks.
+
+### Voice / AI pipeline
+| Sev | Finding | Ref |
+|---|---|---|
+| BLOCKER | Gemini Live: only the text `onMessage` is overridden; the server delivers binary WS frames, so `setupComplete` never arrives (8s timeout — live voice never connects). Verify the frame format when implementing. | `core/voice/GeminiLiveSession.kt:96` |
+| BLOCKER | `LIVE_MODEL = "models/gemini-2.0-flash-exp"` was shut down 2025-12-09 → move to a current native-audio live model | `GeminiLiveSession.kt:36` |
+| BLOCKER | STT `results` are consumed only by foreground UI → wake→command→response is dead when no screen is open (background) | `core/stt/STTManager.kt`, `ui/voice/VoiceViewModel.kt:238`, `ui/chat/ChatViewModel.kt:117` |
+| BLOCKER | `VoiceRouter` double fallback: `onError` calls `fallbackToLocal` **and** the caller speaks again → duplicate playback, double `onDone`, wake-word unmute mid-speech | `core/tts/VoiceRouter.kt:96-112,138-158` |
+| MAJOR | Mic arbitration `ReentrantLock` held across `Thread.sleep` (≤2s), called from main thread → ANR risk; force-steal does not stop the prior owner's AudioRecord | `core/audio/AudioSessionManager.kt:164-211` |
+| MAJOR | Throwaway `CoroutineScope(Dispatchers.Main)` without SupervisorJob → uncaught-crash path | `GeminiLiveVoiceService.kt:44`, `TTSManager.kt`, `VoiceRouter.kt` |
+| MAJOR | Voice state machine: invalid transitions are silently dropped/wedged; service keeps its own divergent `_voiceState` | `VoiceStateManager.kt:46-84`, `GeminiLiveVoiceService.kt:46` |
+| MAJOR | `VasuRecognitionService` (registered system STT) always answers `ERROR_CLIENT` → if selected as the device STT, all recognizer calls fail | `core/assistant/VasuRecognitionService.kt:16`, manifest 222-233 |
+| MAJOR | `startMicrophoneConversation` returns true before the WS connects → `voiceBusy` wedge; overlay starts it a second time concurrently | `GeminiLiveVoiceService.kt`, `ui/voice/VoiceViewModel.kt:474-512`, `ui/overlay/AssistantOverlayActivity.kt:61` |
+| MAJOR | Gemini Live API key in WS URL query → leaks via logs/proxies | `GeminiLiveSession.kt:85` |
+| MEDIUM | Hand-rolled O(n²) DFT per 100ms chunk → slow wake inference | `core/wakeword/MelSpectrogram.kt:104-120` |
+| MEDIUM | TTS chain: `AndroidFallbackTtsEngine.initialize()` never called + 400ms main-thread sleep; `TTSManager` double-init leaks one TextToSpeech; `CustomVoiceEngine` prepare() on main | TTS files |
+
+Dead settings (audit): `voiceGuardEnabled` (Settings-only; the live guardian toggle is RoleManager) → FIX-6; provider enable flags + `selectedProvider` ignored by providers → FIX-10; LOCAL `testConnection` stub → FIX-10. `autoAllowEnabled` was dead and is now consumed (FIX-4).
+
+### Devices / messaging / automation / security
+| Sev | Finding | Ref |
+|---|---|---|
+| MAJOR | Voice Guardian "embedding" = 128 RMS loudness values → any voice with a similar volume envelope passes (spoofable) | `core/security/SecurityImpl.kt:56-70` |
+| MAJOR | `RoleManager.hasPermission` returns true whenever Guardian is off (default) → HIGH-risk role gate inert by default | `core/security/RoleManager.kt:158` |
+| MAJOR | EncryptedVoiceStore plaintext fallback + sticky mode marker → one transient Keystore failure permanently downgrades; `commit()` on main thread | `core/security/EncryptedVoiceStore.kt:64-70,87` |
+| MAJOR | `MacroEngine.createMacro` fake success (validates + logs, persists nothing); `_missions` in-memory only; no `create_mission` tool exists | `AutomationEngines.kt:187-199,39` |
+| MAJOR | `MissionEngine.permissionChecker` never assigned anywhere → `requiresPermission` steps always fail `PRECONDITION_FAILED` | `AutomationEngines.kt:42` |
+| MAJOR | Seeded mission step `action="get_time"` has no ToolRouter dispatch → the default mission always fails at step 2 | `ui/missions/MissionsViewModel.kt:33` |
+| MAJOR | `PermissionsViewModel` checks/requests `CALL_PHONE`/`SEND_SMS` (not declared in the manifest → permanently "not granted"); READ_CONTACTS / CAMERA / POST_NOTIFICATIONS declared but never runtime-requested | `ui/permissions/PermissionsViewModel.kt:126,152` |
+| MAJOR | Contacts query outside try/catch (SecurityException without READ_CONTACTS); `getRecentMessages` dead, main-thread, unguarded | `messaging/MessagingManager.kt:41,122-157`, `ContactManager.kt:34` |
+| MAJOR | `search_web` always reports success; `BrowserManager.openUrl` swallows `ActivityNotFoundException` | `core/ai/ToolRouter.kt:287-295`, `core/browser/BrowserManager.kt:22-24` |
+| MINOR | Fake success / dead surfaces: setBrightness & toggleWifi & BT enable/disable just open settings; accessibility actions ignore `performAction` results; media key events unchecked; notification reply misses RemoteInput results; `PhoneStateReceiver` stores call state as "number"; `ScreenCaptureManager` second manual instance; `browse_files` blocked by scoped storage; `TorchManager` tracks only internal state | multiple |
+
+Confirmed clean: no hardcoded secrets in main/; ToolRouter has 0 unimplemented advertised tools and an intact risk-gate order; OcrManager/VisionProcessor, LocalCommandRouter, ReminderReceiver, notification OTP redaction look correct. The `/root/Vasu-Voice-Assistant/android/` tree is a stale duplicate (settings.gradle.kts includes only `:app`) — ignore it.
+
+### Queue mapping for the findings above
+- FIX-12: voice pipeline blockers (frames, live model, background STT consumer, double fallback).
+- FIX-13: voice robustness (ANR lock, scopes, state machine, recognition-service stub, voiceBusy, overlay double-start, key-in-URL).
+- FIX-14: mission/permission wiring (permissionChecker, seed mission step, manifest permission set, runtime requests).
+- FIX-15: messaging/web robustness (contacts/SMS SecurityException, getRecentMessages, search_web honesty).
+- FIX-16: storage fallbacks (EncryptedVoiceStore; keystore fallback already in FIX-11).
+- FIX-17: fake-success sweep (also noted on line 149).
+- FIX-18: automation honesty (macro persistence, in-memory missions, create_mission).
+- FIX-19: Guardian honesty (real verification or relabel; keep off-by-default behavior documented).
+
+### UI/navigation — pending
+Report not in yet at the time of writing; chat-open crash hypotheses will be appended here when reported.

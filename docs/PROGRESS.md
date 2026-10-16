@@ -64,7 +64,7 @@
 ## Known Issues
 - User's phone: app crash on opening Chat (v4.18.6 installed) — awaiting hidden error-log paste from diag build (artifact of CI run `85c9132`).
 - Package: keeping `com.vasu.assistant` for now (preserves installed app data + keys). Any rename needs explicit user approval.
-- Spec-vs-repo gap audit DONE (`docs/GAP_AUDIT.md`); fix queue executing — FIX-1 (wake word), FIX-2 (boot/FGS safety), FIX-3 (streaming prompt/tools/memory) done; FIX-4 (HIGH-risk confirmation + OTP/payment guard + emergency stop) next.
+- Spec-vs-repo gap audit DONE (`docs/GAP_AUDIT.md`); fix queue executing — FIX-1 (wake word), FIX-2 (boot/FGS safety), FIX-3 (streaming prompt/tools/memory), FIX-4 (HIGH-risk confirmation + OTP/payment guard + emergency stop) done; repo-wide health audit reported (new queue FIX-12..19: voice-pipeline blockers, mission/permission wiring, messaging honesty); FIX-5 (chat completeness) next.
 
 ## Decisions Log
 - 2026-10-16 Package: namespace/applicationId stay `com.vasu.assistant` (reverted an accidental flip). Why: installed-app data, chat history and stored keys survive; 150+ existing files keep compiling; user rule = no package rename without approval.
@@ -74,3 +74,4 @@
 - 2026-10-16 Error handling: reuse existing hidden `com.vasu.assistant.core.logging.ErrorLog` (capped 256 KB, app-private, no UI reads it) instead of a duplicate logger.
 - 2026-10-16 FIX-2 boot/FGS: pre-Android-11 boots start the mic service directly; 11+ gets a "tap to resume" notification (boot mic-FGS disallowed; 14+ throws). Unknown service actions never start the mic pipeline; failed foreground starts degrade to DATA_SYNC, and `stopSelf()` is the last resort instead of a RemoteServiceException.
 - 2026-10-16 FIX-3 streaming: tool-relevant turns (keyword filter on the current input only) route to the non-streaming tool loop for real execution; the streaming prompt excludes the tool section entirely; explicit remember/forget commands short-circuit before every local matcher; auto-learning from generic turns stays off (UserMemory name heuristics too loose). Residual trade-off: broad keywords ("time") route casual chat into the slower tool path; the tool-restraint prompt line prevents unwanted calls.
+- 2026-10-16 FIX-4 safety: HIGH-risk tools ask a script-aware Haan/Nahi confirmation whenever autonomous execution is off (it stays ON by default, preserving current behavior); OTP/payment context blocks communication tools regardless of that setting (`otpProtectionEnabled`, default on, wired to the Privacy toggle); emergency stop = service shutdown + `AutomationEngine.stop()` + `MissionEngine.cancelAll()` (cooperative step-boundary checks).

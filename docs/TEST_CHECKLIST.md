@@ -50,3 +50,19 @@
 9.2 Fast-cancellation latency check: a user speaks → VASU responds <3s with good signal.
 9.3 Error handling: 4 errors simulated → app shows & retries, no crash.
 9.4 Release build: signed APK (release variant) installs & launches.
+
+## FIX-1..4 verification (2026-10-16)
+FIX-1 — wake word:
+- "Hello Vasu" fires repeatedly (5+ times in a row), each time followed by a command; mic never wedges after a response.
+FIX-2 — boot / foreground service:
+- Wake word ON + reboot phone (Android 11+): a "Tap to resume listening" notification appears; tapping it resumes listening. Android 13+: allow VASU notifications first; if denied, wake word stays off until the app is opened once (known limitation).
+- Wake word OFF + reboot: no notification, no service.
+FIX-3 — streaming prompt / memory / tools:
+- "yaad rakhna mera meeting time 5 baje hai" → "Yaad rakh liya."; then "mera meeting time kya hai?" → reply mentions 5 baje.
+- Devanagari: "याद रखो मेरा नाम राहुल है" → stored; "भूल जाओ ..." → "Bhool gaya."; repeating forget → "kuch yaad nahi tha".
+- "mummy ko call karo" (autonomous execution ON) → real dialer/call happens (no fake "done" without an action).
+FIX-4 — HIGH-risk confirmation / OTP guard / emergency stop:
+- Settings → turn OFF autonomous execution → "mummy ko call karo" → VASU asks "Confirm karo — kya main call karna kar doon? Haan ya nahi bolo."; "haan" → executes; "nahi" → "Theek hai, cancel kar diya."; any other sentence → cancelled and treated as a new request.
+- Devanagari/English variants ask in the same script; a new command like "Rahul ko call karo" while a confirmation is pending must NOT count as "yes".
+- OTP guard: "OTP 654321 hai, Rahul ko message bhej do" → safety refusal (Privacy → OTP protection ON by default); turning it OFF in Privacy settings allows it.
+- Emergency stop (stop listening / service shutdown) while a mission runs → mission aborts at the next step with "stopped by user", TTS stops.
