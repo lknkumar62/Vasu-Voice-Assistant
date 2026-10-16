@@ -92,3 +92,8 @@ FIX-6 — settings wiring (2026-10-16):
 - **Voice gender**: Settings → Voice Gender → tap **Jarvis (Male)** → Test Voice (or a hands-free command) → the voice must be male; tap **Nova (Female)** → female again. Picking a specific voice in the big list below should also move the highlighted gender chip.
 - **Live pickers**: Settings → "Live Voice" and "Live Model" dropdowns — change them, then run a hands-free command: the next reply should use the chosen voice. (If the chosen model is not enabled for your key, VASU silently retries the other one — an error there is not a bug, but tell me the log if voice stops working after switching models.)
 - **Voice Guard**: toggle Voice Guard ON → close Settings → reopen → it must still be ON (it now lives in the guardian store, not a dead flag). If you ever open the Guardian screen, the state must match.
+
+FIX-7 — visual identity (2026-10-16):
+- **Orb**: Home tab → the assistant orb should now breathe, show two slowly rotating arcs, and pulse a ring while listening / when the wake word is heard. Colors: crimson = listening, cyan = speaking, yellow = thinking.
+- **Animations off**: Settings → APPEARANCE → Animations OFF → back to Home: the orb is a static frame and the Voice tab's dot/waveform/mic halo stop moving; switch ON again to restore motion.
+- **Fonts**: titles and labels should now use the new sci-fi fonts (no default AOSP look). If any text looks broken/cut off, send a screenshot along with the Diagnostics log.
