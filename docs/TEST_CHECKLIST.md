@@ -86,3 +86,9 @@ FIX-12 — live voice / hands-free loop (2026-10-16):
 - **Offline fallback**: turn airplane mode ON → "Hello Vasu" → "time kya hai" → reply still spoken (local voice). If nothing is heard, the notification returns to "Hello Vasu" within ~15s — try again.
 - **After 5+ back-to-back wake commands**: wake word must still work, phone must not freeze or get unusually hot.
 - If live voice still fails, open Settings → ADVANCED → "Open Diagnostics" (debug APK) → copy the internal log and send it to me.
+
+FIX-6 — settings wiring (2026-10-16):
+- **Language**: Settings → VOICE & SOUND → Language → switch to English (US) → say "Hello Vasu" → "what is the time" → VASU should understand English now (STT follows this setting; it used to stay Hindi forever). Switch back to Hindi and repeat in Hindi.
+- **Voice gender**: Settings → Voice Gender → tap **Jarvis (Male)** → Test Voice (or a hands-free command) → the voice must be male; tap **Nova (Female)** → female again. Picking a specific voice in the big list below should also move the highlighted gender chip.
+- **Live pickers**: Settings → "Live Voice" and "Live Model" dropdowns — change them, then run a hands-free command: the next reply should use the chosen voice. (If the chosen model is not enabled for your key, VASU silently retries the other one — an error there is not a bug, but tell me the log if voice stops working after switching models.)
+- **Voice Guard**: toggle Voice Guard ON → close Settings → reopen → it must still be ON (it now lives in the guardian store, not a dead flag). If you ever open the Guardian screen, the state must match.
