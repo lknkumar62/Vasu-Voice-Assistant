@@ -2,6 +2,7 @@ package com.vasu.assistant.ui.settings
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,6 +13,7 @@ import com.vasu.assistant.core.ai.ModelCatalog
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.network.NetworkMonitor
 import com.vasu.assistant.core.offline.ModelManager
+import com.vasu.assistant.ui.overlay.FloatingOrbService
 import com.vasu.assistant.core.network.NetworkState
 import com.vasu.assistant.core.security.RoleManager
 import com.vasu.assistant.core.service.VasuForegroundService
@@ -75,6 +77,7 @@ data class SettingsUiState(
     val geminiLiveModel: String = VasuSettings.DEFAULT_GEMINI_LIVE_MODEL,
     val animationsEnabled: Boolean = true,
     val preferOfflineStt: Boolean = false,
+    val floatingOrbEnabled: Boolean = false,
 
     // Wake word
     val wakeWordEnabled: Boolean = false,
@@ -165,6 +168,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settings.preferOfflineStt.collect { _uiState.value = _uiState.value.copy(preferOfflineStt = it) }
         }
+        viewModelScope.launch {
+            settings.floatingOrbEnabled.collect { _uiState.value = _uiState.value.copy(floatingOrbEnabled = it) }
+        }
     }
 
     private fun refresh() {
@@ -204,6 +210,7 @@ class SettingsViewModel @Inject constructor(
             geminiLiveModel = settings.geminiLiveModel.value,
             animationsEnabled = settings.animationsEnabled.value,
             preferOfflineStt = settings.preferOfflineStt.value,
+            floatingOrbEnabled = settings.floatingOrbEnabled.value,
             network = networkMonitor.state.value,
             // Live Chat config
             chatServerUrl = context.getSharedPreferences("vasu_chat_config", Context.MODE_PRIVATE)
@@ -464,6 +471,29 @@ class SettingsViewModel @Inject constructor(
     fun downloadModel(modelId: String) = modelManager.download(modelId)
 
     fun deleteModel(modelId: String) = modelManager.delete(modelId)
+
+    // FIX-9 (spec Phase 7): floating orb over other apps. Enabling without the
+    // overlay permission asks for it first; the toggle flips after it's given.
+    fun setFloatingOrbEnabled(enabled: Boolean) {
+        if (enabled && !AndroidSettings.canDrawOverlays(context)) {
+            val intent = Intent(
+                AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${context.packageName}")
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(intent) }
+            return
+        }
+        settings.setFloatingOrbEnabled(enabled)
+        _uiState.value = _uiState.value.copy(floatingOrbEnabled = enabled)
+        if (enabled) {
+            if (!FloatingOrbService.start(context)) {
+                settings.setFloatingOrbEnabled(false)
+                _uiState.value = _uiState.value.copy(floatingOrbEnabled = false)
+            }
+        } else {
+            FloatingOrbService.stop(context)
+        }
+    }
 
     fun setAutoAllowEnabled(enabled: Boolean) {
         settings.setAutoAllowEnabled(enabled)

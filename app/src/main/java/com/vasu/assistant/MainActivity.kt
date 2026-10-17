@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import com.vasu.assistant.core.navigation.VasuNavGraph
 import com.vasu.assistant.core.service.VasuForegroundService
 import com.vasu.assistant.core.settings.VasuSettings
+import com.vasu.assistant.ui.overlay.FloatingOrbService
 import com.vasu.assistant.ui.theme.VasuTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -24,6 +25,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         resumeWakeWordIfRequested(intent)
+        resumeFloatingOrbIfEnabled()
 
         enableEdgeToEdge()
         setContent {
@@ -51,6 +53,13 @@ class MainActivity : ComponentActivity() {
             settings.wakeWordEnabled.value
         ) {
             VasuForegroundService.start(this)
+        }
+    }
+
+    /** FIX-9: restore the floating orb when the app is opened and the toggle is on. */
+    private fun resumeFloatingOrbIfEnabled() {
+        if (settings.floatingOrbEnabled.value) {
+            FloatingOrbService.start(this)
         }
     }
 }

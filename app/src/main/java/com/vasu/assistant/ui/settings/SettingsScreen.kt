@@ -514,6 +514,17 @@ fun SettingsScreen(
                 }
             }
 
+            // --- FLOATING ORB SECTION (FIX-9) ---
+            SettingsSection(title = "FLOATING ORB") {
+                SettingsToggleItem(
+                    icon = Icons.Default.BubbleChart,
+                    title = "Floating orb",
+                    subtitle = if (state.floatingOrbEnabled) "Orb visible over other apps — drag it, tap to talk" else "Draggable orb over other apps (needs overlay permission)",
+                    enabled = state.floatingOrbEnabled,
+                    onToggle = viewModel::setFloatingOrbEnabled
+                )
+            }
+
             // --- SECURITY & AUTOMATION SECTION ---
             SettingsSection(title = "SECURITY & AUTOMATION") {
                 SettingsToggleItem(

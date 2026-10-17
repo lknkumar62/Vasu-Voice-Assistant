@@ -37,6 +37,9 @@ class VasuSettings @Inject constructor(
     private val _preferOfflineStt = MutableStateFlow(false)
     val preferOfflineStt: StateFlow<Boolean> = _preferOfflineStt.asStateFlow()
 
+    private val _floatingOrbEnabled = MutableStateFlow(false)
+    val floatingOrbEnabled: StateFlow<Boolean> = _floatingOrbEnabled.asStateFlow()
+
     private val _otpProtectionEnabled = MutableStateFlow(true)
     val otpProtectionEnabled: StateFlow<Boolean> = _otpProtectionEnabled.asStateFlow()
 
@@ -81,6 +84,7 @@ class VasuSettings @Inject constructor(
         _geminiLiveModel.value = prefs.getString("gemini_live_model", DEFAULT_GEMINI_LIVE_MODEL) ?: DEFAULT_GEMINI_LIVE_MODEL
         _animationsEnabled.value = prefs.getBoolean("animations_enabled", true)
         _preferOfflineStt.value = prefs.getBoolean("prefer_offline_stt", false)
+        _floatingOrbEnabled.value = prefs.getBoolean("floating_orb_enabled", false)
     }
 
     fun setVoiceProfile(profile: VoiceProfile) {
@@ -151,6 +155,11 @@ class VasuSettings @Inject constructor(
     fun setPreferOfflineStt(enabled: Boolean) {
         _preferOfflineStt.value = enabled
         prefs.edit().putBoolean("prefer_offline_stt", enabled).apply()
+    }
+
+    fun setFloatingOrbEnabled(enabled: Boolean) {
+        _floatingOrbEnabled.value = enabled
+        prefs.edit().putBoolean("floating_orb_enabled", enabled).apply()
     }
 
     companion object {

@@ -19,6 +19,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <!-- Background sync inside the foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- FIX-9: FloatingOrbService (specialUse) keeps the draggable orb window alive -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Gemini / Claude / Groq cloud AI + network TTS/STT (OkHttp) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- NetworkMonitor / ConnectivityManager offline detection -->
@@ -197,6 +199,16 @@
             android:name=".core.service.VasuForegroundService"
             android:exported="false"
             android:foregroundServiceType="microphone|mediaProjection|camera|dataSync" />
+
+        <!-- FIX-9: floating draggable orb over other apps (TYPE_APPLICATION_OVERLAY) -->
+        <service
+            android:name=".ui.overlay.FloatingOrbService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating assistant orb" />
+        </service>
 
         <!-- Voice Interaction Service — registers VASU as the system digital assistant -->
         <service
