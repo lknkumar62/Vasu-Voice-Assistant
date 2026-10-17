@@ -11,6 +11,7 @@ import com.vasu.assistant.core.ai.AiResult
 import com.vasu.assistant.core.ai.ModelCatalog
 import com.vasu.assistant.core.ai.SecureKeyStore
 import com.vasu.assistant.core.network.NetworkMonitor
+import com.vasu.assistant.core.offline.ModelManager
 import com.vasu.assistant.core.network.NetworkState
 import com.vasu.assistant.core.security.RoleManager
 import com.vasu.assistant.core.service.VasuForegroundService
@@ -73,6 +74,7 @@ data class SettingsUiState(
     val geminiLiveVoice: String = VasuSettings.DEFAULT_GEMINI_LIVE_VOICE,
     val geminiLiveModel: String = VasuSettings.DEFAULT_GEMINI_LIVE_MODEL,
     val animationsEnabled: Boolean = true,
+    val preferOfflineStt: Boolean = false,
 
     // Wake word
     val wakeWordEnabled: Boolean = false,
@@ -110,11 +112,15 @@ class SettingsViewModel @Inject constructor(
     private val ttsManager: TTSManager,
     private val wakeWordDetector: WakeWordDetector,
     private val networkMonitor: NetworkMonitor,
-    private val roleManager: RoleManager
+    private val roleManager: RoleManager,
+    private val modelManager: ModelManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    /** FIX-8 Pass B: per-model download state for the OFFLINE VOICE section. */
+    val modelStates: StateFlow<Map<String, ModelManager.DownloadState>> = modelManager.states
 
     init {
         refresh()
@@ -156,6 +162,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settings.animationsEnabled.collect { _uiState.value = _uiState.value.copy(animationsEnabled = it) }
         }
+        viewModelScope.launch {
+            settings.preferOfflineStt.collect { _uiState.value = _uiState.value.copy(preferOfflineStt = it) }
+        }
     }
 
     private fun refresh() {
@@ -194,6 +203,7 @@ class SettingsViewModel @Inject constructor(
             geminiLiveVoice = settings.geminiLiveVoice.value,
             geminiLiveModel = settings.geminiLiveModel.value,
             animationsEnabled = settings.animationsEnabled.value,
+            preferOfflineStt = settings.preferOfflineStt.value,
             network = networkMonitor.state.value,
             // Live Chat config
             chatServerUrl = context.getSharedPreferences("vasu_chat_config", Context.MODE_PRIVATE)
@@ -444,6 +454,16 @@ class SettingsViewModel @Inject constructor(
         settings.setAnimationsEnabled(enabled)
         _uiState.value = _uiState.value.copy(animationsEnabled = enabled)
     }
+
+    // FIX-8 Pass B: offline (Vosk) voice — toggle + model downloads.
+    fun setPreferOfflineStt(enabled: Boolean) {
+        settings.setPreferOfflineStt(enabled)
+        _uiState.value = _uiState.value.copy(preferOfflineStt = enabled)
+    }
+
+    fun downloadModel(modelId: String) = modelManager.download(modelId)
+
+    fun deleteModel(modelId: String) = modelManager.delete(modelId)
 
     fun setAutoAllowEnabled(enabled: Boolean) {
         settings.setAutoAllowEnabled(enabled)

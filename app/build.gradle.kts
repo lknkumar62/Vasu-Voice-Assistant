@@ -123,6 +123,10 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.google.crypto.tink:tink-android:1.13.0")
 
+    // FIX-8 Pass B: on-device (offline) speech recognition
+    implementation("com.alphacephei:vosk-android:0.3.47")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")

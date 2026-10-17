@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vasu.assistant.core.network.NetworkState
+import com.vasu.assistant.core.offline.ModelManager
+import com.vasu.assistant.core.offline.VoskCatalog
+import com.vasu.assistant.core.offline.VoskModelSpec
 import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.tts.VoiceGender
 import com.vasu.assistant.core.wakeword.WakeWordState
@@ -38,6 +41,52 @@ import com.vasu.assistant.ui.components.VasuCard
 import com.vasu.assistant.ui.theme.*
 import java.text.DateFormat
 import java.util.Date
+
+/** FIX-8 Pass B: one downloadable offline speech model row. */
+@Composable
+private fun OfflineModelRow(
+    spec: VoskModelSpec,
+    state: ModelManager.DownloadState,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(spec.label, color = VasuTextPrimary, fontSize = 14.sp)
+            when (state) {
+                is ModelManager.DownloadState.Downloading -> {
+                    LinearProgressIndicator(
+                        progress = state.percent / 100f,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        color = VasuCrimson,
+                        trackColor = VasuDarkCard
+                    )
+                    Text("Downloading… ${state.percent}%", color = VasuTextSecondary, fontSize = 11.sp)
+                }
+                is ModelManager.DownloadState.Ready ->
+                    Text("Downloaded — offline ready", color = VasuSuccess, fontSize = 11.sp)
+                is ModelManager.DownloadState.Failed ->
+                    Text("Failed: ${state.message}", color = VasuCrimson, fontSize = 11.sp)
+                ModelManager.DownloadState.NotDownloaded ->
+                    Text("~${spec.sizeMb} MB download", color = VasuTextSecondary, fontSize = 11.sp)
+            }
+        }
+        when (state) {
+            is ModelManager.DownloadState.Ready ->
+                TextButton(onClick = onDelete) { Text("Delete", color = VasuCrimson) }
+            is ModelManager.DownloadState.Downloading -> Unit
+            else ->
+                TextButton(onClick = onDownload) { Text("Download", color = VasuElectric) }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -443,6 +492,26 @@ fun SettingsScreen(
                     enabled = state.animationsEnabled,
                     onToggle = viewModel::setAnimationsEnabled
                 )
+            }
+
+            // --- OFFLINE VOICE SECTION (FIX-8 Pass B) ---
+            SettingsSection(title = "OFFLINE VOICE") {
+                SettingsToggleItem(
+                    icon = Icons.Default.CloudOff,
+                    title = "Offline voice (Vosk)",
+                    subtitle = if (state.preferOfflineStt) "Uses the downloaded model — works without internet" else "Uses the phone's speech service",
+                    enabled = state.preferOfflineStt,
+                    onToggle = viewModel::setPreferOfflineStt
+                )
+                val modelStates by viewModel.modelStates.collectAsStateWithLifecycle()
+                VoskCatalog.MODELS.forEach { spec ->
+                    OfflineModelRow(
+                        spec = spec,
+                        state = modelStates[spec.id] ?: ModelManager.DownloadState.NotDownloaded,
+                        onDownload = { viewModel.downloadModel(spec.id) },
+                        onDelete = { viewModel.deleteModel(spec.id) }
+                    )
+                }
             }
 
             // --- SECURITY & AUTOMATION SECTION ---

@@ -16,6 +16,9 @@ import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.vasu.assistant.core.audio.AudioSessionManager
+import com.vasu.assistant.core.offline.ModelManager
+import com.vasu.assistant.core.offline.VoskCatalog
+import com.vasu.assistant.core.offline.VoskRecognizerEngine
 import com.vasu.assistant.core.settings.VasuSettings
 import com.vasu.assistant.core.voice.GeminiVoiceState
 import com.vasu.assistant.core.voice.VoiceStateManager
@@ -51,7 +54,9 @@ class STTManager @Inject constructor(
     private val wakeWordDetectorProvider: Provider<WakeWordDetector>,
     private val audioSessionManager: AudioSessionManager,
     private val voiceStateManager: VoiceStateManager,
-    private val settings: VasuSettings
+    private val settings: VasuSettings,
+    private val modelManager: ModelManager,
+    private val voskEngine: VoskRecognizerEngine
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -160,6 +165,14 @@ class STTManager @Inject constructor(
 
             refreshLanguageFromSettings()
 
+            // FIX-8 Pass B: when the user enabled offline voice and the Vosk
+            // model for the current language is downloaded, record through it
+            // instead of the platform recognizer (works without internet).
+            if (tryStartVoskListening()) {
+                retryCount = 0
+                return@runOnMainThread
+            }
+
             if (!isInitialized || speechRecognizer == null) {
                 createInternalRecognizer()
             }
@@ -193,6 +206,82 @@ class STTManager @Inject constructor(
         }
     }
 
+    // ----------------------------------------------------------- FIX-8 Pass B
+
+    /** True when offline recognition is enabled and the language model is ready. */
+    private fun shouldUseVosk(): Boolean {
+        if (!settings.preferOfflineStt.value) return false
+        val spec = VoskCatalog.modelForLanguage(settings.voiceProfile.value.language)
+        if (!modelManager.isReady(spec)) {
+            Log.i(TAG, "[VOSK] ${spec.id} model not downloaded; using platform recognizer")
+            return false
+        }
+        return true
+    }
+
+    /** Starts a Vosk turn; false lets the caller fall through to SpeechRecognizer. */
+    private fun tryStartVoskListening(): Boolean {
+        if (!shouldUseVosk()) return false
+        val spec = VoskCatalog.modelForLanguage(settings.voiceProfile.value.language)
+        val started = voskEngine.start(
+            modelDir = modelManager.modelDir(spec),
+            silenceTimeoutMs = config.silenceTimeoutMs,
+            listener = voskListener
+        )
+        if (started) {
+            _state.value = STTState.LISTENING
+            audioSessionManager.transitionState(AudioSessionManager.SessionState.COMMAND_LISTENING)
+            Log.i(TAG, "[VOSK] offline recognition started (${spec.id})")
+        } else {
+            Log.w(TAG, "[VOSK] engine busy; using platform recognizer")
+        }
+        return started
+    }
+
+    private val voskListener = object : VoskRecognizerEngine.Listener {
+        override fun onPartial(text: String) {
+            mainHandler.post { _partialResults.tryEmit(text) }
+        }
+
+        override fun onRms(level: Float) {
+            mainHandler.post { _rmsLevel.value = level }
+        }
+
+        override fun onFinal(text: String) {
+            mainHandler.post {
+                if (text.isBlank()) {
+                    if (!manuallyStopped) {
+                        _state.value = STTState.ERROR
+                        _errors.tryEmit(SttError(SttErrorKind.NO_SPEECH, "No speech detected"))
+                        scope.launch { voiceStateManager.transitionTo(GeminiVoiceState.IDLE) }
+                    }
+                } else {
+                    Log.i(TAG, "[VOSK_RESULT] chars=${text.length}")
+                    _state.value = STTState.RESULT_READY
+                    _results.tryEmit(RecognitionResult(text = text, confidence = 0f, isFinal = true))
+                    scope.launch { voiceStateManager.transitionTo(GeminiVoiceState.PROCESSING) }
+                }
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
+                resumeWakeWordMic()
+                _state.value = STTState.IDLE
+            }
+        }
+
+        override fun onError(message: String) {
+            mainHandler.post {
+                Log.e(TAG, "[VOSK_ERROR] $message")
+                _state.value = STTState.ERROR
+                _errors.tryEmit(
+                    SttError(SttErrorKind.RECOGNITION_ERROR, "Offline recognition failed: $message")
+                )
+                scope.launch { voiceStateManager.transitionTo(GeminiVoiceState.IDLE) }
+                audioSessionManager.releaseMic(AudioSessionManager.MicOwner.SPEECH_RECOGNIZER)
+                resumeWakeWordMic()
+                _state.value = STTState.IDLE
+            }
+        }
+    }
+
     fun stopListening() {
         manuallyStopped = true
         retryCount = 0
@@ -203,7 +292,11 @@ class STTManager @Inject constructor(
                 voiceStateManager.transitionTo(GeminiVoiceState.IDLE)
             }
             try {
-                speechRecognizer?.stopListening()
+                if (voskEngine.isActive) {
+                    voskEngine.stop(flush = true)
+                } else {
+                    speechRecognizer?.stopListening()
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Error stopping speech recognition", e)
             } finally {
@@ -223,7 +316,11 @@ class STTManager @Inject constructor(
                 voiceStateManager.transitionTo(GeminiVoiceState.IDLE)
             }
             try {
-                speechRecognizer?.cancel()
+                if (voskEngine.isActive) {
+                    voskEngine.stop(flush = false)
+                } else {
+                    speechRecognizer?.cancel()
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Error cancelling speech recognition", e)
             } finally {
@@ -238,6 +335,7 @@ class STTManager @Inject constructor(
 
     fun destroy() {
         runOnMainThread {
+            voskEngine.stop(flush = false)
             try {
                 speechRecognizer?.destroy()
             } catch (e: Exception) {
