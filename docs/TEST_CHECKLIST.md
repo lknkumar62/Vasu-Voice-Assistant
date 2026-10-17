@@ -34,9 +34,13 @@
 6.1–6.4 Accessibility: tapping "Read screen" lists current screen text; "click on <text>" opens an element; "go home" works.
 6.5 Risk: high-risk action asked confirmation (voice); emergency stop halts TTS+listening+automation within 500ms.
 
-## Phase 7
-7.1 Overlay appears over launcher; draggable, snaps to edge; tap 2 times to execute of quick voice panel.
-7.3 Mini panel closes gracefully, no window leak.
+## Phase 7 — Floating orb (FIX-9, 2026-10-17)
+- Settings → FLOATING ORB → "Floating orb" ON. Pehli baar Android ka "Display over other apps" screen khulega → allow karo → wapas aa kar toggle ON karo.
+- Orb right edge pe dikhna chahiye — **launcher aur doosri apps ke upar bhi** (home pe jao, orb wahi rahega). Notification "VASU orb active" bhi aayegi.
+- **Drag**: orb pakad ke move karo — chhodne par nearest edge (left/right) pe snap ho jaana chahiye.
+- **Tap**: orb pe tap → quick voice panel khule ("VASU Assistant" sheet, status + transcript) → Close (X) → panel band, orb wapas.
+- **State colors**: sunte waqt cyan, bolte waqt purple, sochte waqt amber — idle grey.
+- **OFF**: toggle OFF → orb + notification gayab (koi window leak nahi; dobara ON pe wapas aa jaye).
 
 ## Phase 8
 8.1–8.2 AI: a message produces a one-sentence reply (no markdown); multiple provider endpoints work with the user key.
