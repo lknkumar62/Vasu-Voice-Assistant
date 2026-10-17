@@ -104,3 +104,10 @@ FIX-8 Pass A — offline routes / command library / contacts (2026-10-16):
 - **Multi-match contacts**: if 2+ contacts share a name, "call Rahul" no longer guesses — VASU answers "Multiple contacts match …" with the names and asks for the full name (same for SMS/WhatsApp).
 - **Command Library**: Tools tab → "Voice Command Library" card → full list (Device / Screen & navigation / Apps / Calls). An automated test keeps this list and the real routing in sync.
 - **Compound guard**: "torch on and send sms" / "go back aur photo dikhao" → no half execution (the LLM handles the whole sentence).
+
+FIX-8 Pass B — offline voice / Vosk (2026-10-16):
+- **Download a model**: Settings → OFFLINE VOICE → "Hindi — small" → tap Download → progress bar chale → "Downloaded — offline ready" aaye (~42 MB, WiFi pe kar lena; beech me app band na karo). English model alag se download hota hai.
+- **Offline recognition (asli test)**: toggle "Offline voice (Vosk)" ON karo → airplane mode ON rakho → "Hello Vasu" → bol "time kya hai" → jawab aana chahiye (bina internet!). English me test: Settings → Language → English (US) + English model downloaded.
+- **Toggle OFF**: purana behaviour (phone ka speech service) turant wapas — agar offline voice me kuch atke, toggle OFF karke normal voice check karo aur Diagnostics log bhejo.
+- **Delete**: model ke saamne Delete → "Download" button wapas aa jaye; dobara download bhi chale.
+- **Pehli command thodi slow** lag sakti hai (model load hota hai ~1-2s) — ye expected hai; uske baad ki commands normal.
